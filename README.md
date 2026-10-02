@@ -1,10 +1,10 @@
 # PIS · 开发基础
 
-最小工程连通性验证：React + Ant Design 页面调用 Spring Boot 的 `GET /api/hello`，显示 **Hello World**。
+开发连通性与认证验证：React + Ant Design 登录后调用 Spring Boot 的 `GET /api/hello`，显示 **Hello World**。
 
 ## 范围
 
-这是开发起点，已接入 PostgreSQL 17 与 Flyway，并建立患者、就诊、申请、病例、标本容器的合成数据结构模板及内部只读查询。尚未实现临床业务接口、身份认证、数字切片或 AI。仅在本机开发使用，不可处理真实患者数据，也不要直接暴露到公网。原始 `readme` 保留不变。模型关系、编号唯一域、版本契约与待确认假设详见[核心数据模型](docs/core-data-model.md)。
+这是开发起点，已接入 PostgreSQL 17 与 Flyway，并建立患者、就诊、申请、病例、标本容器的合成数据结构模板及内部只读查询。已加入会话登录、CSRF、账号撤销及内部资源权限策略，尚未实现临床业务接口、临床签发、数字切片或 AI。仅在本机开发使用，不可处理真实患者数据，也不要直接暴露到公网。原始 `readme` 保留不变。模型关系、编号唯一域、版本契约与待确认假设详见[核心数据模型](docs/core-data-model.md)。
 
 ## 环境
 
@@ -22,6 +22,8 @@ Wrapper 使用 Apache 官方 `only-script` 发行，不提交 JAR。首次运行
 ## 启动
 
 首次按[数据库开发说明](docs/database-development.md)创建 `.env`、替换本机密码，并在运行 Java/npm 的终端导出变量。以下是 Bash 示例；不要覆盖已有 `.env`。
+
+首次登录前，按[身份与资源授权说明](docs/security-access-control.md)在本机环境中显式设置 `PIS_DEV_AUTH_ENABLED=true`、`PIS_DEV_USERNAME` 和 `PIS_DEV_PASSWORD`。账号必须是合成测试身份，密码没有默认值，也不会获得任何病例权限。
 
 终端一（仓库根目录）：
 
@@ -44,13 +46,13 @@ npm run dev
 
 打开 http://127.0.0.1:5173 。开发服务器把 `/api` 代理至 http://127.0.0.1:8080 ，无需开放跨域。
 
-接口返回：
+使用自己配置的本机合成账号登录后，接口返回：
 
 ```json
 {"message":"Hello World","application":"PIS"}
 ```
 
-界面包含连接中、成功、失败及重新请求，离开页面时取消请求。两个服务默认只监听本机。
+界面包含登录、会话恢复、退出、连接状态和重新请求；过时响应不能在退出后恢复已登录界面。两个服务默认只监听本机。认证与权限边界、未启用的并发会话上限及生产门槛见[安全说明](docs/security-access-control.md)。
 
 ## 构建与测试
 
@@ -70,7 +72,7 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-测试使用独立的真实 PostgreSQL 17 测试库；`PIS_TEST_DB_PASSWORD` 必须已导出。数据库或迁移失败会使测试失败，不会跳过或回退到 H2。浏览器测试会自行启动后端 JAR 与 Vite，并等待包含数据库的 readiness 成功，运行前先关闭占用 8080/5173 的开发服务。覆盖真实前后端请求、重复请求，以及接口错误后重试恢复。
+测试使用独立的真实 PostgreSQL 17 测试库；`PIS_TEST_DB_PASSWORD` 必须已导出。数据库或迁移失败会使测试失败，不会跳过或回退到 H2。浏览器测试会通过 Maven `spring-boot:test-run` 启动测试classpath中的隔离入口与 Vite，并等待包含数据库的 readiness 成功；运行前先完成后端 verify，并关闭占用 8080/5173 的开发服务。入口只在独立 `_test` 数据库的随机 schema创建合成账号，正式 JAR不含fixture或测试Controller。覆盖真实登录/退出/CSRF、会话恢复、错误重试与过时请求。后端 verify还会在打包后检查正式 JAR的测试隔离。
 
 测试约定：
 

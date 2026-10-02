@@ -38,13 +38,12 @@ class HelloHttpTest {
     int port;
 
     @Test
-    void returnsHelloWorldOverHttp() throws Exception {
+    void requiresAuthenticationForHelloOverHttp() throws Exception {
         var response = get("/api/hello");
-        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.statusCode()).isEqualTo(401);
         assertThat(response.headers().firstValue("content-type").orElse("")).contains("application/json");
         var json = JsonMapper.builder().build().readTree(response.body());
-        assertThat(json.path("message").stringValue()).isEqualTo("Hello World");
-        assertThat(json.path("application").stringValue()).isEqualTo("PIS");
+        assertThat(json.path("code").stringValue()).isEqualTo("UNAUTHENTICATED");
     }
 
     @Test
@@ -55,8 +54,8 @@ class HelloHttpTest {
         assertThat(json.path("status").stringValue()).isEqualTo("UP");
         assertThat(json.has("components")).isFalse();
         assertThat(json.has("details")).isFalse();
-        assertThat(get("/actuator/env").statusCode()).isEqualTo(404);
-        assertThat(get("/actuator/flyway").statusCode()).isEqualTo(404);
+        assertThat(get("/actuator/env").statusCode()).isEqualTo(401);
+        assertThat(get("/actuator/flyway").statusCode()).isEqualTo(401);
     }
 
     private HttpResponse<String> get(String path) throws Exception {

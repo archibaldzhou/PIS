@@ -18,15 +18,17 @@ export default defineConfig({
   use: { baseURL: 'http://127.0.0.1:5173', browserName: 'chromium' },
   webServer: [
     {
-      command: 'java -jar ../backend/target/pis-backend-0.0.1-SNAPSHOT.jar',
+      command: (process.platform === 'win32' ? '..\\backend\\mvnw.cmd' : '../backend/mvnw')
+        + ' -f ../backend/pom.xml -B -ntp spring-boot:test-run'
+        + ' -Dspring-boot.run.main-class=com.pis.security.testfixture.SecurityE2eApplication',
       env: {
-        PIS_DB_URL: databaseUrl,
-        PIS_DB_USERNAME: process.env.PIS_TEST_DB_USERNAME ?? 'pis_test',
-        PIS_DB_PASSWORD: databasePassword,
+        PIS_TEST_DB_URL: databaseUrl,
+        PIS_TEST_DB_USERNAME: process.env.PIS_TEST_DB_USERNAME ?? 'pis_test',
+        PIS_TEST_DB_PASSWORD: databasePassword,
       },
       url: 'http://127.0.0.1:8080/actuator/health/readiness',
       reuseExistingServer: false,
-      timeout: 90_000,
+      timeout: 120_000,
     },
     { command: 'npm run dev',
       url: 'http://127.0.0.1:5173', reuseExistingServer: false, timeout: 60_000 },

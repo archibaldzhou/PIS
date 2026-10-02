@@ -1,3 +1,13 @@
 body { margin: 0; font-family: system-ui, sans-serif; color: #153a39; background: #eff6f5; }
 .page { min-height: 100vh; display: grid; place-items: center; padding: 24px; box-sizing: border-box; }
 .hello-card { width: min(100%, 680px); box-shadow: 0 16px 48px #163e3610; }
+.login-card { max-width: 460px; }
+.session-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.session-bar .ant-typography { overflow-wrap: anywhere; }
+.auth-message { margin-bottom: 20px; }
+.loading-placeholder { min-height: 80px; }
+@media (max-width: 480px) {
+  .page { padding: 16px; }
+  .hello-card .ant-card-body { padding: 20px; }
+  .hello-card h1.ant-typography { font-size: 28px; }
+}

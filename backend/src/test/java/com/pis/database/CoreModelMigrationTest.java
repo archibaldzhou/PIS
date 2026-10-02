@@ -17,7 +17,7 @@ class CoreModelMigrationTest {
                 statement.execute("CREATE TABLE synthetic_upgrade_marker (value text NOT NULL)");
                 statement.executeUpdate("INSERT INTO synthetic_upgrade_marker VALUES ('synthetic-preserved')");
             }
-            var latest = database.configuration("classpath:db/migration").load();
+            var latest = database.configuration("classpath:db/migration").target("2").load();
             assertThat(latest.migrate().migrationsExecuted).isEqualTo(1);
             assertThat(latest.info().current().getVersion().toString()).isEqualTo("2");
             assertThat(latest.validateWithResult().validationSuccessful).isTrue();
