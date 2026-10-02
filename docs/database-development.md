@@ -2,7 +2,7 @@
 
 ## 当前边界
 
-T04 接入 PostgreSQL 17、Spring JDBC、Flyway 和最小健康检查。生产迁移 V1 仅建立应用 schema 的初始化记录，不包含患者、病例、账号等业务表。升级测试使用独立的合成 fixtures，不代表尚未实现的业务模型已经通过升级验收。
+T04 接入 PostgreSQL 17、Spring JDBC、Flyway 和最小健康检查。生产迁移 V1 仅建立应用 schema 的初始化记录；T05 的增量 V2 建立核心数据结构，详见[核心数据模型与数据字典](core-data-model.md)。没有新增临床 HTTP API、身份权限或账号表。T04 独立合成升级 fixtures 与 T05 的真实生产 V1→V2 升级测试分开保留，执行结果应分别报告。
 
 本工程目前只允许本机开发及合成数据测试，不可处理真实患者数据或直接开放公网。Compose 创建的 `POSTGRES_USER` 是 PostgreSQL 超级用户，仅用于这个本机开发起点，不能当作生产运行账号。
 
@@ -59,7 +59,8 @@ npm --prefix frontend run test:e2e
 
 覆盖范围：
 
-- 空 schema 的生产 V1 迁移及重复运行无新增迁移
+- 空 schema 的生产 V1+V2 迁移及重复运行无新增迁移
+- 真实生产 V1→V2 增量升级、核心表约束和内部 JDBC 查询，具体见核心数据模型说明
 - 已执行迁移的校验和更改被拒绝
 - 合成 V1→V2 升级保留原记录并新增字段
 - PostgreSQL DDL 迁移失败的事务回滚
