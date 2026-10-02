@@ -13,7 +13,7 @@ class IdentityAccessMigrationTest {
     void emptySchemaGetsNineAccessTablesAndOnlyThreeRoleTemplatesWithoutAccountsOrClinicalSeeds() throws Exception {
         try (var f = new AccessPolicyTestFixture()) {
             var flyway = f.database.configuration("classpath:db/migration").load();
-            assertThat(flyway.info().current().getVersion().toString()).isEqualTo("3");
+            assertThat(flyway.info().current().getVersion().toString()).isEqualTo("4");
             assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
             assertThat(flyway.migrate().migrationsExecuted).isZero();
             var tables = f.jdbc.queryForList("SELECT tablename FROM pg_tables WHERE schemaname = current_schema()", String.class);
@@ -54,7 +54,7 @@ class IdentityAccessMigrationTest {
                 jdbc.update("INSERT INTO patient (id, hospital_id) VALUES (?, ?)", patient, hospital);
                 jdbc.update("INSERT INTO pathology_request (id, hospital_id, patient_id, source_system_id, request_number) VALUES (?, ?, ?, ?, 'synthetic-upgrade')", request, hospital, patient, source);
                 jdbc.update("INSERT INTO pathology_case (id, hospital_id, request_id) VALUES (?, ?, ?)", pathologyCase, hospital, request);
-                var latest = database.configuration("classpath:db/migration").load();
+                var latest = database.configuration("classpath:db/migration").target("3").load();
                 assertThat(latest.migrate().migrationsExecuted).isEqualTo(1);
                 assertThat(latest.info().current().getVersion().toString()).isEqualTo("3");
                 assertThat(latest.validateWithResult().validationSuccessful).isTrue();

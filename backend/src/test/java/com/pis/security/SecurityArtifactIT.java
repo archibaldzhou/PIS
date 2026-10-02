@@ -13,10 +13,12 @@ class SecurityArtifactIT {
             var names = jar.stream().map(entry -> entry.getName()).toList();
             assertThat(names).noneMatch(name -> name.contains("testfixture") || name.endsWith("application-test.properties")
                 || name.contains("invalid-fixture") || name.contains("upgrade-fixture")
-                || name.contains("spring-boot-test") || name.contains("junit"));
+                || name.contains("spring-boot-test") || name.contains("junit")
+                || name.startsWith("BOOT-INF/classes/com/pis/api/http/"));
             for (var entry : jar.stream().filter(item -> !item.isDirectory() && item.getName().startsWith("BOOT-INF/classes/")).toList()) {
                 String content = new String(jar.getInputStream(entry).readAllBytes(), StandardCharsets.ISO_8859_1);
-                assertThat(content).doesNotContain("synthetic.reader", "synthetic.disabled", "Synthetic-test-only-42!", "Synthetic-http-test-42!");
+                assertThat(content).doesNotContain("synthetic.reader", "synthetic.disabled", "Synthetic-test-only-42!", "Synthetic-http-test-42!",
+                    "Synthetic-api-http-42!", "/test/api-contract", "http_probe_resource", "command_test_resource");
             }
         }
     }

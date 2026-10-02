@@ -82,7 +82,25 @@ class SecurityHttpTest {
         assertThat(wrong.statusCode()).isEqualTo(401);
         assertThat(unknown.statusCode()).isEqualTo(401);
         assertThat(off.statusCode()).isEqualTo(401);
-        assertThat(wrong.body()).isEqualTo(unknown.body()).isEqualTo(off.body());
+        var stableBodies = new java.util.ArrayList<tools.jackson.databind.node.ObjectNode>();
+        var traces = new java.util.HashSet<String>();
+        for (var response : java.util.List.of(wrong, unknown, off)) {
+            assertThat(response.headers().firstValue("content-type").orElse("")).contains("application/problem+json");
+            var problem = (tools.jackson.databind.node.ObjectNode) JSON.readTree(response.body());
+            String trace = problem.path("traceId").stringValue();
+            assertThat(UUID.fromString(trace).version()).isEqualTo(4);
+            assertThat(problem.path("instance").stringValue()).isEqualTo("urn:uuid:" + trace);
+            assertThat(response.headers().firstValue("X-Trace-Id")).contains(trace);
+            assertThat(problem.path("code").stringValue()).isEqualTo("AUTHENTICATION_FAILED");
+            assertThat(problem.path("status").intValue()).isEqualTo(401);
+            assertThat(problem.propertyNames()).containsExactlyInAnyOrder("type", "title", "status", "detail", "instance", "code", "traceId", "message");
+            traces.add(trace);
+            problem.remove("traceId");
+            problem.remove("instance");
+            stableBodies.add(problem);
+        }
+        assertThat(traces).hasSize(3);
+        assertThat(stableBodies.get(0)).isEqualTo(stableBodies.get(1)).isEqualTo(stableBodies.get(2));
     }
 
     @Test void logoutRequiresFreshCsrfAndInvalidatesTheOldCookie() throws Exception {
