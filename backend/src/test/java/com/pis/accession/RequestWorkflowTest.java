@@ -44,6 +44,7 @@ class RequestWorkflowTest {
     @Autowired com.pis.label.LabelService labels;
     @Autowired com.pis.grossing.GrossService gross;
     @Autowired com.pis.processing.TechnicalService technical;
+    @Autowired com.pis.material.MaterialService materials;
     @Autowired org.springframework.security.crypto.password.PasswordEncoder encoder;
     @org.springframework.boot.test.web.server.LocalServerPort int port;
     static final Draft COMPLETE=new Draft("Synthetic history",Instant.parse("2026-01-01T08:00:00Z"),
@@ -786,6 +787,145 @@ class RequestWorkflowTest {
         assertThat(browser.send("POST","/api/technical/tasks/"+id+"/claim",decision,csrf,false).statusCode()).isEqualTo(409);
         jdbc.update("UPDATE workflow_grant SET can_handoff=false,can_process=false WHERE user_id=?",f.user);
         assertThat(browser.send("GET","/api/technical/tasks/"+id,null,null,false).statusCode()).isEqualTo(404);
+    }
+    private void materialGrant(Fixture f) { jdbc.update("UPDATE workflow_grant SET can_material=true WHERE user_id=?",f.user); }
+    private record MaterialSetup(UUID request,UUID cassette,UUID embedding,UUID sectioning) { }
+    private MaterialSetup materialSetup(Fixture f) {
+        var rid=technicalRequest(f); materialGrant(f); var box=technicalCassette(f,rid);
+        var tasks=new java.util.ArrayList<UUID>();
+        for(var kind:List.of(com.pis.processing.TechnicalContracts.Kind.EMBEDDING,com.pis.processing.TechnicalContracts.Kind.SECTIONING)) {
+            tasks.add(f.as(()->{
+                var task=technical.create(rid,new com.pis.processing.TechnicalContracts.Create(2L,box,kind,null,"Synthetic material prerequisite"),kind.name()).receipt().resourceId();
+                technical.decide(task,td(0,box),"claim-"+kind,"CLAIM"); technical.decide(task,td(1,box),"finish-"+kind,"FINISH_SIMULATION"); return task;
+            }));
+        }
+        return new MaterialSetup(rid,box,tasks.get(0),tasks.get(1));
+    }
+    private com.pis.material.MaterialContracts.BlockCreate blockInput(MaterialSetup s) { return new com.pis.material.MaterialContracts.BlockCreate(2L,s.embedding(),2L,s.cassette(),"Synthetic block registration"); }
+    private com.pis.material.MaterialContracts.Repeat repeatInput(MaterialSetup s,UUID slide,long version) { return new com.pis.material.MaterialContracts.Repeat(version,s.sectioning(),2L,slide,"Synthetic recut/deeper reason"); }
+    @Test void materialIdsRecutsDeeperVoidingAndLabelReprintsKeepDistinctStableLineage() {
+        var f=new Fixture(); var s=materialSetup(f); printGrant(f);
+        f.as(()->{
+            var block=materials.block(s.request(),blockInput(s),"block").receipt().resourceId();
+            assertThat(materials.block(s.request(),blockInput(s),"block").receipt().resourceId()).isEqualTo(block);
+            assertCode(()->materials.block(s.request(),blockInput(s),"another-block"),"MATERIAL_BLOCK_EXISTS");
+            var slide=materials.slide(block,new com.pis.material.MaterialContracts.SlideCreate(0L,s.sectioning(),2L,block,"Synthetic original"),"slide").receipt().resourceId();
+            materials.voidMaterial(slide,new com.pis.material.MaterialContracts.VoidMaterial(0L,slide,"Synthetic damaged original"),"void-original");
+            var recut=materials.repeat(slide,repeatInput(s,slide,1),"recut","RECUT").receipt().resourceId();
+            var deeper=materials.repeat(recut,repeatInput(s,recut,0),"deeper","DEEPER").receipt().resourceId();
+            var original=materials.detail(slide).entity(); var cut=materials.detail(recut).entity(); var deep=materials.detail(deeper).entity();
+            assertThat(List.of(block,slide,recut,deeper)).doesNotHaveDuplicates(); assertThat(List.of(original.number(),cut.number(),deep.number())).doesNotHaveDuplicates(); assertThat(List.of(original.barcode(),cut.barcode(),deep.barcode())).doesNotHaveDuplicates();
+            assertThat(cut.sourceSlideId()).isEqualTo(slide); assertThat(deep.sourceSlideId()).isEqualTo(recut); assertThat(deep.blockId()).isEqualTo(block); assertThat(cut.blockId()).isEqualTo(block); assertThat(original.state()).isEqualTo("VOID");
+            assertThat(materials.barcode(deep.barcode()).entity().id()).isEqualTo(deeper);
+            var label=labels.createMaterial(deeper,new com.pis.label.LabelContracts.MaterialCreate(2L,0L),"label").receipt().resourceId();
+            var reprint=labels.change(label,new com.pis.label.LabelContracts.Change(0L,"Synthetic damaged label"),"reprint","REPRINT").receipt().resourceId();
+            assertThat(labels.view(reprint).job()).satisfies(j->{ assertThat(j.materialId()).isEqualTo(deeper); assertThat(j.containerId()).isNull(); assertThat(j.barcode()).isEqualTo(deep.barcode()); assertThat(j.parentJobId()).isEqualTo(label); });
+            assertThat(labels.verifyMaterial(reprint,new com.pis.label.LabelContracts.MaterialVerify(deeper,deep.barcode())).matches()).isTrue();
+            assertCode(()->labels.verifyMaterial(reprint,new com.pis.label.LabelContracts.MaterialVerify(recut,deep.barcode())),"LABEL_IDENTITY_MISMATCH");
+            assertThat(materials.view(s.request()).entities()).hasSize(4);
+            materials.voidMaterial(block,new com.pis.material.MaterialContracts.VoidMaterial(1L,block,"Synthetic source withdrawn"),"void-block");
+            assertThat(materials.view(s.request()).entities()).allSatisfy(e->assertThat(e.state()).isEqualTo("VOID"));
+            assertThat(materials.detail(deeper).events()).anySatisfy(e->{ assertThat(e.action()).isEqualTo("SOURCE_VOIDED"); assertThat(e.relatedId()).isEqualTo(block); });
+            assertCode(()->labels.view(reprint),"MATERIAL_INACTIVE");
+            assertCode(()->labels.change(reprint,new com.pis.label.LabelContracts.Change(0L,"Late"),"late-print","REPRINT"),"MATERIAL_INACTIVE");
+            assertCode(()->materials.repeat(slide,repeatInput(s,slide,2),"late-recut","RECUT"),"MATERIAL_INACTIVE");
+            assertThatThrownBy(()->jdbc.update("UPDATE material_entity SET barcode=? WHERE id=?",com.pis.label.LabelBarcode.create(UUID.randomUUID()),deeper)).isInstanceOf(org.springframework.dao.DataAccessException.class);
+            assertThatThrownBy(()->jdbc.update("DELETE FROM material_event WHERE material_id=?",deeper)).isInstanceOf(org.springframework.dao.DataAccessException.class); return null;
+        });
+    }
+    @Test void directCytologyHasNoInventedBlockAndCrossCaseSourcesAreRejected() {
+        var f=new Fixture(); var rid=grossRequest(f); materialGrant(f); var other=new Fixture(); var foreign=materialSetup(other);
+        var cid=f.as(()->service.detail(rid)).containers().getFirst().id();
+        var foreignBlock=other.as(()->materials.block(foreign.request(),blockInput(foreign),"block")).receipt().resourceId();
+        var foreignContainer=other.as(()->service.detail(foreign.request())).containers().getFirst().id();
+        f.as(()->{
+            var direct=new com.pis.material.MaterialContracts.DirectCreate(2L,cid,"Synthetic explicit direct cytology");
+            var id=materials.direct(rid,direct,"direct").receipt().resourceId(); var e=materials.detail(id).entity();
+            assertThat(e.route()).isEqualTo("DIRECT_CYTOLOGY"); assertThat(e.containerId()).isEqualTo(cid); assertThat(e.blockId()).isNull(); assertThat(e.cassetteId()).isNull(); assertThat(e.technicalTaskId()).isNull();
+            assertCode(()->materials.repeat(id,repeatInput(foreign,id,0),"wrong-route","RECUT"),"MATERIAL_ROUTE_UNSUPPORTED");
+            assertCode(()->materials.block(rid,blockInput(foreign),"wrong-task"),"MATERIAL_TASK_NOT_READY");
+            assertCode(()->materials.detail(foreignBlock),"REQUEST_NOT_FOUND");
+            assertCode(()->materials.direct(rid,new com.pis.material.MaterialContracts.DirectCreate(2L,foreignContainer,"Foreign container"),"foreign-container"),"MATERIAL_SOURCE_MISMATCH");
+            assertCode(()->materials.direct(rid,new com.pis.material.MaterialContracts.DirectCreate(2L,UUID.randomUUID(),"Wrong container"),"wrong-container"),"MATERIAL_SOURCE_MISMATCH");
+            assertThatThrownBy(()->jdbc.update("INSERT INTO material_entity(id,hospital_id,patient_id,request_id,case_id,kind,route,operation,display_number,barcode,container_id,created_by) SELECT ?,hospital_id,?,request_id,case_id,kind,route,operation,?, ?,container_id,created_by FROM material_entity WHERE id=?",UUID.randomUUID(),other.patient,"DEV-S-SYNTHETIC-WRONG",com.pis.label.LabelBarcode.create(UUID.randomUUID()),id)).isInstanceOf(org.springframework.dao.DataAccessException.class);
+            jdbc.update("UPDATE workflow_grant SET can_material=false WHERE user_id=?",f.user);
+            assertCode(()->materials.direct(rid,direct,"direct"),"MATERIAL_NOT_FOUND"); return null;
+        });
+        var code=other.as(()->materials.detail(foreignBlock)).entity().barcode();
+        f.as(()->{ assertCode(()->materials.barcode(code),"REQUEST_NOT_FOUND"); return null; });
+    }
+    @Test void materialCreationAndVoidingRollBackIdentityAndCascadeOnAuditFailure() {
+        var f=new Fixture(); var s=materialSetup(f);
+        var block=f.as(()->materials.block(s.request(),blockInput(s),"block")).receipt().resourceId();
+        var input=new com.pis.material.MaterialContracts.SlideCreate(0L,s.sectioning(),2L,block,"Synthetic atomic slide");
+        jdbc.execute("CREATE FUNCTION reject_material_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.hospital_id='"+f.hospital+"'::uuid THEN RAISE EXCEPTION 'synthetic failure'; END IF; RETURN NEW; END $$");
+        jdbc.execute("CREATE TRIGGER reject_material_audit BEFORE INSERT ON audit_event FOR EACH ROW EXECUTE FUNCTION reject_material_audit()");
+        try {
+            f.as(()->{ assertThatThrownBy(()->materials.slide(block,input,"recover")).isInstanceOf(org.springframework.dao.DataAccessException.class); return null; });
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM material_entity WHERE request_id=?",Long.class,s.request())).isEqualTo(1);
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM label_identity WHERE request_id=?",Long.class,s.request())).isEqualTo(1);
+        } finally { jdbc.execute("DROP TRIGGER reject_material_audit ON audit_event"); }
+        var slide=f.as(()->materials.slide(block,input,"recover")).receipt().resourceId();
+        jdbc.execute("CREATE TRIGGER reject_material_audit BEFORE INSERT ON audit_event FOR EACH ROW EXECUTE FUNCTION reject_material_audit()");
+        try {
+            f.as(()->{ assertThatThrownBy(()->materials.voidMaterial(block,new com.pis.material.MaterialContracts.VoidMaterial(1L,block,"Synthetic atomic void"),"void-recover")).isInstanceOf(org.springframework.dao.DataAccessException.class); return null; });
+            assertThat(f.as(()->materials.detail(block)).entity().state()).isEqualTo("ACTIVE"); assertThat(f.as(()->materials.detail(slide)).entity().state()).isEqualTo("ACTIVE");
+        } finally { jdbc.execute("DROP TRIGGER reject_material_audit ON audit_event"); jdbc.execute("DROP FUNCTION reject_material_audit()"); }
+        f.as(()->{ assertThat(materials.slide(block,input,"recover").replayed()).isTrue(); materials.voidMaterial(block,new com.pis.material.MaterialContracts.VoidMaterial(1L,block,"Synthetic atomic void"),"void-recover"); return null; });
+    }
+    @Test void concurrentBlockNumberingAndRecutsObserveLocksAndAllocateOnlyWinningIdentities() throws Exception {
+        for(String action:List.of("BLOCK","RECUT")) {
+            var f=new Fixture(); var s=materialSetup(f); UUID parent;
+            if(action.equals("RECUT")) {
+                var block=f.as(()->materials.block(s.request(),blockInput(s),"initial")).receipt().resourceId();
+                parent=f.as(()->materials.slide(block,new com.pis.material.MaterialContracts.SlideCreate(0L,s.sectioning(),2L,block,"Synthetic initial"),"initial-slide")).receipt().resourceId();
+            } else parent=null;
+            try(var blocker=DB.connection();var executor=Executors.newVirtualThreadPerTaskExecutor()) {
+                blocker.setAutoCommit(false);
+                try(var statement=blocker.prepareStatement("SELECT id FROM pathology_request WHERE id=? FOR UPDATE")) { statement.setObject(1,s.request()); statement.executeQuery().close(); }
+                java.util.function.Function<String,String> run=key->f.as(()->{ try { if(action.equals("BLOCK")) materials.block(s.request(),blockInput(s),key); else materials.repeat(parent,repeatInput(s,parent,0),key,"RECUT"); return "SUCCESS"; } catch(ApiException e) { return e.code(); } });
+                var first=executor.submit(()->run.apply("one")); var second=executor.submit(()->run.apply("two"));
+                try {
+                    long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(2); boolean waiting=false;
+                    while(System.nanoTime()<deadline) { if(jdbc.queryForObject("SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%SELECT id FROM pathology_request WHERE id=%'",Long.class)>=2) { waiting=true; break; } Thread.sleep(10); } assertThat(waiting).isTrue();
+                } finally { blocker.rollback(); }
+                assertThat(List.of(first.get(5,TimeUnit.SECONDS),second.get(5,TimeUnit.SECONDS))).containsExactlyInAnyOrder("SUCCESS",action.equals("BLOCK")?"MATERIAL_BLOCK_EXISTS":"VERSION_CONFLICT");
+                var entities=f.as(()->materials.view(s.request())).entities(); assertThat(entities).hasSize(action.equals("BLOCK")?1:3); assertThat(entities).extracting(e->e.number()).doesNotHaveDuplicates(); assertThat(entities).extracting(e->e.barcode()).doesNotHaveDuplicates();
+            }
+        }
+    }
+    @Test void sourceVoidingRacingRecutNeverLeavesAnActiveDescendant() throws Exception {
+        var f=new Fixture(); var s=materialSetup(f);
+        var block=f.as(()->materials.block(s.request(),blockInput(s),"block")).receipt().resourceId();
+        var slide=f.as(()->materials.slide(block,new com.pis.material.MaterialContracts.SlideCreate(0L,s.sectioning(),2L,block,"Synthetic initial"),"slide")).receipt().resourceId();
+        try(var blocker=DB.connection();var executor=Executors.newVirtualThreadPerTaskExecutor()) {
+            blocker.setAutoCommit(false);
+            try(var statement=blocker.prepareStatement("SELECT id FROM pathology_request WHERE id=? FOR UPDATE")) { statement.setObject(1,s.request()); statement.executeQuery().close(); }
+            var cancel=executor.submit(()->f.as(()->materials.voidMaterial(block,new com.pis.material.MaterialContracts.VoidMaterial(1L,block,"Synthetic race void"),"void")));
+            var derive=executor.submit(()->f.as(()->{ try { materials.repeat(slide,repeatInput(s,slide,0),"recut","RECUT"); return "CREATED_THEN_VOIDED"; } catch(ApiException e) { return e.code(); } }));
+            try {
+                long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(2); boolean waiting=false;
+                while(System.nanoTime()<deadline) { if(jdbc.queryForObject("SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%SELECT id FROM pathology_request WHERE id=%'",Long.class)>=2) { waiting=true; break; } Thread.sleep(10); } assertThat(waiting).isTrue();
+            } finally { blocker.rollback(); }
+            assertThat(cancel.get(5,TimeUnit.SECONDS).receipt().resourceId()).isEqualTo(block);
+            String outcome=derive.get(5,TimeUnit.SECONDS); assertThat(outcome).isIn("CREATED_THEN_VOIDED","VERSION_CONFLICT");
+            var entities=f.as(()->materials.view(s.request())).entities(); assertThat(entities).hasSize(outcome.equals("CREATED_THEN_VOIDED")?3:2);
+            assertThat(entities).allSatisfy(e->assertThat(e.state()).isEqualTo("VOID"));
+            if(outcome.equals("CREATED_THEN_VOIDED")) assertThat(entities.stream().filter(e->e.operation().equals("RECUT")).findFirst().orElseThrow().sourceSlideId()).isEqualTo(slide);
+        }
+    }
+    @Test void materialHttpRequiresDedicatedPermissionCsrfAndRejectsUnknownPaths() throws Exception {
+        var f=new Fixture(); var rid=grossRequest(f); var cid=f.as(()->service.detail(rid)).containers().getFirst().id();
+        String password="Synthetic-material-http-42!"; jdbc.update("UPDATE app_user SET password_hash=? WHERE id=?",encoder.encode(password),f.user);
+        var b=new Browser(); var path="/api/materials/requests/"+rid;
+        assertThat(b.send("GET",path,null,null,false).statusCode()).isEqualTo(401);
+        String login="username="+f.principal.getUsername()+"&password="+java.net.URLEncoder.encode(password,java.nio.charset.StandardCharsets.UTF_8);
+        assertThat(b.send("POST","/api/auth/login",login,b.csrf(),true).statusCode()).isEqualTo(204); String csrf=b.csrf();
+        assertThat(b.send("GET",path,null,null,false).statusCode()).isEqualTo(404); materialGrant(f);
+        var body="{\"requestVersion\":2,\"confirmedContainerId\":\""+cid+"\",\"reason\":\"Synthetic direct\"}";
+        assertThat(b.send("POST",path+"/direct-slides",body,null,false).statusCode()).isEqualTo(403);
+        assertThat(b.send("POST",path+"/direct-slides",body.replace("\"reason\":","\"ownerId\":\"client\",\"reason\":"),csrf,false).statusCode()).isEqualTo(400);
+        assertThat(b.send("POST",path+"/direct-slides",body,csrf,false).statusCode()).isEqualTo(201);
     }
     private String editResult(Fixture f,UUID id,String key) { return f.as(()->{ try { service.edit(id,new Edit(0L,COMPLETE),key); return "SUCCESS"; } catch(ApiException e) { return e.code(); } }); }
     private static void assertCode(Runnable action,String code) { assertThatThrownBy(action::run).isInstanceOfSatisfying(ApiException.class,e->assertThat(e.code()).isEqualTo(code)); }

@@ -21,6 +21,13 @@ import org.springframework.transaction.annotation.Transactional;
 import static com.pis.processing.TechnicalContracts.*;
 @Service
 public class TechnicalService {
+    public record MaterialTask(UUID id,long version,UUID requestId,UUID caseId,UUID recordId,UUID cassetteId,String kind) { }
+    /** Public source projection; material registration does not grant technical command permission. */
+    @Transactional(timeout=10)
+    public List<MaterialTask> materialTasks(UUID rid) {
+        requests.detail(rid);
+        return jdbc.query("SELECT id,version,request_id,case_id,record_id,cassette_id,kind FROM technical_task WHERE request_id=? AND state='SIMULATED_DONE' ORDER BY created_at,id LIMIT 50",(r,i)->new MaterialTask(r.getObject(1,UUID.class),r.getLong(2),r.getObject(3,UUID.class),r.getObject(4,UUID.class),r.getObject(5,UUID.class),r.getObject(6,UUID.class),r.getString(7)),rid);
+    }
     private final JdbcTemplate jdbc; private final RequestService requests; private final WorkflowAccess access;
     private final GrossService gross; private final IdempotentCommands commands; private final Validator validator;
     public TechnicalService(JdbcTemplate jdbc,RequestService requests,WorkflowAccess access,GrossService gross,IdempotentCommands commands,Validator validator) {
