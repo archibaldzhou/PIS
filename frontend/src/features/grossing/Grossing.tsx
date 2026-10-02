@@ -35,9 +35,9 @@ export function Grossing({ requestId, onDirty, onClean, onPending, onExpired }: 
           { title: '来源容器', key: 'sources', render: (_, box) => box.containerIds.join(' / ') },
         ]} /></Card>
         <Card title="大体图像（固定合成样本，非真实照片）">{data.record.photos.length === 0 ? <p>尚无附件</p> : data.record.photos.map(photo => <PhotoPanel key={photo.id + String(photo.withdrawnAt) + data.record?.state} photo={photo} cancelled={data.record?.state === 'CANCELLED'} onExpired={onExpired} />)}</Card>
-        <Card title="描述修订（最近50条，旧版本保留）"><Table rowKey="version" dataSource={data.record.revisions} pagination={false} scroll={{ x: 650 }} columns={[
+        <section aria-label="取材描述修订" data-record-id={data.record.id}><Card title="描述修订（最近50条，旧版本保留）"><Table rowKey="version" dataSource={data.record.revisions} pagination={false} scroll={{ x: 650 }} columns={[
           { title: '版本', dataIndex: 'version' }, { title: '描述', dataIndex: 'description' }, { title: '原因', dataIndex: 'reason' }, { title: '操作者', dataIndex: 'actorId' },
-        ]} /></Card>
+        ]} /></Card></section>
         <Card title="操作轨迹（最近100条）"><Table rowKey="id" dataSource={data.record.events} pagination={false} scroll={{ x: 650 }} columns={[
           { title: '版本', dataIndex: 'version' }, { title: '操作', dataIndex: 'action' }, { title: '目标', dataIndex: 'targetId' }, { title: '原因', dataIndex: 'reason' }, { title: '时间 UTC', dataIndex: 'occurredAt' },
         ]} /></Card>

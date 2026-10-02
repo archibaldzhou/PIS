@@ -185,3 +185,45 @@ test('grossing resets modes, revokes photo URLs and freezes an uncertain command
   await page.screenshot({ path: 'test-results/grossing-mobile.png', fullPage: true });
   expect(errors).toEqual([]);
 });
+
+test('exact request selection and saved revision wait for the correction receipt', async ({ page }) => {
+  await start(page);
+  const id = '88888888-8888-4888-8888-888888888888', otherId = '99999999-9999-4999-8999-999999999999';
+  const recordId = '66666666-6666-4666-8666-666666666666';
+  const detail = { id, scopeId: scope, version: 2, state: 'RECEIVED', requestNumber: 'DEV-AP-EXACT', patientId: encounter.patientId, patientLabel: encounter.patientLabel,
+    encounterId: encounter.id, encounterNumber: encounter.encounterNumber, department: '合成科室', requestedAt: '2026-01-01T08:00:00Z', clinicalHistory: '合成资料', sampledAt: '2026-01-01T08:00:00Z', containers: [] };
+  const original = { version: 0, description: '合成原始已完成描述', reason: '合成原始记录', actorId: 'synthetic-user', createdAt: '2026-01-01T08:00:00Z' };
+  let record = { id: recordId, version: 0, state: 'COMPLETED', description: original.description, cassettes: [], photos: [], events: [], revisions: [original] };
+  // A second simultaneous request makes accidental broad DEV-AP selection fail strictly.
+  await page.route('**/api/requests?*', route => route.fulfill({ json: { items: [{ ...detail, id: otherId, requestNumber: 'DEV-AP-OTHER' }, detail], total: 2, page: 1, pageSize: 20 } }));
+  await page.route('**/api/requests/' + id, route => route.fulfill({ json: detail }));
+  await page.route('**/api/requests/' + otherId, route => route.fulfill({ status: 404, json: { code: 'REQUEST_NOT_FOUND' } }));
+  await page.route('**/api/grossing/requests/' + id, route => route.fulfill({ json: { request: detail, caseId: 'synthetic-case', caseNumber: 'DEV-P-EXACT', record } }));
+  await page.getByRole('button', { name: '刷新', exact: true }).click();
+  await expect(page.getByRole('button', { name: /^查看 DEV-AP-/ })).toHaveCount(2);
+  await page.getByTestId('request-row-' + id).getByRole('button', { name: '查看 DEV-AP-EXACT', exact: true }).click();
+  await page.getByRole('button', { name: '处理此病例取材', exact: true }).click();
+  const revisions = page.getByRole('region', { name: '取材描述修订', exact: true });
+  await expect(revisions).toHaveAttribute('data-record-id', recordId);
+  await page.getByLabel('大体描述', { exact: true }).fill('合成更正尚未保存');
+  await page.getByLabel('操作原因 / 更正说明').fill('合成更正原因');
+  let release = () => {}; const gate = new Promise<void>(resolve => { release = resolve; }); let writes = 0;
+  await page.route('**/api/grossing/records/' + recordId + '/correction', async route => {
+    writes++; expect(route.request().postDataJSON()).toEqual({ expectedVersion: 0, description: '合成更正尚未保存', reason: '合成更正原因' });
+    await gate;
+    record = { ...record, version: 1, description: '合成更正尚未保存', revisions: [{ ...original, version: 1, description: '合成更正尚未保存', reason: '合成更正原因' }, original] };
+    await route.fulfill({ json: { receipt: { resourceId: recordId, version: 1 } } });
+  });
+  try {
+    await page.getByRole('button', { name: '更正已完成描述', exact: true }).click();
+    await expect.poll(() => writes).toBe(1);
+    await expect(page.getByLabel('大体描述', { exact: true })).toHaveValue('合成更正尚未保存');
+    await expect(revisions.getByRole('cell', { name: '合成更正尚未保存', exact: true })).toHaveCount(0);
+    await expect(revisions.getByRole('cell', { name: original.description, exact: true })).toBeVisible();
+    await expect(page.getByLabel('取材病例身份')).toContainText('版本 0');
+    release();
+    await expect(page.getByLabel('取材病例身份')).toContainText('版本 1');
+    await expect(revisions.getByRole('cell', { name: '合成更正尚未保存', exact: true })).toBeVisible();
+    await expect(revisions.getByRole('cell', { name: original.description, exact: true })).toBeVisible();
+  } finally { release(); }
+});

@@ -19,7 +19,7 @@ test('grossing keeps description revisions, cassette sources and private photo w
   const cid = detail.containers[0].id;
   expect((await page.request.post(`/api/receptions/${receipt.resourceId}/receive`, { headers: headers(), data: { expectedVersion: 1, patientId: encounters[0].patientId, encounterNumber: 'SYN-GROSS-001', containerIds: [cid] } })).status()).toBe(200);
   await page.getByLabel('授权工作范围').click(); await page.getByText('合成申请工作范围', { exact: true }).last().click();
-  await page.getByRole('button', { name: '查看 ' + detail.requestNumber, exact: true }).click();
+  await page.getByTestId('request-row-' + receipt.resourceId).getByRole('button', { name: '查看 ' + detail.requestNumber, exact: true }).click();
   await page.getByRole('button', { name: '处理此病例取材' }).click();
   await page.getByLabel('大体描述', { exact: true }).fill('Synthetic initial gross description');
   await page.getByRole('button', { name: '建立取材记录', exact: true }).dblclick();
@@ -60,8 +60,15 @@ test('grossing keeps description revisions, cassette sources and private photo w
   await expect(page.getByLabel('取材病例身份')).toContainText('COMPLETED');
   await page.getByLabel('大体描述', { exact: true }).fill('Synthetic corrected description');
   await page.getByLabel('操作原因 / 更正说明').fill('Synthetic appended correction');
+  const correctionResponse = page.waitForResponse(response => new URL(response.url()).pathname === '/api/grossing/records/' + before.record.id + '/correction' && response.request().method() === 'POST');
   await page.getByRole('button', { name: '更正已完成描述', exact: true }).click();
-  await expect(page.getByText('Synthetic corrected description', { exact: true })).toBeVisible();
+  const correction = await correctionResponse; expect(correction.status()).toBe(200);
+  const saved = await correction.json() as { receipt: { resourceId: string; version: number } };
+  expect(saved.receipt.resourceId).toBe(before.record.id);
+  await expect(page.getByLabel('取材病例身份')).toContainText('版本 ' + saved.receipt.version);
+  const revisions = page.getByRole('region', { name: '取材描述修订', exact: true });
+  await expect(revisions).toHaveAttribute('data-record-id', before.record.id);
+  await expect(revisions.getByRole('cell', { name: 'Synthetic corrected description', exact: true })).toBeVisible();
   const after = await (await page.request.get('/api/grossing/requests/' + receipt.resourceId)).json() as { record: { id: string; state: string; cassettes: { id: string; state: string; containerIds: string[] }[]; revisions: { description: string }[] } };
   expect(after.record.id).toBe(before.record.id);
   expect(after.record.state).toBe('COMPLETED');

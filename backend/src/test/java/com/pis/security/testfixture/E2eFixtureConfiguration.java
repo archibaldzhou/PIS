@@ -31,8 +31,12 @@ public class E2eFixtureConfiguration {
         jdbc.update("INSERT INTO workflow_grant(user_id,scope_id,can_read,can_write,can_receive,can_exception,can_print,can_reprint,can_gross) SELECT id,?,true,true,true,true,true,true,true FROM app_user WHERE username=?",scope,username);
         jdbc.update("INSERT INTO patient(id,hospital_id,display_name) VALUES(?,?,'合成申请患者')",patient,hospital);
         jdbc.update("INSERT INTO encounter(hospital_id,patient_id,source_system_id,encounter_number,department_id) VALUES(?,?,?,'SYN-WORKFLOW-001',?)",hospital,patient,source,department);
-        for(var number:java.util.List.of("SYN-RECEIVE-001","SYN-RETURN-001","SYN-RESOLVE-001","SYN-LABEL-001","SYN-GROSS-001"))
-            jdbc.update("INSERT INTO encounter(hospital_id,patient_id,source_system_id,encounter_number,department_id) VALUES(?,?,?,?,?)",hospital,patient,source,number,department);
+        for(var number:java.util.List.of("SYN-RECEIVE-001","SYN-RETURN-001","SYN-RESOLVE-001","SYN-LABEL-001","SYN-GROSS-001")) {
+            // Independent patient/encounter per scenario; shared list still exercises exact resource selection.
+            var scenarioPatient=java.util.UUID.randomUUID();
+            jdbc.update("INSERT INTO patient(id,hospital_id,display_name) VALUES(?,?,'合成申请患者')",scenarioPatient,hospital);
+            jdbc.update("INSERT INTO encounter(hospital_id,patient_id,source_system_id,encounter_number,department_id) VALUES(?,?,?,?,?)",hospital,scenarioPatient,source,number,department);
+        }
     }
     private static void insert(JdbcTemplate jdbc, PasswordEncoder encoder, String username, String password,
                                String displayName, boolean enabled) {
