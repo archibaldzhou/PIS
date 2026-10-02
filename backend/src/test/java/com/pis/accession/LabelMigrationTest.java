@@ -12,7 +12,7 @@ class LabelMigrationTest {
                 var jdbc=new JdbcTemplate(new SingleConnectionDataSource(connection,true));
                 String history="SELECT version,checksum FROM flyway_schema_history WHERE version IN ('1','2','3','4','5','6') ORDER BY installed_rank";
                 var before=jdbc.queryForList(history); assertThat(before).hasSize(6);
-                var latest=db.configuration("classpath:db/migration").load();
+                var latest=db.configuration("classpath:db/migration").target("7").load();
                 assertThat(latest.migrate().migrationsExecuted).isEqualTo(1);
                 assertThat(latest.validateWithResult().validationSuccessful).isTrue();
                 assertThat(latest.migrate().migrationsExecuted).isZero();

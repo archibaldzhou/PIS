@@ -20,3 +20,5 @@
 CI 已执行通过的新增后端测试：条码固定向量、V6→V7、同实体重打/不可改快照、状态与版本、跨范围/低权限、扫码防串容器、审计回滚、同键创建并发、不同键同版本重打竞争、真实HTTP/CSRF及撤权。新增真实浏览器E2E从已接收容器完成创建→预览→校验→模拟失败→重试→取消→重打，显式拦截浏览器打印函数仅验证调用，不向设备发作业。
 
 真实PG17隔离SQL探针已成功执行最终V1–V7，验证迁移语法/无种子并清理容器，但不替代Flyway/JVM测试；父会话核验验证分支 `135db30b2dcea30e9d42f49b3318000b2786929a` 的 [CI 37037476692](https://github.com/archibaldzhou/PIS/actions/runs/37037476692) 为 success：verify 110939143277 的后端、前端、真实浏览器与合成 UI 全部成功，独立依赖审计成功，PR-only dependency-review 按原条件跳过。本地被拒的下载/Actions入口不重试，沿用已批准验证分支流程。main 整理保留已验证业务实现，仅更新说明和移除临时分支触发；推送后仍核验 main 确切 SHA 的 CI。禁止部署/强推，不包含T11。
+
+父会话后续确认 main SHA `d70ac5d21c5a1985d7036d1ab945d4a1c4b211aa` 的 [CI 37038134888](https://github.com/archibaldzhou/PIS/actions/runs/37038134888) 为 success。

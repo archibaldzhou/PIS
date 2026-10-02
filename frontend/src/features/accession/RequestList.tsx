@@ -26,7 +26,7 @@ export function RequestList({ reader, onSelect }: { reader: RequestReader; onSel
         <Button onClick={() => void controller.run(filter)} disabled={state.status === 'loading'}>刷新</Button></Space>
     </Form>
     <ReadPanel state={state}>{data => data.items.length === 0 ? <NoRecords /> :
-      <Table<RequestSummary> rowKey="id" dataSource={data.items} scroll={{ x: 850 }}
+      <Table<RequestSummary> rowKey="id" onRow={row => ({ 'aria-label': '申请 ' + row.requestNumber, 'data-testid': 'request-row-' + row.id })} dataSource={data.items} scroll={{ x: 850 }}
         pagination={{ current: data.page, pageSize: data.pageSize, total: data.total, showSizeChanger: false,
           onChange: page => search({ ...filter, page }) }} columns={[
           { title: '申请号', dataIndex: 'requestNumber' },
