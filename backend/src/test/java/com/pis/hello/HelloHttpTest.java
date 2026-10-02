@@ -7,10 +7,12 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.http.MediaType;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -41,9 +43,24 @@ class HelloHttpTest {
     void requiresAuthenticationForHelloOverHttp() throws Exception {
         var response = get("/api/hello");
         assertThat(response.statusCode()).isEqualTo(401);
-        assertThat(response.headers().firstValue("content-type").orElse("")).contains("application/json");
+        var mediaType = MediaType.parseMediaType(response.headers().firstValue("content-type").orElseThrow());
+        assertThat(mediaType.getType()).isEqualTo("application");
+        assertThat(mediaType.getSubtype()).isEqualTo("problem+json");
+        assertThat(response.headers().firstValue("cache-control").orElse("")).contains("no-store");
         var json = JsonMapper.builder().build().readTree(response.body());
+        assertThat(json.propertyNames()).containsExactlyInAnyOrder(
+            "type", "title", "status", "detail", "instance", "code", "traceId", "message");
+        assertThat(json.path("status").intValue()).isEqualTo(401);
         assertThat(json.path("code").stringValue()).isEqualTo("UNAUTHENTICATED");
+        assertThat(json.path("type").stringValue()).isEqualTo("urn:pis:problem:unauthenticated");
+        assertThat(json.path("title").stringValue()).isEqualTo("Unauthorized");
+        assertThat(json.path("detail").stringValue()).isEqualTo("请先登录");
+        assertThat(json.path("message").stringValue()).isEqualTo(json.path("detail").stringValue());
+        String trace = json.path("traceId").stringValue();
+        assertThat(UUID.fromString(trace).version()).isEqualTo(4);
+        assertThat(response.headers().firstValue("X-Trace-Id")).contains(trace);
+        assertThat(json.path("instance").stringValue()).isEqualTo("urn:uuid:" + trace);
+        assertThat(response.body()).doesNotContain("password", "stackTrace", "exception", "properties", "/api/hello");
     }
 
     @Test
