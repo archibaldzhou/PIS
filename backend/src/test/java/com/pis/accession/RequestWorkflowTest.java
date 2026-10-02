@@ -41,6 +41,7 @@ class RequestWorkflowTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired RequestService service;
     @Autowired com.pis.specimen.ReceptionService reception;
+    @Autowired com.pis.label.LabelService labels;
     @Autowired org.springframework.security.crypto.password.PasswordEncoder encoder;
     @org.springframework.boot.test.web.server.LocalServerPort int port;
     static final Draft COMPLETE=new Draft("Synthetic history",Instant.parse("2026-01-01T08:00:00Z"),
@@ -359,6 +360,143 @@ class RequestWorkflowTest {
         jdbc.update("UPDATE workflow_grant SET can_receive=false WHERE user_id=?",f.user);
         assertThat(browser.send("POST",path,body,csrf,false).statusCode()).isEqualTo(403);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM pathology_case WHERE request_id=?",Long.class,id)).isEqualTo(1);
+    }
+    private UUID receivedContainer(Fixture f) {
+        var id=submitted(f); receptionGrant(f); var input=check(f,id,1);
+        f.as(()->reception.receive(id,input,"receive")); return input.containerIds().getFirst();
+    }
+    private void printGrant(Fixture f) { jdbc.update("UPDATE workflow_grant SET can_print=true,can_reprint=true WHERE user_id=?",f.user); }
+    @Test void labelReprintKeepsEntityBarcodeTemplateAndHistoryWithoutCreatingSpecimens() {
+        var f=new Fixture(); var cid=receivedContainer(f); printGrant(f);
+        f.as(()->{
+            var input=new com.pis.label.LabelContracts.Create(2L,1L);
+            var root=labels.create(cid,input,"label").receipt().resourceId();
+            assertThat(labels.create(cid,input,"label").replayed()).isTrue();
+            var original=labels.view(root).job();
+            assertThat(com.pis.label.LabelBarcode.valid(original.barcode())).isTrue();
+            assertCode(()->labels.create(cid,input,"second-root"),"LABEL_USE_REPRINT");
+            var command=new com.pis.label.LabelContracts.Change(0L,"Synthetic damaged label");
+            var child=labels.change(root,command,"reprint","REPRINT").receipt().resourceId();
+            assertThat(labels.change(root,command,"reprint","REPRINT").replayed()).isTrue();
+            var copy=labels.view(child).job();
+            assertThat(copy.parentJobId()).isEqualTo(root);
+            assertThat(copy.containerId()).isEqualTo(cid);
+            assertThat(copy.barcode()).isEqualTo(original.barcode());
+            assertThat(copy.templateVersion()).isEqualTo(original.templateVersion());
+            assertThat(copy.patientId()).isEqualTo(original.patientId());
+            assertThat(copy.caseNumber()).isEqualTo(original.caseNumber());
+            assertThat(labels.view(root).job().version()).isEqualTo(1);
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM specimen_container WHERE hospital_id=?",Long.class,f.hospital)).isEqualTo(1);
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM label_identity WHERE container_id=?",Long.class,cid)).isEqualTo(1);
+            assertThatThrownBy(()->jdbc.update("UPDATE label_job SET barcode='changed' WHERE id=?",child)).isInstanceOf(org.springframework.dao.DataAccessException.class);
+            assertThatThrownBy(()->jdbc.update("DELETE FROM label_job_event WHERE job_id=?",child)).isInstanceOf(org.springframework.dao.DataAccessException.class);
+            return null;
+        });
+    }
+    @Test void labelFailedRetryCancelAreVersionedAndNeverClaimPhysicalSuccess() {
+        var f=new Fixture(); var cid=receivedContainer(f); printGrant(f);
+        f.as(()->{
+            var id=labels.create(cid,new com.pis.label.LabelContracts.Create(2L,1L),"create").receipt().resourceId();
+            assertCode(()->labels.change(id,new com.pis.label.LabelContracts.Change(1L,"Synthetic"),"stale","FAIL"),"VERSION_CONFLICT");
+            assertThatThrownBy(()->labels.change(id,new com.pis.label.LabelContracts.Change(0L," "),"empty","REPRINT")).isInstanceOf(jakarta.validation.ConstraintViolationException.class);
+            labels.change(id,new com.pis.label.LabelContracts.Change(0L,"Synthetic disconnected adapter"),"fail","FAIL");
+            assertThat(labels.view(id).job().state()).isEqualTo("FAILED");
+            labels.change(id,new com.pis.label.LabelContracts.Change(1L,"Synthetic retry"),"retry","RETRY");
+            assertThat(labels.view(id).job().state()).isEqualTo("PREVIEW_READY");
+            assertThat(labels.view(id).job().attempts()).isEqualTo(2);
+            labels.change(id,new com.pis.label.LabelContracts.Change(2L,"Synthetic cancel"),"cancel","CANCEL");
+            assertCode(()->labels.change(id,new com.pis.label.LabelContracts.Change(3L,"Synthetic late retry"),"late","RETRY"),"LABEL_STATE_CONFLICT");
+            assertThat(labels.view(id).events()).extracting(e->e.action()).containsExactly("CANCEL","RETRY","FAIL","CREATE");
+            return null;
+        });
+    }
+    @Test void labelsRejectCrossScopeUnreceivedMismatchedBarcodeAndRevokedReprints() {
+        var f=new Fixture(); var other=new Fixture(); var cid=receivedContainer(f);
+        f.as(()->{ assertCode(()->labels.container(cid),"LABEL_NOT_FOUND"); return null; });
+        printGrant(f);
+        var root=f.as(()->labels.create(cid,new com.pis.label.LabelContracts.Create(2L,1L),"create")).receipt().resourceId();
+        printGrant(other);
+        other.as(()->{ assertCode(()->labels.view(root),"REQUEST_NOT_FOUND"); return null; });
+        f.as(()->{
+            var barcode=labels.view(root).job().barcode();
+            assertThat(labels.verify(root,new com.pis.label.LabelContracts.Verify(cid,barcode)).matches()).isTrue();
+            assertCode(()->labels.verify(root,new com.pis.label.LabelContracts.Verify(UUID.randomUUID(),barcode)),"LABEL_IDENTITY_MISMATCH");
+            assertCode(()->labels.verify(root,new com.pis.label.LabelContracts.Verify(cid,barcode.substring(0,33)+"!")),"LABEL_IDENTITY_MISMATCH");
+            var command=new com.pis.label.LabelContracts.Change(0L,"Synthetic reprint");
+            labels.change(root,command,"copy","REPRINT");
+            assertCode(()->labels.change(root,new com.pis.label.LabelContracts.Change(0L,"Different reason"),"copy","REPRINT"),"IDEMPOTENCY_KEY_REUSED");
+            jdbc.update("UPDATE workflow_grant SET can_reprint=false WHERE user_id=?",f.user);
+            assertCode(()->labels.change(root,command,"copy","REPRINT"),"LABEL_NOT_FOUND");
+            return null;
+        });
+        var draft=new Fixture(); printGrant(draft);
+        draft.as(()->{
+            var id=service.create(new Create(draft.scope,draft.encounter,COMPLETE),"draft").receipt().resourceId();
+            var container=service.detail(id).containers().getFirst().id();
+            assertCode(()->labels.create(container,new com.pis.label.LabelContracts.Create(0L,0L),"label"),"LABEL_REQUIRES_RECEIVED"); return null;
+        });
+    }
+    @Test void labelAuditFailureRollsBackIdentityJobAndReceipt() {
+        var f=new Fixture(); var cid=receivedContainer(f); printGrant(f);
+        jdbc.execute("CREATE FUNCTION reject_label_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.hospital_id='"+f.hospital+"'::uuid THEN RAISE EXCEPTION 'synthetic failure'; END IF; RETURN NEW; END $$");
+        jdbc.execute("CREATE TRIGGER reject_label_audit BEFORE INSERT ON audit_event FOR EACH ROW EXECUTE FUNCTION reject_label_audit()");
+        try {
+            f.as(()->{ assertThatThrownBy(()->labels.create(cid,new com.pis.label.LabelContracts.Create(2L,1L),"recover")).isInstanceOf(org.springframework.dao.DataAccessException.class); return null; });
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM label_identity WHERE container_id=?",Long.class,cid)).isZero();
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM label_job WHERE container_id=?",Long.class,cid)).isZero();
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM idempotency_command WHERE hospital_id=? AND operation_code='LABEL_CREATE_V1'",Long.class,f.hospital)).isZero();
+        } finally { jdbc.execute("DROP TRIGGER reject_label_audit ON audit_event"); jdbc.execute("DROP FUNCTION reject_label_audit()"); }
+        assertThat(f.as(()->labels.create(cid,new com.pis.label.LabelContracts.Create(2L,1L),"recover")).replayed()).isFalse();
+    }
+    @Test void concurrentSameKeyLabelCreationReturnsOneIdentityAndJob() throws Exception {
+        var f=new Fixture(); var cid=receivedContainer(f); printGrant(f);
+        try(var executor=Executors.newVirtualThreadPerTaskExecutor()) {
+            var start=new java.util.concurrent.CountDownLatch(1);
+            java.util.concurrent.Callable<com.pis.idempotency.IdempotentCommands.Result> run=()->{ if(!start.await(2,TimeUnit.SECONDS)) throw new AssertionError("barrier"); return f.as(()->labels.create(cid,new com.pis.label.LabelContracts.Create(2L,1L),"same")); };
+            var a=executor.submit(run); var b=executor.submit(run); start.countDown();
+            var first=a.get(5,TimeUnit.SECONDS); var second=b.get(5,TimeUnit.SECONDS);
+            assertThat(first.receipt()).isEqualTo(second.receipt());
+            assertThat(List.of(first.replayed(),second.replayed())).containsExactlyInAnyOrder(false,true);
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM label_job WHERE container_id=?",Long.class,cid)).isEqualTo(1);
+        }
+    }
+    @Test void labelHttpRequiresCsrfPrintPermissionAndNonblankReprintReason() throws Exception {
+        var f=new Fixture(); var cid=receivedContainer(f); String password="Synthetic-label-http-42!";
+        jdbc.update("UPDATE app_user SET password_hash=? WHERE id=?",encoder.encode(password),f.user);
+        var browser=new Browser();
+        assertThat(browser.send("GET","/api/labels/containers/"+cid,null,null,false).statusCode()).isEqualTo(401);
+        String login="username="+f.principal.getUsername()+"&password="+java.net.URLEncoder.encode(password,java.nio.charset.StandardCharsets.UTF_8);
+        assertThat(browser.send("POST","/api/auth/login",login,browser.csrf(),true).statusCode()).isEqualTo(204);
+        String csrf=browser.csrf(); String path="/api/labels/containers/"+cid+"/jobs";
+        String input="{\"requestVersion\":2,\"containerVersion\":1}";
+        assertThat(browser.send("POST",path,input,csrf,false).statusCode()).isEqualTo(404);
+        printGrant(f);
+        assertThat(browser.send("POST",path,input,null,false).statusCode()).isEqualTo(403);
+        var response=browser.send("POST",path,input,csrf,false); assertThat(response.statusCode()).isEqualTo(201);
+        String id=tools.jackson.databind.json.JsonMapper.builder().build().readTree(response.body()).path("receipt").path("resourceId").stringValue();
+        assertThat(browser.send("POST",path,input,csrf,false).headers().firstValue("Idempotency-Replayed")).contains("true");
+        assertThat(browser.send("POST","/api/labels/jobs/"+id+"/reprint","{\"expectedVersion\":0,\"reason\":\" \"}",csrf,false).statusCode()).isEqualTo(400);
+        jdbc.update("UPDATE workflow_grant SET can_reprint=false,can_print=false WHERE user_id=?",f.user);
+        assertThat(browser.send("GET","/api/labels/jobs/"+id,null,null,false).statusCode()).isEqualTo(404);
+    }
+    @Test void competingReprintsCannotReuseOneParentVersion() throws Exception {
+        var f=new Fixture(); var cid=receivedContainer(f); printGrant(f);
+        var root=f.as(()->labels.create(cid,new com.pis.label.LabelContracts.Create(2L,1L),"root")).receipt().resourceId();
+        try(var blocker=DB.connection();var executor=Executors.newVirtualThreadPerTaskExecutor()) {
+            blocker.setAutoCommit(false);
+            try(var statement=blocker.prepareStatement("SELECT id FROM specimen_container WHERE id=? FOR UPDATE")) { statement.setObject(1,cid); statement.executeQuery().close(); }
+            java.util.function.Function<String,String> run=key->f.as(()->{ try { labels.change(root,new com.pis.label.LabelContracts.Change(0L,"Synthetic replacement"),key,"REPRINT"); return "SUCCESS"; } catch(ApiException e) { return e.code(); } });
+            var first=executor.submit(()->run.apply("one")); var second=executor.submit(()->run.apply("two"));
+            try {
+                long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(2); boolean waiting=false;
+                while(System.nanoTime()<deadline) {
+                    if(jdbc.queryForObject("SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND (query LIKE '%SELECT id FROM specimen_container WHERE id=%' OR query LIKE '%SELECT id FROM pathology_request WHERE id=%')",Long.class)>=2) { waiting=true; break; } Thread.sleep(10);
+                }
+                assertThat(waiting).isTrue();
+            } finally { blocker.rollback(); }
+            assertThat(List.of(first.get(5,TimeUnit.SECONDS),second.get(5,TimeUnit.SECONDS))).containsExactlyInAnyOrder("SUCCESS","VERSION_CONFLICT");
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM label_job WHERE parent_job_id=?",Long.class,root)).isEqualTo(1);
+        }
     }
     private String editResult(Fixture f,UUID id,String key) { return f.as(()->{ try { service.edit(id,new Edit(0L,COMPLETE),key); return "SUCCESS"; } catch(ApiException e) { return e.code(); } }); }
     private static void assertCode(Runnable action,String code) { assertThatThrownBy(action::run).isInstanceOfSatisfying(ApiException.class,e->assertThat(e.code()).isEqualTo(code)); }

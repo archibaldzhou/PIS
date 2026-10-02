@@ -2,7 +2,7 @@
 
 开发前请阅读根级 [AGENTS.md](AGENTS.md)、[工程基线 ADR](docs/adr/0001-engineering-baseline.md)、[真实门禁与缺口](docs/engineering-gates.md)及[需求来源登记](docs/prd/README.md)。这些文件落实 T01 工程约束，不代表临床批准或全部未来功能已实现。
 
-T08 申请与 T09 接收/异常开发工作流已通过验证分支完整 CI，见[T08 记录](docs/api/t08-development-status.md)、[T09 记录](docs/api/t09-development-status.md)及[开发运行说明](docs/runbooks/synthetic-workflow.md)。功能默认关闭且仅合成数据 dev/test 可启用；main 整理提交 CI 另行核验。不得在临床环境启用。
+T08 申请、T09 接收/异常与 T10 标签/重打开发工作流已通过验证分支完整 CI，见[T08 记录](docs/api/t08-development-status.md)、[T09 记录](docs/api/t09-development-status.md)、[T10 记录](docs/api/t10-development-status.md)及[开发运行说明](docs/runbooks/synthetic-workflow.md)。功能默认关闭且仅合成数据 dev/test 可启用；main 整理提交 CI 另行核验。不得在临床环境启用。
 
 开发连通性与认证验证：React + Ant Design 登录后调用 Spring Boot 的 `GET /api/hello`，显示 **Hello World**。
 

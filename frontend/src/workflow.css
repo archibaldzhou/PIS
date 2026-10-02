@@ -28,3 +28,9 @@
   .workflow-content { padding: 16px; }
   .field-pair { grid-template-columns: 1fr; }
 }
+.label-print-preview { background: white; color: black; border: 1px solid #b5c8cf; padding: 16px; margin: 16px 0; max-width: 600px; overflow-wrap: anywhere; }
+@media print {
+  body * { visibility: hidden; }
+  .label-print-preview, .label-print-preview * { visibility: visible; }
+  .label-print-preview { position: absolute; left: 0; top: 0; width: 150mm; max-width: none; border: 0; }
+}
