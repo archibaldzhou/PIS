@@ -32,9 +32,8 @@ public class SyntheticAccessTestConfiguration {
             .authorizeHttpRequests(access -> access.anyRequest().authenticated());
         return http.build();
     }
-    @Bean SyntheticCaseController syntheticCaseController(CaseAccessPolicy policy) {
-        return new SyntheticCaseController(policy);
-    }
+    // The imported test configuration discovers this nested component once.
+    // Do not also register it through a @Bean factory: that duplicates MVC mappings.
     @RestController @TestComponent
     static final class SyntheticCaseController {
         private final CaseAccessPolicy policy;

@@ -38,7 +38,12 @@ class IdentityAccessMigrationTest {
             assertThat(old.migrate().migrationsExecuted).isEqualTo(2);
             try (var connection = database.connection()) {
                 var jdbc = new JdbcTemplate(new SingleConnectionDataSource(connection, true));
-                var checksums = jdbc.queryForList("SELECT version, checksum FROM flyway_schema_history WHERE success ORDER BY installed_rank");
+                String migrationHistory = "SELECT version, checksum FROM flyway_schema_history "
+                    + "WHERE success AND version IN ('1', '2') ORDER BY installed_rank";
+                var checksums = jdbc.queryForList(migrationHistory);
+                assertThat(checksums).hasSize(2);
+                assertThat(checksums).extracting(row -> row.get("version")).containsExactly("1", "2");
+                assertThat(checksums).allSatisfy(row -> assertThat(row.get("checksum")).isNotNull());
                 var hospital = UUID.randomUUID();
                 var source = UUID.randomUUID();
                 var patient = UUID.randomUUID();
@@ -54,7 +59,7 @@ class IdentityAccessMigrationTest {
                 assertThat(latest.info().current().getVersion().toString()).isEqualTo("3");
                 assertThat(latest.validateWithResult().validationSuccessful).isTrue();
                 assertThat(latest.migrate().migrationsExecuted).isZero();
-                assertThat(jdbc.queryForList("SELECT version, checksum FROM flyway_schema_history WHERE version IN ('1', '2') ORDER BY installed_rank")).isEqualTo(checksums);
+                assertThat(jdbc.queryForList(migrationHistory)).isEqualTo(checksums);
                 assertThat(jdbc.queryForObject("SELECT request_id FROM pathology_case WHERE id = ?", UUID.class, pathologyCase)).isEqualTo(request);
                 assertThat(jdbc.queryForObject("SELECT count(*) FROM case_access_scope", Integer.class)).isZero();
                 assertThat(jdbc.queryForObject("SELECT count(*) FROM app_user", Integer.class)).isZero();
