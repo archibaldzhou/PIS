@@ -42,7 +42,7 @@ export default function App() {
         <Button type="primary" loading={state.status === 'loading'}
           onClick={() => setAttempt(value => value + 1)}>重新请求</Button>
         <Typography.Text type="secondary">
-          仅用于工程连通性验证，尚未实现病理业务、数据库或临床 AI
+          仅用于工程连通性验证，尚未实现病理业务或临床 AI
         </Typography.Text>
       </Space>
     </Card>

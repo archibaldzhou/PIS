@@ -1,0 +1,37 @@
+# Local synthetic-data development only; no production security guarantee.
+# Verified official multi-platform image: docker-library/repo-info, 2026-10-02.
+x-postgres-image: &postgres-image postgres:17.11-bookworm@sha256:639ab7ceb90e13123085b741fb31ef493fba25463002f6da665352e7b534b652
+services:
+  postgres:
+    image: *postgres-image
+    environment:
+      POSTGRES_DB: pis_dev
+      POSTGRES_USER: ${PIS_DB_USERNAME:-pis_dev}
+      POSTGRES_PASSWORD: ${PIS_DB_PASSWORD:?Set PIS_DB_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+  postgres-test:
+    profiles: [test]
+    image: *postgres-image
+    environment:
+      POSTGRES_DB: pis_test
+      POSTGRES_USER: ${PIS_TEST_DB_USERNAME:-pis_test}
+      POSTGRES_PASSWORD: ${PIS_TEST_DB_PASSWORD:?Set PIS_TEST_DB_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:5433:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+volumes:
+  postgres-data:

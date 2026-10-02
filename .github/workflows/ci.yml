@@ -1,4 +1,4 @@
-name: Hello World CI
+name: PIS CI
 on:
   push:
     branches: [main]
@@ -9,6 +9,24 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      PIS_TEST_DB_URL: jdbc:postgresql://127.0.0.1:5432/pis_test?connectTimeout=5&socketTimeout=10
+      PIS_TEST_DB_USERNAME: pis_test
+      PIS_TEST_DB_PASSWORD: synthetic-ci-only
+    services:
+      postgres:
+        image: postgres:17.11-bookworm@sha256:639ab7ceb90e13123085b741fb31ef493fba25463002f6da665352e7b534b652
+        env:
+          POSTGRES_DB: pis_test
+          POSTGRES_USER: pis_test
+          POSTGRES_PASSWORD: synthetic-ci-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pis_test -d pis_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:

@@ -1,17 +1,17 @@
-# PIS · Hello World
+# PIS · 开发基础
 
 最小工程连通性验证：React + Ant Design 页面调用 Spring Boot 的 `GET /api/hello`，显示 **Hello World**。
 
 ## 范围
 
-这是开发起点，尚未实现病理业务、身份认证、PostgreSQL 持久化、数字切片或 AI。仅在本机开发使用，不可处理真实患者数据，也不要直接暴露到公网。原始 `readme` 保留不变。
+这是开发起点，已接入 PostgreSQL 17 与 Flyway，尚未实现病理业务、身份认证、数字切片或 AI。仅在本机开发使用，不可处理真实患者数据，也不要直接暴露到公网。原始 `readme` 保留不变。
 
 ## 环境
 
 - JDK 21
 - Maven 3.9.16，由仓库中的 Maven Wrapper 3.3.4 下载和运行，无需安装系统 Maven
 - Node.js 22.23.3（根目录 `.nvmrc`），npm 11.21.0（安装 Node 后显式升级，CI 使用同一固定版本）
-- 本例不需要 PostgreSQL
+- PostgreSQL 17；本机推荐 Docker Compose v2，详见[数据库开发说明](docs/database-development.md)
 
 后端固定 Spring Boot 4.1.1；前端固定 React 19.2.4、Ant Design 6.6.5、Vite 7.3.6、Vitest 4.1.11 和 TypeScript 5.9.3。完整前端依赖树记录在 `frontend/package-lock.json`，日常开发和 CI 均使用 `npm ci` 冻结安装，不使用 `npm install` 重新解析依赖。`frontend/.npmrc` 会拒绝与声明不符的 Node/npm 版本。
 
@@ -21,11 +21,15 @@ Wrapper 使用 Apache 官方 `only-script` 发行，不提交 JAR。首次运行
 
 ## 启动
 
+首次按[数据库开发说明](docs/database-development.md)创建 `.env`、替换本机密码，并在运行 Java/npm 的终端导出变量。以下是 Bash 示例；不要覆盖已有 `.env`。
+
 终端一（仓库根目录）：
 
 ```bash
+set -a; . ./.env; set +a
+docker compose up -d --wait postgres
 cd backend
-./mvnw spring-boot:run
+SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run
 ```
 
 终端二：
@@ -36,7 +40,7 @@ npm ci
 npm run dev
 ```
 
-两个终端都从仓库根目录开始。Windows PowerShell 中将 `./mvnw` 替换为 `.\mvnw.cmd`，其他参数相同。
+两个终端都从仓库根目录开始。Windows PowerShell 使用 `mvnw.cmd`，并通过 `$env:变量名` 设置同名数据库变量及 `SPRING_PROFILES_ACTIVE=dev`；Bash 的导出命令不能直接用于 PowerShell。
 
 打开 http://127.0.0.1:5173 。开发服务器把 `/api` 代理至 http://127.0.0.1:8080 ，无需开放跨域。
 
@@ -51,6 +55,8 @@ npm run dev
 ## 构建与测试
 
 ```bash
+set -a; . ./.env; set +a
+docker compose --profile test up -d --wait postgres-test
 cd backend
 ./mvnw -B -ntp verify
 cd ..
@@ -64,13 +70,13 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-浏览器测试会自行启动后端 JAR 与 Vite，运行前先关闭占用 8080/5173 的开发服务。覆盖真实前后端请求、重复请求，以及接口错误后重试恢复。
+测试使用独立的真实 PostgreSQL 17 测试库；`PIS_TEST_DB_PASSWORD` 必须已导出。数据库或迁移失败会使测试失败，不会跳过或回退到 H2。浏览器测试会自行启动后端 JAR 与 Vite，并等待包含数据库的 readiness 成功，运行前先关闭占用 8080/5173 的开发服务。覆盖真实前后端请求、重复请求，以及接口错误后重试恢复。
 
 测试约定：
 
 - Vitest 自动运行 `frontend/src/` 内所有 `*.test.ts`、`*.test.tsx`、`*.spec.ts` 和 `*.spec.tsx`，新增单元测试不需要修改 npm 脚本。默认使用 Node 环境；需要 DOM 的组件测试应配置对应环境和依赖。
 - Playwright 单独发现 `frontend/e2e/` 内的浏览器测试，不会被 Vitest 混跑。
-- 在 `frontend` 中运行 `npm run test:list` 和 `npm run test:e2e -- --list` 可分别核对发现的测试。
+- 在 `frontend` 中运行 `npm run test:list` 和 `npm run test:e2e -- --list` 可分别核对发现的测试；Playwright 列表命令同样需要已导出的测试数据库配置。
 - `npm run lint` 检查源码、测试和配置文件，启用 ESLint/TypeScript 推荐规则与 React Hooks 核心规则；任何警告都会使检查失败。`npm run build` 包含源码、测试和配置的 TypeScript 检查。
 
 后端产物：`backend/target/pis-backend-0.0.1-SNAPSHOT.jar`。
@@ -88,7 +94,7 @@ npm 11.21 的依赖安装脚本采用明确允许机制；本项目的 `allowScr
 
 ## 持续集成
 
-`.github/workflows/ci.yml` 在 main 推送和 PR 时运行后端测试/打包、前端 lint、自动发现的单元测试、类型检查/构建以及 Chromium 集成测试，并独立检查前端依赖。实际是否成功请查看该提交的 GitHub Actions 结果；配置工作流不代表测试已通过。
+`.github/workflows/ci.yml` 在 main 推送和 PR 时先启动固定摘要的 PostgreSQL 17 service，再运行后端迁移/集成测试及打包、前端 lint、自动发现的单元测试、类型检查/构建以及 Chromium 集成测试，并独立检查前端依赖。实际是否成功请查看该提交的 GitHub Actions 结果；配置工作流不代表测试已通过。
 
 依赖检查边界：
 
@@ -97,4 +103,14 @@ npm 11.21 的依赖安装脚本采用明确允许机制；本项目的 `allowScr
 - Dependency Review 是变更审查，不是 Java 全量扫描；它不能保证覆盖 Maven 实际解析出的全部传递依赖、父 POM 或 BOM，也不能发现未变更依赖后来新增的告警。后续仍需补齐基于 Maven 实际解析依赖图或 SBOM 的全量安全扫描。当前 main 直接推送不会运行 PR 依赖变更审查。
 - CI 失败会显示检查结果，但本任务不修改分支保护规则；是否强制阻止合并由仓库已有规则决定。
 
-此工程使用现有账户权限提交，不包含密码、令牌、患者信息或自动部署步骤。
+此工程使用现有账户权限提交，不包含真实密码、令牌、患者信息或自动部署步骤；CI 数据库凭据仅用于每次运行的临时合成测试服务。
+
+## 数据库与迁移边界
+
+- 生产 V1 仅初始化应用 schema；业务模型留待后续任务，不包含患者表或临床数据
+- 空 schema 迁移、重复迁移、合成 V1→V2 升级、校验和错误、DDL 回滚与启动失败均有测试
+- 开发库只映射回环地址并使用持久卷；测试库独立且可丢弃，测试不会删除开发卷
+- Actuator 仅开放不带详情的 health；readiness 包含数据库，liveness 不依赖数据库
+- 当前 Compose 账号是仅供本机使用的超级用户；生产前必须分离迁移 DDL 账号与最小权限运行账号
+
+配置、环境变量、数据保留、迁移规则及账号分离路线见[数据库开发说明](docs/database-development.md)。
