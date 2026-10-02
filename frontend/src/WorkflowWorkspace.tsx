@@ -7,8 +7,9 @@ import { accessionApi, type AccessionApi, type RequestDetail } from './features/
 import { ReadController, type RequestReader, type RequestSummary } from './shared/workflow';
 import { ReadPanel } from './shared/WorkflowElements';
 import './workflow.css';
+import { Reception } from './features/specimen/Reception';
 
-const pages = { requests: '申请单查询', registration: '病理申请录入' };
+const pages = { requests: '申请单查询', registration: '病理申请录入', reception: '标本接收与异常' };
 type Page = keyof typeof pages;
 export function WorkflowWorkspace({ onClose, onLogout, onExpired, api = accessionApi }: {
   onClose: () => void; onLogout: () => void; onExpired: () => void; api?: AccessionApi;
@@ -87,7 +88,8 @@ export function WorkflowWorkspace({ onClose, onLogout, onExpired, api = accessio
       </div>}</ReadPanel>
       {scopeState.status !== 'ready' && <Button onClick={() => void scopes.run(null)}>重试加载范围</Button>}
       {scope && page === 'requests' && <RequestList key={scope} reader={reader} onSelect={selected => navigate('registration', selected)} />}
-      {scope && page === 'registration' && (record ? <ReadPanel state={detailState}>{registration}</ReadPanel> : registration())}
+      {scope && page === 'registration' && (record ? <><Button onClick={() => navigate('reception', record)}>处理此申请接收与异常</Button><ReadPanel state={detailState}>{registration}</ReadPanel></> : registration())}
+      {scope && page === 'reception' && (record ? <Reception key={record.id} id={record.id} onDirty={() => setDirty(true)} onClean={() => setDirty(false)} onPending={setUnresolved} onExpired={onExpired} /> : <Alert type="info" title="请从申请列表查看申请，再进入接收与异常处理" />)}
       {!scope && page === 'registration' && <Alert type="info" title="先选择授权工作范围，再登记申请" />}
     </section>
     <Modal title="放弃未保存的本地输入？" open={confirming} okText="放弃并继续" cancelText="继续编辑"
