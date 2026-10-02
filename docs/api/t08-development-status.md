@@ -2,6 +2,14 @@
 
 2026-10-02，依据用户授权新编[开发 PRD](../prd/development-accession-v1.md)及已合法读取原型。本文件记录工作区事实，不替代 CI 或临床验收。
 
+## 最新 CI 证据
+
+父会话核验 `d7f78c2307874ec227f8e27f9edb6d394b53a4f2` 的 CI 37029404698：后端已编译并执行170项测试，169通过、1失败；单独依赖审计通过，主 verify 的前端阶段未运行。唯一失败是 `IdentityAccessMigrationTest` 仍将最新版本断言为4，实际已为5。
+
+本轮修复更新版本断言并保留全部角色/权限种子限制，补充四张 V5 表无种子；V4→V5 测试检查旧申请/容器未改变、V1–V4全部校验和及角色/权限未变。修复后的结果待新 SHA 的 CI 核验。
+
+`RequestWorkflowTest` 源码恰有8个 `@Test`，包括 `realHttpRequiresSessionCsrfAndCurrentWriteGrant`（真实随机端口、Cookie登录、CSRF、只读/跨范围/撤权、创建及重放）；它与 CI 该类8项执行数一致。`RequestMigrationTest` 为另1项，新增合计9项。以下本地阻塞记录不再表示 CI 尚未编译。
+
 ## 已写入工作区
 
 - V5 增量迁移：独立 workflow_scope/workflow_grant、申请状态/临床资料、结构化容器详情。无机构/账号/权限种子；旧申请不自动进入新状态机。
