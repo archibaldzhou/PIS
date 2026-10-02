@@ -8,6 +8,18 @@ const disabledUsername = process.env.PIS_E2E_DISABLED_USERNAME ?? 'synthetic.dis
 const disabledPassword = process.env.PIS_E2E_DISABLED_PASSWORD ?? password;
 const genericLoginError = '用户名或密码不正确，或账号不可用';
 
+// Synthetic-only failure diagnostics. Never inspect input values, cookies, headers, or tokens.
+test.afterEach(async ({ page }, testInfo) => {
+  if (testInfo.status === testInfo.expectedStatus || page.isClosed()) return;
+  const headings = await page.getByRole('heading').allTextContents();
+  const buttons = await page.getByRole('button').evaluateAll(nodes => nodes.map(node => ({
+    label: node.getAttribute('aria-label'), text: node.textContent?.trim(),
+    busy: node.getAttribute('aria-busy'), disabled: (node as HTMLButtonElement).disabled,
+    iconLabels: Array.from(node.querySelectorAll('[role="img"]')).map(icon => icon.getAttribute('aria-label')),
+  })));
+  console.info('Synthetic failure UI state:', JSON.stringify({ headings, buttons }));
+});
+
 async function fillLogin(page: Page, loginUsername = username, loginPassword = password) {
   await page.getByLabel('用户名', { exact: true }).fill(loginUsername);
   await page.getByLabel('密码', { exact: true }).fill(loginPassword);
@@ -118,6 +130,8 @@ test('login CSRF errors are explicit and retry gets a fresh token', async ({ pag
 });
 
 test('login network error clears the password and a later real login recovers', async ({ page }) => {
+  let loginRequests = 0;
+  page.on('request', request => { if (new URL(request.url()).pathname === '/api/auth/login') loginRequests++; });
   await page.route('**/api/auth/csrf', route => route.abort('failed'));
   await page.goto('/');
   await fillLogin(page);
@@ -126,8 +140,14 @@ test('login network error clears the password and a later real login recovers', 
   await expect(page.getByLabel('密码', { exact: true })).toHaveValue('');
   await page.unroute('**/api/auth/csrf');
   await fillLogin(page);
+  const retryButton = page.locator('button[type="submit"]');
+  await expect(retryButton).toBeEnabled();
+  await expect(retryButton).toHaveAttribute('aria-busy', 'false');
+  await expect(retryButton).toHaveAccessibleName('登录');
+  expect(loginRequests).toBe(0);
   await page.getByRole('button', { name: '登录', exact: true }).click();
   await expectHello(page);
+  expect(loginRequests).toBe(1);
 });
 
 test('repeated submit while login is pending sends one real login request', async ({ page }) => {

@@ -47,7 +47,8 @@ export default function App() {
             <Form.Item label="密码" name="password" rules={[{ required: true, message: '请输入密码' }]}>
               <Input.Password name="password" autoComplete="current-password" />
             </Form.Item>
-            <Button type="primary" htmlType="submit" autoInsertSpace={false} block loading={state.status === 'authenticating'}>登录</Button>
+            <Button type="primary" htmlType="submit" autoInsertSpace={false} aria-label="登录"
+              aria-busy={state.status === 'authenticating'} block loading={state.status === 'authenticating'}>登录</Button>
           </Form>
         </div>}
         {state.status === 'error' && <Space orientation="vertical" style={{ width: '100%' }}>

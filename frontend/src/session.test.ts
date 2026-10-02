@@ -81,12 +81,18 @@ describe('session lifecycle', () => {
     expect(session.getSnapshot().status).toBe('authenticated');
     expect(api.fetchCsrf).toHaveBeenCalledTimes(3);
   });
-  it('does not send credentials if CSRF acquisition fails', async () => {
+  it('does not auto-submit after fast CSRF failure and recovers only after an explicit retry', async () => {
     const { api, session } = await anonymousFixture();
     api.fetchCsrf.mockRejectedValueOnce(new Error('network unavailable'));
     await session.login(credentials);
     expect(api.login).not.toHaveBeenCalled();
     expect(session.getSnapshot()).toEqual({ status: 'anonymous', message: 'network unavailable' });
+    await Promise.resolve();
+    expect(api.login).not.toHaveBeenCalled();
+    await session.login(credentials);
+    expect(api.login).toHaveBeenCalledOnce();
+    expect(api.fetchCsrf).toHaveBeenCalledTimes(3);
+    expect(session.getSnapshot()).toMatchObject({ status: 'authenticated', user });
   });
   it('offers identity recheck if login succeeds but me fails', async () => {
     const { api, session } = await anonymousFixture();
@@ -210,6 +216,19 @@ describe('protected Hello and cancellation', () => {
     old.resolve(user);
     await pending;
     expect(session.getSnapshot().status).toBe('anonymous');
+    expect(api.fetchHello).toHaveBeenCalledOnce();
+  });
+  it.each(['resolve', 'reject'] as const)('ignores obsolete CSRF %s after a newer authenticated session check', async outcome => {
+    const { api, session } = await anonymousFixture();
+    const old = deferred<typeof csrf>();
+    api.fetchCsrf.mockReturnValueOnce(old.promise);
+    const pending = session.login(credentials);
+    await session.restore();
+    expect(api.fetchCsrf.mock.calls[0][0].aborted).toBe(true);
+    if (outcome === 'resolve') old.resolve(csrf); else old.reject(new Error('late CSRF failure'));
+    await pending;
+    expect(session.getSnapshot()).toMatchObject({ status: 'authenticated', user });
+    expect(api.login).not.toHaveBeenCalled();
     expect(api.fetchHello).toHaveBeenCalledOnce();
   });
   it('does not finish an obsolete login after a newer session check', async () => {
