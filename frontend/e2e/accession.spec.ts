@@ -1,0 +1,37 @@
+import { test, expect } from '@playwright/test';
+
+// Actual login, CSRF/session, application and PostgreSQL. No routes are mocked in this suite.
+test('synthetic request registration, editing and submission persist through real API', async ({ page }) => {
+  await page.goto('/');
+  await page.getByLabel('用户名').fill(process.env.PIS_E2E_USERNAME ?? 'synthetic.reader');
+  await page.getByLabel('密码', { exact: true }).fill(process.env.PIS_E2E_PASSWORD ?? 'Synthetic-test-only-42!');
+  await page.getByRole('button', { name: '登录', exact: true }).click();
+  await page.getByRole('button', { name: '申请登记工作区' }).click();
+  await page.getByLabel('授权工作范围').click();
+  await page.getByText('合成申请工作范围', { exact: true }).last().click();
+  await page.getByRole('button', { name: '病理申请录入', exact: true }).click();
+  await page.getByLabel('精确就诊号').fill('SYN-WORKFLOW-001');
+  await page.getByRole('button', { name: '查找就诊' }).click();
+  await page.getByLabel('选择已核对就诊').click();
+  await page.getByText('合成申请患者 / SYN-WORKFLOW-001', { exact: true }).last().click();
+  await page.getByLabel('临床诊断与病史', { exact: true }).fill('合成临床资料，仅用于自动化测试');
+  await page.getByLabel('手术 / 采样时间（UTC）').fill('2026-01-01T08:00');
+  await page.getByLabel('部位', { exact: true }).fill('合成测试部位');
+  await page.getByLabel('固定液', { exact: true }).fill('合成测试固定液');
+  await page.getByLabel('固定开始时间（UTC）').fill('2026-01-01T08:10');
+  const createdResponse = page.waitForResponse(response => response.url().endsWith('/api/requests') && response.request().method() === 'POST');
+  await page.getByRole('button', { name: '保存草稿', exact: true }).click();
+  expect((await createdResponse).status()).toBe(201);
+  await expect(page.getByText('服务器已确认操作；列表将重新查询。')).toBeVisible();
+  await page.getByRole('button', { name: /^查看 DEV-AP-/ }).click();
+  await expect(page.getByLabel('临床诊断与病史', { exact: true })).toHaveValue('合成临床资料，仅用于自动化测试');
+  await page.getByLabel('临床诊断与病史', { exact: true }).fill('修订后的合成资料');
+  await page.getByRole('button', { name: '保存草稿', exact: true }).click();
+  await page.getByRole('button', { name: /^查看 DEV-AP-/ }).click();
+  await expect(page.getByLabel('临床诊断与病史', { exact: true })).toHaveValue('修订后的合成资料');
+  await page.getByRole('button', { name: '核对后提交', exact: true }).click();
+  await expect(page.getByRole('cell', { name: '待接收', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: /^查看 DEV-AP-/ }).click();
+  await expect(page.getByRole('button', { name: '保存草稿', exact: true })).toBeDisabled();
+  await expect(page.getByLabel('临床诊断与病史', { exact: true })).toBeDisabled();
+});

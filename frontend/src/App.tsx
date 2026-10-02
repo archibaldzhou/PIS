@@ -2,9 +2,11 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 import { Alert, Button, Card, Form, Input, Space, Spin, Tag, Typography } from 'antd';
 import type { Credentials } from './api';
 import { SessionController } from './session';
+import { WorkflowWorkspace } from './WorkflowWorkspace';
 
 export default function App() {
   const [session] = useState(() => new SessionController());
+  const [workspaceUser, setWorkspaceUser] = useState<string>();
   const state = useSyncExternalStore(session.subscribe, session.getSnapshot);
   const [form] = Form.useForm<Credentials>();
 
@@ -19,6 +21,11 @@ export default function App() {
   }
 
   const loginScreen = state.status === 'anonymous' || state.status === 'authenticating';
+  if (state.status === 'authenticated' && workspaceUser === state.user.id) {
+    return <WorkflowWorkspace key={state.user.id} onClose={() => setWorkspaceUser(undefined)}
+      onExpired={() => { setWorkspaceUser(undefined); void session.restore(); }}
+      onLogout={() => { setWorkspaceUser(undefined); void session.logout(); }} />;
+  }
   return <main className="page">
     <Card className={loginScreen ? 'hello-card login-card' : 'hello-card'}>
       <Space orientation="vertical" size="large" style={{ width: '100%' }}>
@@ -71,6 +78,7 @@ export default function App() {
               title="连接失败" description={state.hello.message} role="alert" />}
           </section>
           <Button type="primary" loading={state.hello.status === 'loading'} onClick={session.retryHello}>重新请求</Button>
+          <Button onClick={() => setWorkspaceUser(state.user.id)}>申请登记工作区</Button>
         </>}
         <Typography.Text type="secondary">
           仅用于工程连通性验证，尚未实现病理业务或临床 AI

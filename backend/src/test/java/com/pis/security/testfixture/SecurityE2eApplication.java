@@ -15,6 +15,7 @@ public final class SecurityE2eApplication {
         arguments.remove("--server.port=0");
         arguments.add("--server.port=8080");
         arguments.add("--spring.profiles.active=test");
+        arguments.add("--pis.workflow.development-enabled=true");
         var application = new SpringApplication(PisApplication.class, E2eFixtureConfiguration.class);
         application.setRegisterShutdownHook(false);
         try {

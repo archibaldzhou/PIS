@@ -14,7 +14,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-async function request(path: string, options: RequestInit = {}): Promise<Response> {
+export async function request(path: string, options: RequestInit = {}): Promise<Response> {
   let response: Response;
   try {
     response = await fetch(path, { ...options, credentials: 'same-origin', cache: 'no-store' });
@@ -46,10 +46,21 @@ async function request(path: string, options: RequestInit = {}): Promise<Respons
     }
     throw new ApiError(403, 'FORBIDDEN', '请求被拒绝，请重试或联系管理员');
   }
+  const workflowErrors: Record<string, string> = {
+    WORKFLOW_DISABLED: '开发工作流未启用', VERSION_CONFLICT: '版本已变化，请刷新并复核',
+    REQUEST_NOT_DRAFT: '当前申请不是可编辑草稿', REQUEST_INCOMPLETE: '请补齐病史、采样和各容器固定信息',
+    DUPLICATE_REVIEW_REQUIRED: '同一就诊已有提交申请，需要人工复核，本版不允许绕过',
+    ENCOUNTER_MISMATCH: '就诊与授权工作范围不匹配', CONTAINER_SET_IMMUTABLE: '已登记容器清单不能增删条目',
+    REQUEST_NOT_FOUND: '申请不存在或不可见', IDEMPOTENCY_KEY_REUSED: '请求键对应另一份输入，请核对原操作',
+    COMMAND_BUSY: '原操作仍需确认，请保留原请求重试', COMMAND_TIMEOUT: '操作超时，请保留原请求确认结果',
+  };
+  if (isRecord(body) && typeof body.code === 'string' && Object.hasOwn(workflowErrors, body.code)) {
+    throw new ApiError(response.status, body.code, workflowErrors[body.code]);
+  }
   throw new ApiError(response.status, 'HTTP_ERROR', '后端请求失败（HTTP ' + response.status + '）');
 }
 
-async function readJson(response: Response): Promise<unknown> {
+export async function readJson(response: Response): Promise<unknown> {
   try { return await response.json(); }
   catch { throw new ApiError(response.status, 'INVALID_RESPONSE', '后端返回格式不正确'); }
 }
