@@ -57,3 +57,5 @@ V10 新增 material_entity/material_event、默认 false 的 MATERIAL；标签�
 新增限流回归证明两个账号预算独立，同时仍受原100次来源上限。已在本地编译运行实际生产 LoginAttemptLimiter 的独立Java探针，通过账号隔离及来源上限断言；这不是JUnit/Spring全量测试。前端lint/typecheck通过。完整JUnit和26项真实E2E待新SHA的CI核验。
 
 最终验收：父会话确认验证 SHA `514d385993ae94d666862c63e0cfeea1c628b8ad` 的 CI 37054044130 success，verify 110994216886 和独立依赖审计成功，PR-only review按原条件跳过。main整理保留已验证实现及V10/V11迁移，仅更新验收说明和移除验证分支触发。
+
+父会话确认 main `b4fa7d476183e5c9795bd4a4da56c6a123a89d53` 的 CI 37054694320 success。

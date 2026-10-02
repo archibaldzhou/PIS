@@ -36,3 +36,9 @@ V12新增quality_head/assessment/event与can_qc，无业务种子；V1–V11字�
 已新增待CI执行：V11→V12升级校验和/旧材料/默认权限/历史约束；完整FAIL→返工新任务→重切新玻片→独立PENDING/PASS→撤销；跨病例、身份不可解除、旧任务版本、同键异参/撤权重放；新判定及返工审计回滚；撤销与标签/新玻片竞争（观察实际PG锁等待）；直制无任务及HTTP认证/CSRF/白名单；普通技术返工失效传播与新任务关联。真实E2E覆盖完整QC返工链和标签拒绝，独立SYN-QC-001合成患者/就诊，无路由mock。
 
 本地Maven依赖此前429、下载及Actions权限拒绝未换路绕过。完整Java/Flyway、真实Spring E2E、锁定浏览器、正式JAR隔离和独立依赖审计待父会话核验确切验证SHA。未部署，不临床启用，不包含T15。
+
+## 首轮CI失败与SQL绑定修复
+
+父会话核验 `01a94b254fa202a8006baf78ff326535b5d0eb75` 的 CI 37058196434 / verify 111007990597：后端221项0 failure、7 errors，均为QualityGate事件INSERT的7列误写8占位符。已修为7参数，保留全部失败回归，并补充首个ASSESS事件的null关联任务、判定ID、版本、操作者/原因，以及REWORK非空关联任务的字段往返断言。没有改迁移或降低安全断言。
+
+本地对quality、MaterialQualitySubjects、TechnicalService共42条字面量JDBC语句做占位符/参数数量审查通过（不包含动态SQL）；动态where语句人工核对为一个UUID绑定。真实PG17执行从修复后QualityGate源码提取的PREPARE/EXECUTE七参数语句，含null关联任务，通过；同时确认升级与历史/身份隔离约束，临时容器已清理。首次探针遇到PG初始化临时服务与正式服务切换，等待正式启动后重跑通过。探针不是Java/Spring/JDBC集成测试结果，完整回归仍待修复SHA的CI。

@@ -66,7 +66,7 @@ public class QualityGate {
   }
  }
  public void event(UUID material,long version,String action,UUID assessment,UUID related,String reason,UUID actor) {
-  jdbc.update("INSERT INTO quality_event(material_id,version,action,assessment_id,related_task_id,reason,actor_id) VALUES(?,?,?,?,?,?,?,?)",material,version,action,assessment,related,reason,actor);
+  jdbc.update("INSERT INTO quality_event(material_id,version,action,assessment_id,related_task_id,reason,actor_id) VALUES(?,?,?,?,?,?,?)",material,version,action,assessment,related,reason,actor);
  }
  public static ApiException blocked() { return new ApiException(HttpStatus.CONFLICT,"QC_QUARANTINED","Quality quarantine requires review"); }
 }
