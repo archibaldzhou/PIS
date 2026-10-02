@@ -77,7 +77,7 @@ public class RequestService {
     @Transactional(timeout=10)
     public Page list(UUID scopeId,String keyword,String state,LocalDate date,int page) {
         access.require(scopeId,false);
-        if(page<1||page>10000 || keyword.length()>255 || !List.of("","DRAFT","SUBMITTED").contains(state)) throw bad("INVALID_QUERY");
+        if(page<1||page>10000 || keyword.length()>255 || !List.of("","DRAFT","SUBMITTED","RECEIVED","EXCEPTION","RETURNED").contains(state)) throw bad("INVALID_QUERY");
         String where=" WHERE w.scope_id=? AND (?='' OR r.request_number=? OR e.encounter_number=? OR r.patient_id::text=?) AND (?='' OR w.state=?)"
             +" AND (? OR (r.created_at>=? AND r.created_at<?))";
         Object start=date==null?null:date.atStartOfDay().atOffset(ZoneOffset.UTC);

@@ -26,7 +26,7 @@ class RequestMigrationTest {
                 jdbc.update("INSERT INTO pathology_request(id,hospital_id,patient_id,source_system_id,request_number) VALUES(?,?,?,?,'SYN-V4')",request,hospital,patient,source);
                 jdbc.update("INSERT INTO specimen_container(id,hospital_id,request_id) VALUES(?,?,?)",container,hospital,request);
                 var before=jdbc.queryForMap("SELECT * FROM pathology_request WHERE id=?",request);
-                var latest=database.configuration("classpath:db/migration").load();
+                var latest=database.configuration("classpath:db/migration").target("5").load();
                 assertThat(latest.migrate().migrationsExecuted).isEqualTo(1);
                 assertThat(latest.info().current().getVersion().toString()).isEqualTo("5");
                 assertThat(latest.migrate().migrationsExecuted).isZero();

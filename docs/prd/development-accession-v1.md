@@ -23,8 +23,9 @@
 
 - 在 T08 提交申请上接收，不对 DRAFT 或无工作流旧申请操作。接收授权独立 RECEIVE，异常处理独立 EXCEPTION；不因 WRITE 自动获得接收权限。
 - 核对输入为精确患者 ID、就诊号和逐个容器 UUID；服务端校验同申请归属、无重复、与计划清单集合一致。人工核对布尔值不替代这些关系校验。身份不符阻断，不可条件放行；数量不符转异常，不自动补容器。
+- 接收核对不符时，RECEIVE 权限可原子记录自动 IDENTITY/QUANTITY 异常，返回已确认回执但状态为 EXCEPTION，不能在 UI 声称接收成功；人工登记/恢复/退回仍要求独立 EXCEPTION 权限。禁止静默扫描去重；重扫同一容器造成集合/数量不符。
 - SUBMITTED→RECEIVED，创建一个开发病例、权威病例范围与开发病理号 `DEV-P-<完整UUID>`，容器关联该病例及接收时间；病理号/病例/容器/状态/审计/回执原子提交。不得生成重复病例或覆盖原病例。
-- SUBMITTED→EXCEPTION，记录类别 IDENTITY/QUANTITY/INFORMATION、受影响容器（可空但非空须属本申请）、事实说明、创建人/时间；保留追加事件。EXCEPTION→RETURNED 记录退回原因；EXCEPTION→SUBMITTED 仅 INFORMATION 且明确补充说明，重新核对后再接收。IDENTITY/QUANTITY 不允许软件自行纠正并恢复，保持阻断。
+- SUBMITTED→EXCEPTION，记录类别 IDENTITY/QUANTITY/INFORMATION、本版按整份申请记录异常（不支持单容器处置）、事实说明、创建人/时间；保留追加事件。EXCEPTION→RETURNED 记录退回原因；EXCEPTION→SUBMITTED 仅 INFORMATION 且明确补充说明，恢复时复用 T08 就诊锁和同范围重复提交检查，重新核对后再接收。IDENTITY/QUANTITY 不允许软件自行纠正并恢复，保持阻断。
 - 不提供有条件接收、不关闭历史异常、不删除申请、不处理临床身份更正、拒收实物交接设备或打印机。页面禁用这些未实现操作并说明原因。软件退回记录不宣称实物已交接。
 
 ## 一致性与技术契约

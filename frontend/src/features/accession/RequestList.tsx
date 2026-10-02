@@ -18,6 +18,7 @@ export function RequestList({ reader, onSelect }: { reader: RequestReader; onSel
       <Form.Item name="date" label="申请日期"><Input type="date" /></Form.Item>
       <Form.Item name="status" label="状态"><Select options={[
         { value: '', label: '全部' }, { value: '草稿', label: '草稿' }, { value: '待接收', label: '待接收' },
+        ...['接收异常', '已退回', '已接收'].map(value => ({ value, label: value })),
       ]} /></Form.Item>
       <Form.Item label="来源"><Input disabled value="由授权工作范围确定" /></Form.Item>
       <Space><Button htmlType="submit" type="primary" disabled={state.status === 'loading'}>查询</Button>

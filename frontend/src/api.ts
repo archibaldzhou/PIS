@@ -47,6 +47,8 @@ export async function request(path: string, options: RequestInit = {}): Promise<
     throw new ApiError(403, 'FORBIDDEN', '请求被拒绝，请重试或联系管理员');
   }
   const workflowErrors: Record<string, string> = {
+    RECEPTION_STATE_CONFLICT: '当前状态不允许此操作，请刷新', RECEPTION_ALREADY_LINKED: '已有关联病例或接收记录，需要人工复核',
+    RECEPTION_CONTAINER_CONFLICT: '容器清单已变化，接收已回滚', IDENTITY_OR_QUANTITY_REVIEW_REQUIRED: '身份或数量异常不能自行修正并恢复',
     WORKFLOW_DISABLED: '开发工作流未启用', VERSION_CONFLICT: '版本已变化，请刷新并复核',
     REQUEST_NOT_DRAFT: '当前申请不是可编辑草稿', REQUEST_INCOMPLETE: '请补齐病史、采样和各容器固定信息',
     DUPLICATE_REVIEW_REQUIRED: '同一就诊已有提交申请，需要人工复核，本版不允许绕过',

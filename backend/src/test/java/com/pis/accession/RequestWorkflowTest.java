@@ -40,6 +40,7 @@ class RequestWorkflowTest {
     @AfterAll static void close() throws Exception { DB.close(); }
     @Autowired JdbcTemplate jdbc;
     @Autowired RequestService service;
+    @Autowired com.pis.specimen.ReceptionService reception;
     @Autowired org.springframework.security.crypto.password.PasswordEncoder encoder;
     @org.springframework.boot.test.web.server.LocalServerPort int port;
     static final Draft COMPLETE=new Draft("Synthetic history",Instant.parse("2026-01-01T08:00:00Z"),
@@ -225,6 +226,139 @@ class RequestWorkflowTest {
             builder.method(method,body==null?java.net.http.HttpRequest.BodyPublishers.noBody():java.net.http.HttpRequest.BodyPublishers.ofString(body));
             return client.send(builder.build(),java.net.http.HttpResponse.BodyHandlers.ofString());
         }
+    }
+    private UUID submitted(Fixture f) {
+        return f.as(()->{ var id=service.create(new Create(f.scope,f.encounter,COMPLETE),"create").receipt().resourceId(); service.submit(id,new Submit(0L),"submit"); return id; });
+    }
+    private void receptionGrant(Fixture f) { jdbc.update("UPDATE workflow_grant SET can_receive=true,can_exception=true WHERE user_id=?",f.user); }
+    private com.pis.specimen.ReceptionContracts.Check check(Fixture f,UUID id,long version) {
+        java.util.function.Supplier<com.pis.specimen.ReceptionContracts.Check> read=()->new com.pis.specimen.ReceptionContracts.Check(version,f.patient,"synthetic-001",service.detail(id).containers().stream().map(Container::id).toList());
+        return SecurityContextHolder.getContext().getAuthentication()==null?f.as(read):read.get();
+    }
+    @Test void receivesExactlyOnceWithCaseScopeContainersAndAppendOnlyHistory() {
+        var f=new Fixture(); var id=submitted(f); receptionGrant(f); var command=check(f,id,1);
+        f.as(()->{
+            var result=reception.receive(id,command,"receive");
+            assertThat(result.receipt().version()).isEqualTo(2);
+            assertThat(reception.receive(id,command,"receive").replayed()).isTrue();
+            var view=reception.view(id);
+            assertThat(view.request().state()).isEqualTo("RECEIVED");
+            assertThat(view.caseNumber()).startsWith("DEV-P-");
+            assertThat(view.events()).hasSize(1);
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM pathology_case WHERE request_id=?",Long.class,id)).isEqualTo(1);
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM specimen_container WHERE request_id=? AND case_id IS NOT NULL AND received_at IS NOT NULL AND version=1",Long.class,id)).isEqualTo(1);
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM case_access_scope WHERE hospital_id=?",Long.class,f.hospital)).isEqualTo(1);
+            assertCode(()->reception.receive(id,check(f,id,2),"again"),"RECEPTION_STATE_CONFLICT");
+            assertThatThrownBy(()->jdbc.update("UPDATE reception_event SET reason='changed' WHERE request_id=?",id)).isInstanceOf(org.springframework.dao.DataAccessException.class);
+            assertThatThrownBy(()->jdbc.update("DELETE FROM reception_event WHERE request_id=?",id)).isInstanceOf(org.springframework.dao.DataAccessException.class);
+            return null;
+        });
+    }
+    @Test void identityAndDuplicateContainerMismatchBlockAndCannotResolve() {
+        for(boolean identity:List.of(true,false)) {
+            var f=new Fixture(); var id=submitted(f); receptionGrant(f); var valid=check(f,id,1);
+            var wrong=new com.pis.specimen.ReceptionContracts.Check(1L,identity?UUID.randomUUID():f.patient,"synthetic-001",identity?valid.containerIds():List.of(valid.containerIds().getFirst(),valid.containerIds().getFirst()));
+            f.as(()->{
+                reception.receive(id,wrong,"mismatch");
+                var view=reception.view(id); assertThat(view.request().state()).isEqualTo("EXCEPTION");
+                assertThat(view.events().getFirst().category()).isEqualTo(identity?"IDENTITY":"QUANTITY");
+                assertThat(view.caseNumber()).isNull();
+                assertCode(()->reception.resolve(id,new com.pis.specimen.ReceptionContracts.Decision(2L,"Synthetic correction"),"resolve"),"IDENTITY_OR_QUANTITY_REVIEW_REQUIRED");
+                reception.sendBack(id,new com.pis.specimen.ReceptionContracts.Decision(2L,"Synthetic return reason"),"return");
+                assertThat(reception.view(id).request().state()).isEqualTo("RETURNED");
+                assertThat(reception.view(id).events()).hasSize(2);
+                return null;
+            });
+        }
+    }
+    @Test void informationCanBeResolvedAndRecheckedWithoutErasingHistory() {
+        var f=new Fixture(); var id=submitted(f); receptionGrant(f);
+        f.as(()->{
+            reception.exception(id,new com.pis.specimen.ReceptionContracts.ExceptionInput(1L,com.pis.specimen.ReceptionContracts.Category.INFORMATION,"Synthetic missing information"),"exception");
+            reception.resolve(id,new com.pis.specimen.ReceptionContracts.Decision(2L,"Synthetic supporting information"),"resolve");
+            reception.receive(id,check(f,id,3),"receive");
+            assertThat(reception.view(id).request().state()).isEqualTo("RECEIVED");
+            assertThat(reception.view(id).events()).extracting(e->e.action()).containsExactly("RECEIVE","RESOLVE","EXCEPTION");
+            return null;
+        });
+    }
+    @Test void informationResolutionCannotBypassDuplicateSubmissionRule() {
+        var f=new Fixture(); var id=submitted(f); receptionGrant(f);
+        f.as(()->{
+            reception.exception(id,new com.pis.specimen.ReceptionContracts.ExceptionInput(1L,com.pis.specimen.ReceptionContracts.Category.INFORMATION,"Synthetic missing information"),"exception");
+            var other=service.create(new Create(f.scope,f.encounter,COMPLETE),"other-create").receipt().resourceId();
+            service.submit(other,new Submit(0L),"other-submit");
+            assertCode(()->reception.resolve(id,new com.pis.specimen.ReceptionContracts.Decision(2L,"Synthetic corrected information"),"resolve"),"DUPLICATE_REVIEW_REQUIRED");
+            assertThat(reception.view(id).request().state()).isEqualTo("EXCEPTION");
+            assertThat(reception.view(id).events()).hasSize(1);
+            return null;
+        });
+    }
+    @Test void writeDoesNotGrantReceptionAndRevocationBlocksReplay() {
+        var f=new Fixture(); var other=new Fixture(); var id=submitted(f); var command=check(f,id,1);
+        f.as(()->{ assertThatThrownBy(()->reception.receive(id,command,"denied")).isInstanceOf(AccessDeniedException.class); return null; });
+        other.as(()->{ assertCode(()->reception.view(id),"REQUEST_NOT_FOUND"); return null; });
+        receptionGrant(f);
+        f.as(()->{
+            reception.receive(id,command,"receive");
+            jdbc.update("UPDATE workflow_grant SET can_receive=false WHERE user_id=?",f.user);
+            assertThatThrownBy(()->reception.receive(id,command,"receive")).isInstanceOf(AccessDeniedException.class);
+            assertThat(reception.view(id).events()).hasSize(1);
+            return null;
+        });
+    }
+    @Test void receptionAuditFailureRollsBackCaseContainersStateEventAndReceipt() {
+        var f=new Fixture(); var id=submitted(f); receptionGrant(f); var command=check(f,id,1);
+        jdbc.execute("CREATE FUNCTION reject_reception_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.hospital_id='"+f.hospital+"'::uuid THEN RAISE EXCEPTION 'synthetic failure'; END IF; RETURN NEW; END $$");
+        jdbc.execute("CREATE TRIGGER reject_reception_audit BEFORE INSERT ON audit_event FOR EACH ROW EXECUTE FUNCTION reject_reception_audit()");
+        try {
+            f.as(()->{ assertThatThrownBy(()->reception.receive(id,command,"recover")).isInstanceOf(org.springframework.dao.DataAccessException.class); return null; });
+            assertThat(f.as(()->reception.view(id)).request().state()).isEqualTo("SUBMITTED");
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM pathology_case WHERE request_id=?",Long.class,id)).isZero();
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM specimen_container WHERE request_id=? AND case_id IS NOT NULL",Long.class,id)).isZero();
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM reception_event WHERE request_id=?",Long.class,id)).isZero();
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM idempotency_command WHERE hospital_id=? AND operation_code='RECEPTION_RECEIVE_V1'",Long.class,f.hospital)).isZero();
+        } finally { jdbc.execute("DROP TRIGGER reject_reception_audit ON audit_event"); jdbc.execute("DROP FUNCTION reject_reception_audit()"); }
+        assertThat(f.as(()->reception.receive(id,command,"recover")).replayed()).isFalse();
+    }
+    @Test void competingReceptionsWaitAndOnlyOneCaseIsCreated() throws Exception {
+        var f=new Fixture(); var id=submitted(f); receptionGrant(f); var command=check(f,id,1);
+        try(var blocker=DB.connection();var executor=Executors.newVirtualThreadPerTaskExecutor()) {
+            blocker.setAutoCommit(false);
+            try(var s=blocker.prepareStatement("SELECT id FROM pathology_request WHERE id=? FOR UPDATE")) { s.setObject(1,id); s.executeQuery().close(); }
+            java.util.function.Function<String,String> run=key->f.as(()->{ try { reception.receive(id,command,key); return "SUCCESS"; } catch(ApiException e) { return e.code(); } });
+            var first=executor.submit(()->run.apply("one")); var second=executor.submit(()->run.apply("two"));
+            try {
+                long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(2); boolean waiting=false;
+                while(System.nanoTime()<deadline) {
+                    if(jdbc.queryForObject("SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%SELECT id FROM pathology_request WHERE id=%'",Long.class)>=2) { waiting=true; break; } Thread.sleep(10);
+                }
+                assertThat(waiting).isTrue();
+            } finally { blocker.rollback(); }
+            assertThat(List.of(first.get(5,TimeUnit.SECONDS),second.get(5,TimeUnit.SECONDS))).containsExactlyInAnyOrder("SUCCESS","VERSION_CONFLICT");
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM pathology_case WHERE request_id=?",Long.class,id)).isEqualTo(1);
+        }
+    }
+    @Test void realReceptionHttpEnforcesCsrfSeparatePermissionAndReplayRevocation() throws Exception {
+        var f=new Fixture(); var id=submitted(f); var command=check(f,id,1);
+        String password="Synthetic-reception-http-42!";
+        jdbc.update("UPDATE app_user SET password_hash=? WHERE id=?",encoder.encode(password),f.user);
+        var browser=new Browser();
+        assertThat(browser.send("GET","/api/receptions/"+id,null,null,false).statusCode()).isEqualTo(401);
+        String login="username="+f.principal.getUsername()+"&password="+java.net.URLEncoder.encode(password,java.nio.charset.StandardCharsets.UTF_8);
+        assertThat(browser.send("POST","/api/auth/login",login,browser.csrf(),true).statusCode()).isEqualTo(204);
+        String csrf=browser.csrf();
+        String body="{\"expectedVersion\":1,\"patientId\":\""+f.patient+"\",\"encounterNumber\":\"synthetic-001\",\"containerIds\":[\""+command.containerIds().getFirst()+"\"]}";
+        String path="/api/receptions/"+id+"/receive";
+        assertThat(browser.send("POST",path,body,csrf,false).statusCode()).isEqualTo(403);
+        receptionGrant(f);
+        var missingCsrf=browser.send("POST",path,body,null,false);
+        assertThat(missingCsrf.statusCode()).isEqualTo(403); assertThat(missingCsrf.body()).contains("CSRF_INVALID");
+        assertThat(browser.send("POST",path,body,csrf,false).statusCode()).isEqualTo(200);
+        assertThat(browser.send("POST",path,body,csrf,false).headers().firstValue("Idempotency-Replayed")).contains("true");
+        jdbc.update("UPDATE workflow_grant SET can_receive=false WHERE user_id=?",f.user);
+        assertThat(browser.send("POST",path,body,csrf,false).statusCode()).isEqualTo(403);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM pathology_case WHERE request_id=?",Long.class,id)).isEqualTo(1);
     }
     private String editResult(Fixture f,UUID id,String key) { return f.as(()->{ try { service.edit(id,new Edit(0L,COMPLETE),key); return "SUCCESS"; } catch(ApiException e) { return e.code(); } }); }
     private static void assertCode(Runnable action,String code) { assertThatThrownBy(action::run).isInstanceOfSatisfying(ApiException.class,e->assertThat(e.code()).isEqualTo(code)); }
