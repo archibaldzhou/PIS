@@ -1,6 +1,6 @@
 # T14 技术QC与隔离验收记录
 
-状态：验证分支完整CI已通过；main整理提交后另行核验。依据[开发规格](../prd/development-quality-v1.md)。重新验证已授权上传ZIP SHA256 `74f3305da4278f84c7660eb13625c1ff604174116d2fe13fbeffe85cf7a58291`，实际查看UI-014/037及生成的移动端QC截图；附件未入库。
+状态：验证分支及main完整CI已通过。依据[开发规格](../prd/development-quality-v1.md)。重新验证已授权上传ZIP SHA256 `74f3305da4278f84c7660eb13625c1ff604174116d2fe13fbeffe85cf7a58291`，实际查看UI-014/037及生成的移动端QC截图；附件未入库。
 
 ## 契约与边界
 
@@ -44,3 +44,5 @@ V12新增quality_head/assessment/event与can_qc，无业务种子；V1–V11字�
 本地对quality、MaterialQualitySubjects、TechnicalService共42条字面量JDBC语句做占位符/参数数量审查通过（不包含动态SQL）；动态where语句人工核对为一个UUID绑定。真实PG17执行从修复后QualityGate源码提取的PREPARE/EXECUTE七参数语句，含null关联任务，通过；同时确认升级与历史/身份隔离约束，临时容器已清理。首次探针遇到PG初始化临时服务与正式服务切换，等待正式启动后重跑通过。探针不是Java/Spring/JDBC集成测试结果，完整回归仍待修复SHA的CI。
 
 最终验收：父会话确认验证SHA `11fe584bce1048d4fc34c202d8802b724f2a4b79` 的 CI 37059074063 completed success，verify 111010899562 与独立依赖审计成功，PR-only review按原条件跳过。main保留已验证实现，仅更新验收说明和移除验证分支触发。未部署，不临床启用。
+
+main最终核验：父会话确认`a36fbff996a57180eb7edb64313b89a5345d6e71`的CI 37059736770 completed success。

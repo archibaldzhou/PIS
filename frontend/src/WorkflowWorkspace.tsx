@@ -7,6 +7,7 @@ import { accessionApi, type AccessionApi, type RequestDetail } from './features/
 import { ReadController, type RequestReader, type RequestSummary } from './shared/workflow';
 import { ReadPanel } from './shared/WorkflowElements';
 import './workflow.css';
+import { Worklist } from './features/worklist/Worklist';
 import { Quality } from './features/quality/Quality';
 import { Materials } from './features/materials/Materials';
 import { Technical } from './features/processing/Technical';
@@ -14,7 +15,7 @@ import { Grossing } from './features/grossing/Grossing';
 import { Labels } from './features/labels/Labels';
 import { Reception } from './features/specimen/Reception';
 
-const pages = { requests: '申请单查询', registration: '病理申请录入', reception: '标本接收与异常', labels: '标签打印与重打', grossing: '取材记录与取材盒', technical: '技术任务与交接', materials: '蜡块与玻片谱系', quality: '技术QC与隔离' };
+const pages = { requests: '申请单查询', registration: '病理申请录入', reception: '标本接收与异常', labels: '标签打印与重打', grossing: '取材记录与取材盒', technical: '技术任务与交接', materials: '蜡块与玻片谱系', quality: '技术QC与隔离', worklist: '工作列表与追踪' };
 type Page = keyof typeof pages;
 export function WorkflowWorkspace({ onClose, onLogout, onExpired, api = accessionApi }: {
   onClose: () => void; onLogout: () => void; onExpired: () => void; api?: AccessionApi;
@@ -92,6 +93,7 @@ export function WorkflowWorkspace({ onClose, onLogout, onExpired, api = accessio
         {values.length === 0 && <Alert type="warning" title="没有申请业务授权；病例权限不会自动授予申请权限" />}
       </div>}</ReadPanel>
       {scopeState.status !== 'ready' && <Button onClick={() => void scopes.run(null)}>重试加载范围</Button>}
+      {scope && page === 'worklist' && <Worklist key={scope} scopeId={scope} onDirty={() => setDirty(true)} onClean={() => setDirty(false)} onPending={setUnresolved} onExpired={onExpired} />}
       {scope && page === 'requests' && <RequestList key={scope} reader={reader} onSelect={selected => navigate('registration', selected)} />}
       {scope && page === 'registration' && (record ? <><Button onClick={() => navigate('reception', record)}>处理此申请接收与异常</Button><Button onClick={() => navigate('labels', record)}>处理此申请标签</Button><Button onClick={() => navigate('grossing', record)}>处理此病例取材</Button><Button onClick={() => navigate('technical', record)}>处理此病例技术任务</Button><Button onClick={() => navigate('materials', record)}>处理此病例材料谱系</Button><Button onClick={() => navigate('quality', record)}>处理此病例技术QC</Button><ReadPanel state={detailState}>{registration}</ReadPanel></> : registration())}
       {scope && page === 'reception' && (record ? <Reception key={record.id} id={record.id} onDirty={() => setDirty(true)} onClean={() => setDirty(false)} onPending={setUnresolved} onExpired={onExpired} /> : <Alert type="info" title="请从申请列表查看申请，再进入接收与异常处理" />)}

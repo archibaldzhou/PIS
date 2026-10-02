@@ -12,6 +12,8 @@ T13 蜡块/玻片身份、重切加深、直制路径与标签复用已实现，
 
 T14 技术QC、隔离和返工已实现，完整验证分支CI已通过，见[T14记录](docs/api/t14-development-status.md)。异常放行仍禁用。
 
+T15 已实现授权工作列表、当前页逐项批量领取、合成超期和既有流程追踪，完整CI待核验，见[T15记录](docs/api/t15-development-status.md)。
+
 开发连通性与认证验证：React + Ant Design 登录后调用 Spring Boot 的 `GET /api/hello`，显示 **Hello World**。
 
 ## 范围

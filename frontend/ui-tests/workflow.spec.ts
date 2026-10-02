@@ -352,3 +352,40 @@ test('quality preserves pending identity, confirms dirty operation changes and r
   await page.screenshot({ path: 'test-results/quality-desktop.png', fullPage: true }); await page.setViewportSize({ width: 390, height: 844 });
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true); await page.screenshot({ path: 'test-results/quality-mobile.png', fullPage: true });
 });
+
+test('worklist clears cross-page selections and uncertain batch retries exact original items', async ({ page }) => {
+  await start(page);
+  const task = (id: string) => ({ kind: 'TECHNICAL', id, requestId: '44444444-4444-4444-8444-444444444444', patientId: encounter.patientId, requestNumber: 'DEV-AP-WORK', state: 'QUEUED', version: 0, createdAt: '2026-01-01T00:00:00Z', cassetteId: '55555555-5555-4555-8555-555555555555', blocked: false, active: true, dueAt: '2026-01-01T04:00:00Z', overdue: true });
+  const a = task('66666666-6666-4666-8666-666666666666'), b = task('77777777-7777-4777-8777-777777777777');
+  await page.route('**/api/worklists/scopes/' + scope + '?*', route => { const params = new URL(route.request().url()).searchParams; const current = Number(params.get('page')); return route.fulfill({ json: { total: 11, page: current, pageSize: Number(params.get('pageSize')), asOf: '2026-01-01T05:00:00Z', syntheticDueMinutes: 240, items: current === 1 ? [a] : [b] } }); });
+  await page.getByRole('button', { name: '工作列表与追踪', exact: true }).click();
+  await page.getByRole('checkbox', { name: '选择任务 ' + a.id, exact: true }).check(); await page.getByLabel('批量领取原因').fill('合成第一页面');
+  await page.getByTitle('2', { exact: true }).click(); await page.getByRole('button', { name: '清除并切换', exact: true }).click();
+  await expect(page.getByText('本页明确选择：0 项（最多20项）', { exact: true })).toBeVisible(); await expect(page.getByLabel('批量领取原因')).toHaveValue('');
+  await page.getByRole('checkbox', { name: '选择任务 ' + b.id, exact: true }).check(); await page.getByLabel('批量领取原因').fill('合成第二页面');
+  const writes: string[] = [];
+  await page.route('**/api/worklists/scopes/' + scope + '/claims', async route => { writes.push(route.request().postData() ?? ''); await route.abort(); });
+  await page.getByRole('button', { name: '核对所选并批量领取' }).click(); await expect(page.getByRole('dialog')).toContainText(b.id); await expect(page.getByRole('dialog')).not.toContainText(a.id);
+  await page.getByRole('button', { name: '确认逐项领取' }).dblclick(); await expect(page.getByText('批次结果待确认；不得假定整批回滚，请用原批次确认结果。')).toBeVisible(); expect(writes).toHaveLength(1);
+  await expect(page.getByLabel('工作类别')).toBeDisabled(); await page.getByRole('button', { name: '申请单查询', exact: true }).click(); await expect(page.getByText('原请求结果尚未确认，请先使用页面上的原请求确认结果。')).toBeVisible();
+  await page.getByRole('button', { name: '原批次确认/重试' }).click(); await expect.poll(() => writes.length).toBe(2); expect(writes[1]).toEqual(writes[0]);
+  const sent = JSON.parse(writes[0]) as { items: { taskId: string; expectedVersion: number; confirmedCassetteId: string }[]; reason: string };
+  expect(sent.items).toEqual([{ taskId: b.id, expectedVersion: 0, confirmedCassetteId: b.cassetteId }]); expect(sent.reason).toBe('合成第二页面');
+  await page.screenshot({ path: 'test-results/worklist-desktop.png', fullPage: true }); await page.setViewportSize({ width: 390, height: 844 });
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true); await page.screenshot({ path: 'test-results/worklist-mobile.png', fullPage: true });
+});
+
+test('worklist partial results preserve successes while denied query is not empty data', async ({ page }) => {
+  await start(page);
+  const tasks = ['66666666-6666-4666-8666-666666666666', '77777777-7777-4777-8777-777777777777'].map(id => ({ kind: 'TECHNICAL', id, requestId: '44444444-4444-4444-8444-444444444444', patientId: encounter.patientId, requestNumber: 'DEV-AP-WORK', state: 'QUEUED', version: 0, createdAt: '2026-01-01T00:00:00Z', cassetteId: '55555555-5555-4555-8555-555555555555', blocked: false, active: true, dueAt: '2026-01-01T04:00:00Z', overdue: false }));
+  await page.route('**/api/worklists/scopes/' + scope + '?*', route => route.fulfill({ json: { total: 2, page: 1, pageSize: 10, asOf: '2026-01-01T04:00:00Z', syntheticDueMinutes: 240, items: tasks } }));
+  await page.route('**/api/worklists/scopes/' + scope + '/claims', route => { const input = route.request().postDataJSON() as { batchId: string }; return route.fulfill({ json: { batchId: input.batchId, items: [{ taskId: tasks[0].id, outcome: 'SUCCESS', status: 200, code: 'CLAIMED', version: 1, replayed: false }, { taskId: tasks[1].id, outcome: 'REJECTED', status: 409, code: 'VERSION_CONFLICT', version: null, replayed: false }] } }); });
+  await page.getByRole('button', { name: '工作列表与追踪', exact: true }).click();
+  for (const task of tasks) await page.getByRole('checkbox', { name: '选择任务 ' + task.id, exact: true }).check();
+  await page.getByLabel('批量领取原因').fill('合成部分成功'); await page.getByRole('button', { name: '核对所选并批量领取' }).click(); await page.getByRole('button', { name: '确认逐项领取' }).click();
+  await expect(page.getByRole('cell', { name: 'SUCCESS', exact: true })).toHaveCount(1); await expect(page.getByRole('cell', { name: 'REJECTED', exact: true })).toHaveCount(1);
+  await expect(page.getByText('本页明确选择：0 项（最多20项）', { exact: true })).toBeVisible();
+  await page.route('**/api/worklists/scopes/' + scope + '?*', route => route.fulfill({ status: 404, json: { code: 'WORKLIST_NOT_FOUND' } }));
+  await page.getByRole('button', { name: '刷新工作列表' }).click(); await expect(page.getByText('无权查看', { exact: true })).toBeVisible();
+  await expect(page.getByText('当前授权过滤集没有工作项；不是未来模块的零统计。')).toHaveCount(0);
+});

@@ -58,3 +58,5 @@ T12新增 `architecture/TechnicalDomainBoundaryTest`：三个工作流域的显�
 T13 将上述有界源码无环检查扩展至 accession/grossing/processing/specimen/label/material 六域；保留 processing 公开服务边界断言。执行结果待 T13 Java CI，不扩大为完整架构分析声明。
 
 T14源码引用检查扩展到quality共七域，并增加QC与消费竞态PG测试、迁移与真实UI/API返工链。具体已运行/待CI结果见[T14记录](api/t14-development-status.md)，不由测试源码存在推断通过。
+
+T15新增V13授权只读投影、同快照计数/分页、逐项批量领取与最小追踪。源码域引用检查扩展八域。前端72单测和14系统Chromium UI测试、本地PG SQL探针通过；新增真实PG/HTTP/并发/截止边界及真实E2E仍待确切SHA完整CI，见[T15记录](api/t15-development-status.md)。

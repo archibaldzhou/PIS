@@ -101,14 +101,19 @@ public class TechnicalService {
         quality.reworkTask(id,result,actor.id(),input.reason()); event(id,old.version()+1,"REWORK",actor.id(),old.ownerId(),old.ownerId(),result,input.reason());
         return result;
     }
-    private IdempotentCommands.Result command(UUID rid,UUID id,Object input,String key,String action) {
+    /** Bulk caller supplies an explicit scope; each item still owns its normal T07 transaction. */
+    public IdempotentCommands.Result bulkClaim(UUID scope,UUID task,Decision input,String key) { return command(requestId(task),task,input,key,"CLAIM",scope); }
+    private void expectedScope(UUID rid,UUID expected) { if(expected!=null&&!requests.detail(rid).scopeId().equals(expected)) throw missing(); }
+    private IdempotentCommands.Result command(UUID rid,UUID id,Object input,String key,String action) { return command(rid,id,input,key,action,null); }
+    private IdempotentCommands.Result command(UUID rid,UUID id,Object input,String key,String action,UUID expectedScope) {
+
         var errors=validator.validate(input); if(!errors.isEmpty()) throw new jakarta.validation.ConstraintViolationException(errors);
-        boolean handoff=List.of("OFFER","ACCEPT","WITHDRAW").contains(action); var initial=context(rid,handoff);
+        boolean handoff=List.of("OFFER","ACCEPT","WITHDRAW").contains(action); var initial=context(rid,handoff); expectedScope(rid,expectedScope);
         return commands.execute(initial.hospitalId(),"TECH_"+action+"_V1",key,Map.of("request",rid,"task",id==null?"":id.toString(),"command",input),new IdempotentCommands.Work() {
-            public void authorize(CurrentActor.Actor actor) { context(rid,handoff); }
-            public void authorizeReplay(CurrentActor.Actor actor,CommandReceipt receipt) { context(requestId(receipt.resourceId()),handoff); }
+            public void authorize(CurrentActor.Actor actor) { context(rid,handoff); expectedScope(rid,expectedScope); }
+            public void authorizeReplay(CurrentActor.Actor actor,CommandReceipt receipt) { context(requestId(receipt.resourceId()),handoff); expectedScope(rid,expectedScope); }
             public IdempotentCommands.Mutation mutate(CurrentActor.Actor actor) {
-                jdbc.queryForList("SELECT id FROM pathology_request WHERE id=? FOR UPDATE",rid); var released=context(rid,handoff);
+                jdbc.queryForList("SELECT id FROM pathology_request WHERE id=? FOR UPDATE",rid); var released=context(rid,handoff); expectedScope(rid,expectedScope);
                 if(action.equals("CREATE")) {
                     var c=(Create)input; if(released.requestVersion()!=c.requestVersion()) throw conflict("VERSION_CONFLICT");
                     quality.cassette(rid,c.cassetteId(),null); source(released,c.cassetteId()); predecessor(rid,c.cassetteId(),c.predecessorId()); capacity(rid);

@@ -46,6 +46,10 @@ class RequestWorkflowTest {
     @Autowired com.pis.processing.TechnicalService technical;
     @Autowired com.pis.material.MaterialService materials;
     @Autowired com.pis.quality.QualityService quality;
+    @Autowired com.pis.worklist.WorklistService worklist;
+    @Autowired WorkflowAccess workflowAccess;
+    @Autowired jakarta.validation.Validator validator;
+    @Autowired org.springframework.transaction.PlatformTransactionManager transactionManager;
     @Autowired org.springframework.security.crypto.password.PasswordEncoder encoder;
     @org.springframework.boot.test.web.server.LocalServerPort int port;
     static final Draft COMPLETE=new Draft("Synthetic history",Instant.parse("2026-01-01T08:00:00Z"),
@@ -1082,6 +1086,139 @@ class RequestWorkflowTest {
             var entities=f.as(()->materials.view(s.request())).entities(); assertThat(entities).hasSize(creation.equals("QC_QUARANTINED")?1:2);
             for(var entity:entities) f.as(()->{ assertCode(()->labels.createMaterial(entity.id(),new com.pis.label.LabelContracts.MaterialCreate(2L,entity.version()),"blocked-"+entity.id()),"QC_QUARANTINED"); return null; });
             assertThat(f.as(()->quality.detail(block)).item().effectiveState()).isIn("REVOKED","INVALIDATED");
+        }
+    }
+    private com.pis.worklist.WorklistContracts.Page workPage(Fixture f,com.pis.worklist.WorklistContracts.Kind kind,int page,int size) {
+        return worklist.list(f.scope,kind,com.pis.worklist.WorklistContracts.State.ALL,com.pis.worklist.WorklistContracts.Due.ALL,com.pis.worklist.WorklistContracts.Sort.OLDEST,page,size);
+    }
+    private com.pis.worklist.WorklistContracts.Claim wc(UUID id,long version,UUID cassette) { return new com.pis.worklist.WorklistContracts.Claim(id,version,cassette); }
+    @Test void worklistCountsPaginationAndTraceUseDomainPermissionsAndScopedRealStates() {
+        var f=new Fixture(); var setup=materialSetup(f); printGrant(f);
+        var other=new Fixture(); var foreign=materialSetup(other);
+        var block=f.as(()->materials.block(setup.request(),blockInput(setup),"block")).receipt().resourceId();
+        f.as(()->{
+            var page=workPage(f,com.pis.worklist.WorklistContracts.Kind.ALL,1,50); assertThat(page.total()).isEqualTo(4); assertThat(page.items()).hasSize(4);
+            assertThat(page.items()).allSatisfy(item->{ assertThat(item.requestId()).isEqualTo(setup.request()); assertThat(item.patientId()).isEqualTo(f.patient); });
+            assertCode(()->workPage(f,com.pis.worklist.WorklistContracts.Kind.QUALITY,1,20),"WORKLIST_NOT_FOUND");
+            assertCode(()->worklist.trace(foreign.request(),1,20),"REQUEST_NOT_FOUND");
+            var first=workPage(f,com.pis.worklist.WorklistContracts.Kind.ALL,1,2); var second=workPage(f,com.pis.worklist.WorklistContracts.Kind.ALL,2,2);
+            assertThat(first.total()).isEqualTo(second.total()); assertThat(first.items()).doesNotContainAnyElementsOf(second.items());
+            assertThat(workPage(f,com.pis.worklist.WorklistContracts.Kind.ALL,100,2).items()).isEmpty();
+            assertThat(workPage(f,com.pis.worklist.WorklistContracts.Kind.ALL,100,2).total()).isEqualTo(4);
+            assertCode(()->workPage(f,com.pis.worklist.WorklistContracts.Kind.ALL,1,51),"WORKLIST_PAGE_INVALID"); return null;
+        });
+        qcGrant(f);
+        f.as(()->{
+            assertThat(workPage(f,com.pis.worklist.WorklistContracts.Kind.QUALITY,1,20).items().getFirst().state()).isEqualTo("NOT_ASSESSED");
+            quality.assess(block,qa(block,-1,0,2L,com.pis.quality.QualityContracts.Outcome.FAIL),"fail");
+            var items=workPage(f,com.pis.worklist.WorklistContracts.Kind.ALL,1,50); assertThat(items.total()).isEqualTo(5);
+            assertThat(items.items()).anySatisfy(item->{ assertThat(item.kind()).isEqualTo("QUALITY"); assertThat(item.state()).isEqualTo("FAIL"); assertThat(item.blocked()).isTrue(); });
+            var trace=worklist.trace(setup.request(),1,50); assertThat(trace.events()).extracting(e->e.domain()).contains("REQUEST","RECEPTION","GROSSING","TECHNICAL","MATERIAL","QUALITY");
+            assertThat(trace.events()).extracting(e->e.eventId()).doesNotHaveDuplicates();
+            assertThat(trace.events()).anySatisfy(e->{ assertThat(e.domain()).isEqualTo("QUALITY"); assertThat(e.entityId()).isEqualTo(block); assertThat(e.relatedType()).isEqualTo("QUALITY_ASSESSMENT"); assertThat(e.relatedId()).isNotNull(); });
+            jdbc.update("UPDATE workflow_grant SET can_qc=false WHERE user_id=?",f.user);
+            assertThat(workPage(f,com.pis.worklist.WorklistContracts.Kind.ALL,1,50).total()).isEqualTo(4);
+            assertThat(worklist.trace(setup.request(),1,50).events()).noneMatch(e->e.domain().equals("QUALITY"));
+            jdbc.update("UPDATE workflow_grant SET revoked_at=statement_timestamp() WHERE user_id=?",f.user);
+            assertCode(()->workPage(f,com.pis.worklist.WorklistContracts.Kind.ALL,1,50),"WORKLIST_NOT_FOUND"); return null;
+        });
+    }
+    @Test void bulkClaimsReportPartialFailureMaskForeignIdsAndNeverOverrideVersionOrQuarantine() {
+        var f=new Fixture(); var rid=technicalRequest(f); var box=technicalCassette(f,rid);
+        var other=new Fixture(); var foreign=technicalRequest(other); var fbox=technicalCassette(other,foreign);
+        var foreignTask=other.as(()->technical.create(foreign,tc(fbox,null),"foreign")).receipt().resourceId(); technicalGrant(f,other,true);
+        var a=f.as(()->technical.create(rid,tc(box,null),"a")).receipt().resourceId(); var b=f.as(()->technical.create(rid,tc(box,null),"b")).receipt().resourceId();
+        f.as(()->technical.decide(b,td(0,box),"already","CLAIM"));
+        UUID unknown=UUID.randomUUID(); var batch=new com.pis.worklist.WorklistContracts.Batch(UUID.randomUUID(),List.of(wc(a,0,box),wc(b,0,box),wc(foreignTask,0,fbox),wc(unknown,0,box)),"Synthetic bulk ownership");
+        f.as(()->{
+            var result=worklist.claim(f.scope,batch); assertThat(result.items()).extracting(e->e.outcome()).containsExactly("SUCCESS","REJECTED","REJECTED","REJECTED");
+            assertThat(result.items().get(1).code()).isEqualTo("VERSION_CONFLICT");
+            assertThat(result.items().get(2).code()).isEqualTo(result.items().get(3).code()).isEqualTo("WORKLIST_ITEM_UNAVAILABLE");
+            assertThat(result.items().get(2).status()).isEqualTo(404); assertThat(result.items().get(2).version()).isNull();
+            assertThat(worklist.claim(f.scope,batch).items().getFirst().replayed()).isTrue();
+            var changed=new com.pis.worklist.WorklistContracts.Batch(batch.batchId(),List.of(wc(a,0,box)),"Changed reason");
+            assertThat(worklist.claim(f.scope,changed).items().getFirst().code()).isEqualTo("IDEMPOTENCY_KEY_REUSED");
+            assertCode(()->worklist.claim(f.scope,new com.pis.worklist.WorklistContracts.Batch(UUID.randomUUID(),List.of(wc(a,0,box),wc(a,0,box)),"Duplicate")),"WORKLIST_DUPLICATE_ITEM");
+            assertThatThrownBy(()->worklist.claim(f.scope,new com.pis.worklist.WorklistContracts.Batch(UUID.randomUUID(),java.util.Collections.nCopies(21,wc(a,0,box)),"Too many"))).isInstanceOf(jakarta.validation.ConstraintViolationException.class);
+            assertThat(technical.detail(foreignTask).task().state()).isEqualTo("QUEUED"); return null;
+        });
+        var q=new Fixture(); var setup=materialSetup(q); qcGrant(q);
+        var waiting=q.as(()->technical.create(setup.request(),tc(setup.cassette(),null),"waiting")).receipt().resourceId();
+        var block=q.as(()->materials.block(setup.request(),blockInput(setup),"b")).receipt().resourceId();
+        q.as(()->{ quality.assess(block,qa(block,-1,0,2L,com.pis.quality.QualityContracts.Outcome.IDENTITY_MISMATCH),"identity");
+            var result=worklist.claim(q.scope,new com.pis.worklist.WorklistContracts.Batch(UUID.randomUUID(),List.of(wc(waiting,0,setup.cassette())),"No bypass"));
+            assertThat(result.items().getFirst().code()).isEqualTo("QC_QUARANTINED"); assertThat(technical.detail(waiting).task().state()).isEqualTo("QUEUED"); return null;
+        });
+    }
+    @Test void bulkItemAuditFailurePreservesEarlierSuccessAndRetriesOriginalReceipt() {
+        var f=new Fixture(); var rid=technicalRequest(f); var box=technicalCassette(f,rid);
+        var a=f.as(()->technical.create(rid,tc(box,null),"a")).receipt().resourceId(); var b=f.as(()->technical.create(rid,tc(box,null),"b")).receipt().resourceId();
+        var batch=new com.pis.worklist.WorklistContracts.Batch(UUID.randomUUID(),List.of(wc(a,0,box),wc(b,0,box)),"Synthetic partial commit");
+        jdbc.execute("CREATE FUNCTION reject_bulk_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.resource_id='"+b+"'::uuid AND NEW.operation_code='TECH_CLAIM_V1' THEN RAISE EXCEPTION 'synthetic failure'; END IF; RETURN NEW; END $$");
+        jdbc.execute("CREATE TRIGGER reject_bulk_audit BEFORE INSERT ON audit_event FOR EACH ROW EXECUTE FUNCTION reject_bulk_audit()");
+        try { f.as(()->{
+            var result=worklist.claim(f.scope,batch); assertThat(result.items()).extracting(e->e.outcome()).containsExactly("SUCCESS","UNKNOWN");
+            assertThat(technical.detail(a).task().state()).isEqualTo("ACTIVE"); assertThat(technical.detail(b).task().state()).isEqualTo("QUEUED"); return null;
+        }); } finally { jdbc.execute("DROP TRIGGER reject_bulk_audit ON audit_event"); jdbc.execute("DROP FUNCTION reject_bulk_audit()"); }
+        f.as(()->{ var result=worklist.claim(f.scope,batch); assertThat(result.items()).allSatisfy(e->assertThat(e.outcome()).isEqualTo("SUCCESS")); assertThat(result.items().getFirst().replayed()).isTrue(); assertThat(result.items().get(1).replayed()).isFalse(); return null; });
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM audit_event WHERE resource_id IN (?,?) AND operation_code='TECH_CLAIM_V1'",Long.class,a,b)).isEqualTo(2);
+    }
+    @Test void competingBulkClaimsRecheckEachVersionAfterRealLockWait() throws Exception {
+        var f=new Fixture(); var rid=technicalRequest(f); var box=technicalCassette(f,rid);
+        var task=f.as(()->technical.create(rid,tc(box,null),"task")).receipt().resourceId();
+        try(var blocker=DB.connection();var executor=Executors.newVirtualThreadPerTaskExecutor()) {
+            blocker.setAutoCommit(false); try(var statement=blocker.prepareStatement("SELECT id FROM pathology_request WHERE id=? FOR UPDATE")) { statement.setObject(1,rid); statement.executeQuery().close(); }
+            java.util.concurrent.Callable<String> run=()->f.as(()->worklist.claim(f.scope,new com.pis.worklist.WorklistContracts.Batch(UUID.randomUUID(),List.of(wc(task,0,box)),"Synthetic competing batch")).items().getFirst().code());
+            var first=executor.submit(run); var second=executor.submit(run);
+            try {
+                long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(2); boolean waiting=false;
+                while(System.nanoTime()<deadline) { if(jdbc.queryForObject("SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%SELECT id FROM pathology_request WHERE id=%'",Long.class)>=2) { waiting=true; break; } Thread.sleep(10); } assertThat(waiting).isTrue();
+            } finally { blocker.rollback(); }
+            assertThat(List.of(first.get(5,TimeUnit.SECONDS),second.get(5,TimeUnit.SECONDS))).containsExactlyInAnyOrder("CLAIMED","VERSION_CONFLICT");
+        }
+    }
+    @Test void worklistHttpPreservesSessionCsrfWhitelistPagingAndCurrentDomainPermissions() throws Exception {
+        var f=new Fixture(); var rid=technicalRequest(f); var box=technicalCassette(f,rid);
+        var task=f.as(()->technical.create(rid,tc(box,null),"http-task")).receipt().resourceId();
+        String password="Synthetic-worklist-http-42!"; jdbc.update("UPDATE app_user SET password_hash=? WHERE id=?",encoder.encode(password),f.user);
+        var b=new Browser(); String path="/api/worklists/scopes/"+f.scope;
+        assertThat(b.send("GET",path,null,null,false).statusCode()).isEqualTo(401);
+        String login="username="+f.principal.getUsername()+"&password="+java.net.URLEncoder.encode(password,java.nio.charset.StandardCharsets.UTF_8);
+        assertThat(b.send("POST","/api/auth/login",login,b.csrf(),true).statusCode()).isEqualTo(204); String csrf=b.csrf();
+        assertThat(b.send("GET",path+"?kind=TECHNICAL&pageSize=50",null,null,false).statusCode()).isEqualTo(200);
+        for(String query:List.of("?sort=UNTRUSTED","?page=0","?pageSize=51","?kind=AI"))
+            assertThat(b.send("GET",path+query,null,null,false).statusCode()).isEqualTo(400);
+        String body="""
+            {"batchId":"%s","items":[{"taskId":"%s","expectedVersion":0,"confirmedCassetteId":"%s"}],"reason":"Synthetic HTTP batch"}
+            """.formatted(UUID.randomUUID(),task,box);
+        assertThat(b.send("POST",path+"/claims",body,null,false).statusCode()).isEqualTo(403);
+        assertThat(b.send("POST",path+"/claims",body.replace("\"reason\":","\"adminOverride\":true,\"reason\":"),csrf,false).statusCode()).isEqualTo(400);
+        var claimed=b.send("POST",path+"/claims",body,csrf,false); assertThat(claimed.statusCode()).isEqualTo(200); assertThat(claimed.body()).contains("SUCCESS");
+        jdbc.update("UPDATE workflow_grant SET can_process=false,can_handoff=false WHERE user_id=?",f.user);
+        assertThat(b.send("GET",path+"?kind=TECHNICAL",null,null,false).statusCode()).isEqualTo(404);
+        var trace=b.send("GET","/api/worklists/requests/"+rid+"/trace",null,null,false);
+        assertThat(trace.statusCode()).isEqualTo(200); assertThat(trace.body()).doesNotContain("TECHNICAL");
+        var denied=b.send("POST",path+"/claims",body,csrf,false); assertThat(denied.statusCode()).isEqualTo(200); assertThat(denied.body()).contains("REJECTED","WORKLIST_ITEM_UNAVAILABLE").doesNotContain("SUCCESS");
+        jdbc.update("UPDATE workflow_grant SET revoked_at=statement_timestamp() WHERE user_id=?",f.user);
+        assertThat(b.send("GET",path,null,null,false).statusCode()).isEqualTo(404);
+    }
+    @Test void worklistSqlDeadlineUsesExactBoundaryAndExcludesCompletedItems() {
+        var f=new Fixture();
+        var draft=f.as(()->service.create(new Create(f.scope,f.encounter,COMPLETE),"deadline")).receipt().resourceId();
+        technicalRequest(f); // A received application is ended for REQUEST work.
+        var created=jdbc.queryForObject("SELECT created_at FROM pathology_request WHERE id=?",java.sql.Timestamp.class,draft).toInstant();
+        var tx=new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        for(long micro:List.of(-1L,0L,1L)) {
+            var asOf=created.plusSeconds(240*60).plusNanos(micro*1000);
+            var fixed=new com.pis.worklist.WorklistService(jdbc,workflowAccess,service,technical,validator,java.time.Clock.fixed(asOf,java.time.ZoneOffset.UTC),240);
+            f.as(()->tx.execute(status->{
+                var page=fixed.list(f.scope,com.pis.worklist.WorklistContracts.Kind.REQUEST,com.pis.worklist.WorklistContracts.State.ALL,com.pis.worklist.WorklistContracts.Due.OVERDUE,com.pis.worklist.WorklistContracts.Sort.OLDEST,1,50);
+                assertThat(page.total()).isEqualTo(micro>0?1:0);
+                if(micro>0) assertThat(page.items().getFirst().id()).isEqualTo(draft);
+                var all=fixed.list(f.scope,com.pis.worklist.WorklistContracts.Kind.REQUEST,com.pis.worklist.WorklistContracts.State.ALL,com.pis.worklist.WorklistContracts.Due.ALL,com.pis.worklist.WorklistContracts.Sort.OLDEST,1,50);
+                assertThat(all.total()).isEqualTo(2);
+                assertThat(all.items()).filteredOn(i->!i.active()).singleElement().satisfies(i->{ assertThat(i.overdue()).isFalse(); assertThat(i.dueAt()).isNull(); }); return null;
+            }));
         }
     }
     private String editResult(Fixture f,UUID id,String key) { return f.as(()->{ try { service.edit(id,new Edit(0L,COMPLETE),key); return "SUCCESS"; } catch(ApiException e) { return e.code(); } }); }

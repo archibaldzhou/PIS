@@ -47,6 +47,7 @@ export async function request(path: string, options: RequestInit = {}): Promise<
     throw new ApiError(403, 'FORBIDDEN', '请求被拒绝，请重试或联系管理员');
   }
   const workflowErrors: Record<string, string> = {
+    WORKLIST_NOT_FOUND: '工作范围或模块不可用，或未获授权', WORKLIST_PAGE_INVALID: '工作列表分页参数不正确', WORKLIST_DUPLICATE_ITEM: '批次包含重复任务，未执行任何项',
     QC_NOT_FOUND: '没有此材料QC权限或材料不存在', QC_QUARANTINED: '当前材料或来源已隔离，操作被阻断', QC_IDENTITY_LOCKED: '身份错误持续阻断，本版不支持解除', QC_IDENTITY_MISMATCH: '核对材料身份不一致，未提交QC', QC_EXCEPTION_RELEASE_DISABLED: '异常放行未批准，服务端已禁用', QC_STANDARD_UNSUPPORTED: '不支持该QC标准版本', QC_SOURCE_INVALID: '材料或技术来源已失效', QC_REWORK_NEW_MATERIAL_REQUIRED: '返工必须新建材料并独立质检，原材料保持隔离', QC_REWORK_UNSUPPORTED: '当前状态或直制路径不支持盒级返工', QC_NOT_ASSESSED: '尚未登记QC判定', QC_STATE_CONFLICT: 'QC状态已变化，请刷新核对', QC_LIMIT_REACHED: '质检历史达到开发限制',
     RECEPTION_STATE_CONFLICT: '当前状态不允许此操作，请刷新', RECEPTION_ALREADY_LINKED: '已有关联病例或接收记录，需要人工复核',
     RECEPTION_CONTAINER_CONFLICT: '容器清单已变化，接收已回滚', IDENTITY_OR_QUANTITY_REVIEW_REQUIRED: '身份或数量异常不能自行修正并恢复',

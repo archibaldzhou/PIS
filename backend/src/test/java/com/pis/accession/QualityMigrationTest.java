@@ -22,7 +22,7 @@ class QualityMigrationTest {
     j.update("INSERT INTO material_entity(id,hospital_id,patient_id,request_id,case_id,kind,route,operation,display_number,barcode,container_id,created_by) VALUES(?,?,?,?,?,'SLIDE','DIRECT_CYTOLOGY','ORIGINAL','DEV-S-QC',?,?,?)",m,h,p,r,k,com.pis.label.LabelBarcode.create(m),c,u);
     var before=j.queryForList("SELECT * FROM material_entity");
     String history="SELECT version,checksum FROM flyway_schema_history WHERE version IS NOT NULL AND version::integer<=11 ORDER BY installed_rank";
-    var checksums=j.queryForList(history); var latest=db.configuration("classpath:db/migration").load(); assertThat(latest.migrate().migrationsExecuted).isEqualTo(1); assertThat(latest.validateWithResult().validationSuccessful).isTrue();
+    var checksums=j.queryForList(history); var latest=db.configuration("classpath:db/migration").target("12").load(); assertThat(latest.migrate().migrationsExecuted).isEqualTo(1); assertThat(latest.validateWithResult().validationSuccessful).isTrue();
     assertThat(j.queryForList(history)).isEqualTo(checksums); assertThat(j.queryForList("SELECT * FROM material_entity")).isEqualTo(before);
     assertThat(j.queryForObject("SELECT column_default FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='workflow_grant' AND column_name='can_qc'",String.class)).isEqualTo("false");
     j.update("INSERT INTO quality_head(material_id,hospital_id,request_id,case_id,patient_id,material_version,state,version) VALUES(?,?,?,?,?,0,'PENDING',0)",m,h,r,k,p);
