@@ -9,27 +9,34 @@
 ## 环境
 
 - JDK 21
-- Maven 3.9.x（当前使用系统 Maven，尚未加入 Wrapper）
-- Node.js 22.12+，npm
+- Maven 3.9.16，由仓库中的 Maven Wrapper 3.3.4 下载和运行，无需安装系统 Maven
+- Node.js 22.23.3（根目录 `.nvmrc`），npm 10.9.9（该 Node 版本自带）
 - 本例不需要 PostgreSQL
 
-已固定直接依赖版本。首版通过仓库接口创建，暂未包含 npm 锁文件；首次 `npm install` 会生成 `package-lock.json`。后续应审核并提交锁文件，改用 `npm ci`，再建立完整可重复构建基线。
+后端固定 Spring Boot 4.1.1；前端固定 React 19.2.4、Ant Design 6.6.5、Vite 7.3.1 和 TypeScript 5.9.3。完整前端依赖树记录在 `frontend/package-lock.json`，日常开发和 CI 均使用 `npm ci` 冻结安装，不使用 `npm install` 重新解析依赖。`frontend/.npmrc` 会拒绝与声明不符的 Node/npm 版本。
+
+使用 nvm 时，在仓库根目录运行 `nvm install && nvm use`；也可从 [Node.js 官网](https://nodejs.org/dist/v22.23.3/)安装对应版本。确认 `node --version` 为 `v22.23.3`、`npm --version` 为 `10.9.9`，并用 `java -version` 和 `javac -version` 确认完整 JDK 21（只有 JRE 无法编译）。
+
+Wrapper 使用 Apache 官方 `only-script` 发行，不提交 JAR。首次运行需要网络、JDK 21，以及 Linux/macOS 的 `curl` 或 `wget`、`unzip` 和 `sha256sum` 或 `shasum`，或 Windows PowerShell。它会校验已固定的 Maven ZIP 发行包 SHA-256；后续运行复用本地缓存。初次 Maven 构建与 npm 安装也需要访问各自的官方软件仓库。
 
 ## 启动
 
 终端一（仓库根目录）：
 
 ```bash
-mvn -f backend/pom.xml spring-boot:run
+cd backend
+./mvnw spring-boot:run
 ```
 
 终端二：
 
 ```bash
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
+
+两个终端都从仓库根目录开始。Windows PowerShell 中将 `./mvnw` 替换为 `.\mvnw.cmd`，其他参数相同。
 
 打开 http://127.0.0.1:5173 。开发服务器把 `/api` 代理至 http://127.0.0.1:8080 ，无需开放跨域。
 
@@ -44,9 +51,11 @@ npm run dev
 ## 构建与测试
 
 ```bash
-mvn -B -f backend/pom.xml verify
+cd backend
+./mvnw -B -ntp verify
+cd ..
 cd frontend
-npm install
+npm ci
 npm test
 npm run build
 npx playwright install chromium
@@ -57,6 +66,12 @@ npm run test:e2e
 
 后端产物：`backend/target/pis-backend-0.0.1-SNAPSHOT.jar`。
 前端产物：`frontend/dist/`。生产部署需配置同源 API 反向代理，Vite 开发代理不包含在构建产物中。
+
+## 更新构建基线
+
+仅在有意升级依赖时，使用上面固定的 Node/npm 版本，在 `frontend` 中运行 `npm install <包名>@<精确版本> --save-exact`（开发依赖加 `--save-dev`），同时提交 `package.json` 与 npm 实际生成的 `package-lock.json`。不要手工编辑锁文件。之后重新运行 `npm ci`、测试、构建和浏览器测试。
+
+升级 Maven 时同步修改 `backend/.mvn/wrapper/maven-wrapper.properties` 的发行地址与经过核验的 SHA-256；升级 Node/npm 时同步更新 `.nvmrc`、`frontend/package.json`、锁文件与本说明。CI 从同一 `.nvmrc` 读取 Node 版本，并通过同一 Wrapper 构建后端。
 
 ## 持续集成
 

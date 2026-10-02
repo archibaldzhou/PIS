@@ -3,6 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
+  "packageManager": "npm@10.9.9",
   "scripts": {
     "dev": "vite",
     "typecheck": "tsc --noEmit",
@@ -11,7 +12,8 @@
     "test:e2e": "playwright test"
   },
   "engines": {
-    "node": ">=22.12.0"
+    "node": "22.23.3",
+    "npm": "10.9.9"
   },
   "dependencies": {
     "react": "19.2.4",
