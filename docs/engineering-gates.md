@@ -52,3 +52,5 @@ CI `.github/workflows/ci.yml` 的 verify 和 frontend-dependencies 在 main push
 T01 只新增规范、ADR、需求登记和本文，并更新 README 导航。适用检查为 diff/本地文档链接、命令入口及测试证据路径一致性；没有运行时、迁移、依赖或 CI 配置变更，因此不为此文档任务重跑 PG/浏览器/构建。当前环境 Node 24.19.0、npm 11.9.0 不符合仓库固定版本，不以这些版本运行前端门禁或关闭 engine 检查。
 
 本环境 Actions API 曾返回 Forbidden，不换路重试。正常推送后交由父会话通过已授权连接核验该 SHA 的 CI；在收到结果前只报告 CI 待核验，不写通过。
+
+T12新增 `architecture/TechnicalDomainBoundaryTest`：三个工作流域的显式源码引用无环与processing公开服务边界检查，随backend verify执行。它不是完整Java解析器或全仓字节码依赖检查，既有全局架构门禁缺口仍保留。

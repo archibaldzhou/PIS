@@ -31,6 +31,20 @@ public class GrossService {
         var cases=jdbc.query("SELECT c.id,c.case_number FROM specimen_reception s JOIN pathology_case c ON c.id=s.case_id WHERE s.request_id=?",(r,i)->new Context(scope,request,r.getObject(1,UUID.class),r.getString(2)),rid);
         if(cases.size()!=1) throw conflict("GROSS_REQUIRES_RECEIVED"); return cases.getFirst();
     }
+    /** Public material-release projection for technical tasks; no GROSS editing grant is implied. */
+    public record Released(UUID requestId,long requestVersion,UUID scopeId,UUID hospitalId,UUID caseId,String caseNumber,UUID recordId,UUID patientId,String patientLabel,String encounterNumber,List<ReleasedCassette> cassettes) { }
+    public record ReleasedCassette(UUID id,String number,String site,List<UUID> containerIds) { }
+    private record ReleasedIdentity(UUID recordId,UUID hospitalId,UUID caseId,String caseNumber) { }
+    @Transactional(timeout=10)
+    public Released released(UUID rid) {
+        var q=requests.detail(rid);
+        var rows=jdbc.query("SELECT g.id,g.hospital_id,g.case_id,c.case_number FROM gross_record g JOIN pathology_case c ON c.id=g.case_id WHERE g.request_id=? AND g.state='COMPLETED'",(r,i)->new ReleasedIdentity(r.getObject(1,UUID.class),r.getObject(2,UUID.class),r.getObject(3,UUID.class),r.getString(4)),rid);
+        if(!q.state().equals("RECEIVED")||rows.size()!=1) throw conflict("TECH_SOURCE_NOT_READY");
+        var r=rows.getFirst(); var sources=new HashMap<UUID,List<UUID>>();
+        jdbc.query("SELECT cassette_id,container_id FROM gross_cassette_source WHERE record_id=? ORDER BY cassette_id,container_id LIMIT 1000",row->{ sources.computeIfAbsent(row.getObject(1,UUID.class),key->new ArrayList<>()).add(row.getObject(2,UUID.class)); },r.recordId());
+        var boxes=jdbc.query("SELECT id,cassette_number,site FROM gross_cassette WHERE record_id=? AND state='PLANNED' ORDER BY cassette_number LIMIT 50",(row,i)->new ReleasedCassette(row.getObject(1,UUID.class),row.getString(2),row.getString(3),sources.getOrDefault(row.getObject(1,UUID.class),List.of())),r.recordId());
+        return new Released(rid,q.version(),q.scopeId(),r.hospitalId(),r.caseId(),r.caseNumber(),r.recordId(),q.patientId(),q.patientLabel(),q.encounterNumber(),boxes);
+    }
     private UUID requestId(UUID recordId) {
         access.actor(); var rows=jdbc.queryForList("SELECT request_id FROM gross_record WHERE id=?",UUID.class,recordId);
         if(rows.isEmpty()) throw missing(); return rows.getFirst();

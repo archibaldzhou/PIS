@@ -12,7 +12,7 @@ class GrossMigrationTest {
                 var jdbc=new JdbcTemplate(new SingleConnectionDataSource(c,true));
                 String sql="SELECT version,checksum FROM flyway_schema_history WHERE version IN ('1','2','3','4','5','6','7') ORDER BY installed_rank";
                 var before=jdbc.queryForList(sql); assertThat(before).hasSize(7);
-                var latest=db.configuration("classpath:db/migration").load();
+                var latest=db.configuration("classpath:db/migration").target("8").load();
                 assertThat(latest.migrate().migrationsExecuted).isEqualTo(1);
                 assertThat(latest.validateWithResult().validationSuccessful).isTrue(); assertThat(latest.migrate().migrationsExecuted).isZero();
                 assertThat(jdbc.queryForList(sql)).isEqualTo(before);
