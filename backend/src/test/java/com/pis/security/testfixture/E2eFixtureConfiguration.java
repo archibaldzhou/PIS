@@ -15,7 +15,22 @@ public class E2eFixtureConfiguration {
                 value("PIS_E2E_DISPLAY_NAME", "合成测试用户"), true);
             insert(jdbc, encoder, value("PIS_E2E_DISABLED_USERNAME", "synthetic.disabled"),
                 value("PIS_E2E_DISABLED_PASSWORD", "Synthetic-test-only-42!"), "停用的合成测试用户", false);
+            workflow(jdbc, value("PIS_E2E_USERNAME", "synthetic.reader"));
         };
+    }
+    private static void workflow(JdbcTemplate jdbc, String username) {
+        var hospital=java.util.UUID.randomUUID(); var campus=java.util.UUID.randomUUID();
+        var department=java.util.UUID.randomUUID(); var source=java.util.UUID.randomUUID();
+        var scope=java.util.UUID.randomUUID(); var patient=java.util.UUID.randomUUID();
+        jdbc.update("INSERT INTO hospital(id,code,name) VALUES(?,'synthetic-e2e','合成测试医院')",hospital);
+        jdbc.update("INSERT INTO campus(id,hospital_id,code,name) VALUES(?,?,'synthetic-e2e','合成院区')",campus,hospital);
+        jdbc.update("INSERT INTO department(id,hospital_id,code,name) VALUES(?,?,'synthetic-e2e','合成科室')",department,hospital);
+        jdbc.update("INSERT INTO department_campus VALUES(?,?,?,statement_timestamp())",hospital,campus,department);
+        jdbc.update("INSERT INTO source_system(id,hospital_id,code,name) VALUES(?,?,'synthetic-e2e','合成来源')",source,hospital);
+        jdbc.update("INSERT INTO workflow_scope(id,hospital_id,campus_id,department_id,source_system_id,name,enabled) VALUES(?,?,?,?,?,'合成申请工作范围',true)",scope,hospital,campus,department,source);
+        jdbc.update("INSERT INTO workflow_grant(user_id,scope_id,can_read,can_write) SELECT id,?,true,true FROM app_user WHERE username=?",scope,username);
+        jdbc.update("INSERT INTO patient(id,hospital_id,display_name) VALUES(?,?,'合成申请患者')",patient,hospital);
+        jdbc.update("INSERT INTO encounter(hospital_id,patient_id,source_system_id,encounter_number,department_id) VALUES(?,?,?,'SYN-WORKFLOW-001',?)",hospital,patient,source,department);
     }
     private static void insert(JdbcTemplate jdbc, PasswordEncoder encoder, String username, String password,
                                String displayName, boolean enabled) {

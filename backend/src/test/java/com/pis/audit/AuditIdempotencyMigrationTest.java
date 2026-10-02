@@ -13,7 +13,7 @@ class AuditIdempotencyMigrationTest {
             try (var connection = database.connection(); var statement = connection.createStatement()) {
                 statement.execute("INSERT INTO hospital(code, name) VALUES ('t07-upgrade', 'Synthetic retained hospital')");
             }
-            var latest = database.configuration("classpath:db/migration").load();
+            var latest = database.configuration("classpath:db/migration").target("4").load();
             assertThat(latest.migrate().migrationsExecuted).isEqualTo(1);
             assertThat(latest.info().current().getVersion().toString()).isEqualTo("4");
             assertThat(latest.migrate().migrationsExecuted).isZero();

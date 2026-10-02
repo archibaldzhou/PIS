@@ -1,7 +1,7 @@
 name: PIS CI
 on:
   push:
-    branches: [main]
+    branches: [main, validation/t08-20261002]
   pull_request:
 permissions:
   contents: read
@@ -64,6 +64,9 @@ jobs:
       - name: Browser integration tests
         working-directory: frontend
         run: npm run test:e2e
+      - name: Synthetic browser UI contracts
+        working-directory: frontend
+        run: npm run test:ui
   frontend-dependencies:
     runs-on: ubuntu-latest
     timeout-minutes: 10

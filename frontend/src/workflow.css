@@ -1,0 +1,30 @@
+.workflow-shell { min-height: 100vh; display: grid; grid-template-columns: 216px minmax(0, 1fr); background: #eff5f8; color: #183e52; }
+.workflow-sidebar { background: #123044; padding: 28px 18px; color: #c5dbe5; }
+.workflow-sidebar strong { color: white; font-size: 23px; }
+.workflow-sidebar p { font-size: 13px; line-height: 1.8; }
+.workflow-sidebar nav { display: grid; gap: 12px; margin: 35px 0; }
+.workflow-sidebar nav button { color: white; text-align: left; height: 42px; }
+.workflow-sidebar nav button:hover { color: #123044 !important; background: #d5eae6 !important; }
+.workflow-content { min-width: 0; padding: 26px 30px; }
+.workflow-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+.workflow-header h1 { margin: 0; font-size: 28px; }
+.workflow-status { margin: 16px 0; }
+.workflow-columns { display: grid; grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); gap: 18px; }
+.workflow-columns > * { min-width: 0; }
+.field-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 18px; }
+.search-form { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.search-form .ant-form-item { flex: 1 1 180px; }
+.identity-strip { border-left: 4px solid #168475; background: white; border-radius: 6px; padding: 18px; display: flex; gap: 16px; flex-wrap: wrap; margin: 18px 0; overflow-wrap: anywhere; }
+.workflow-steps { margin: 25px 0; }
+.workflow-notice { margin: 16px 0; }
+.scope-picker { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin: 20px 0; }
+.container-fields { border-bottom: 1px solid #d7e3ea; padding: 16px 0; margin-bottom: 16px; overflow-wrap: anywhere; }
+@media (max-width: 1000px) { .workflow-columns { grid-template-columns: 1fr; } }
+@media (max-width: 650px) {
+  .workflow-shell { grid-template-columns: 1fr; }
+  .workflow-sidebar { padding: 16px; }
+  .workflow-sidebar nav { grid-template-columns: 1fr 1fr; margin: 12px 0; gap: 8px; }
+  .workflow-sidebar p { margin: 6px 0; }
+  .workflow-content { padding: 16px; }
+  .field-pair { grid-template-columns: 1fr; }
+}

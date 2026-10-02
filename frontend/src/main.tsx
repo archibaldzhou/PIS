@@ -8,7 +8,7 @@ const root = document.getElementById('root');
 if (!root) throw new Error('Missing application root');
 ReactDOM.createRoot(root).render(
   <React.StrictMode>
-    <ConfigProvider theme={{ token: { colorPrimary: '#126b67', borderRadius: 12 } }}>
+    <ConfigProvider button={{ autoInsertSpace: false }} theme={{ token: { colorPrimary: '#126b67', borderRadius: 12 } }}>
       <App />
     </ConfigProvider>
   </React.StrictMode>,

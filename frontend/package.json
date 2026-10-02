@@ -12,7 +12,8 @@
     "test:list": "vitest list --filesOnly",
     "audit:dependencies": "npm audit --include=dev --audit-level=high",
     "build": "npm run typecheck && vite build",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:ui": "playwright test --config playwright.ui.config.ts"
   },
   "engines": {
     "node": "22.23.3",

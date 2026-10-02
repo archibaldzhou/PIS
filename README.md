@@ -2,6 +2,8 @@
 
 开发前请阅读根级 [AGENTS.md](AGENTS.md)、[工程基线 ADR](docs/adr/0001-engineering-baseline.md)、[真实门禁与缺口](docs/engineering-gates.md)及[需求来源登记](docs/prd/README.md)。这些文件落实 T01 工程约束，不代表临床批准或全部未来功能已实现。
 
+T08 验证分支开发状态见[实施记录](docs/api/t08-development-status.md)和[新编开发 PRD](docs/prd/development-accession-v1.md)。当前申请工作流尚未完成后端验证，默认关闭；页面与局部测试通过不等于完整联调通过。不得在临床环境启用。
+
 开发连通性与认证验证：React + Ant Design 登录后调用 Spring Boot 的 `GET /api/hello`，显示 **Hello World**。
 
 ## 范围
