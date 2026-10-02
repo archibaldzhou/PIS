@@ -104,3 +104,40 @@ test('reception uncertain result preserves original intent and blocks navigation
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: 'test-results/reception-mobile.png', fullPage: true });
 });
+test('label preview closes without printing and unknown reprint retains identity and key', async ({ page }) => {
+  await start(page);
+  const id = '44444444-4444-4444-8444-444444444444'; const cid = '55555555-5555-4555-8555-555555555555'; const jobId = '66666666-6666-4666-8666-666666666666';
+  const barcode = 'S' + '0'.repeat(32) + 'S';
+  const detail = { id, scopeId: scope, version: 2, state: 'RECEIVED', requestNumber: 'DEV-AP-LABEL', patientId: encounter.patientId, patientLabel: encounter.patientLabel,
+    encounterId: encounter.id, encounterNumber: encounter.encounterNumber, department: '合成科室', requestedAt: '2026-01-01T08:00:00Z', clinicalHistory: '合成资料', sampledAt: '2026-01-01T08:00:00Z',
+    containers: [{ id: cid, site: '合成部位', laterality: 'UNKNOWN', materialQuantity: 1, fixative: '合成固定液', fixedAt: '2026-01-01T08:10:00Z' }] };
+  const job = { id: jobId, containerId: cid, barcode, parentJobId: null, templateVersion: 'SYN-CONTAINER-1', state: 'PREVIEW_READY', version: 0, attempts: 1,
+    patientId: encounter.patientId, patientLabel: encounter.patientLabel, encounterNumber: encounter.encounterNumber, requestNumber: detail.requestNumber, caseNumber: 'DEV-P-SYNTHETIC', site: '合成部位', laterality: 'UNKNOWN', reason: 'Synthetic initial', createdBy: 'synthetic-user', createdAt: '2026-01-01T08:00:00Z' };
+  await page.route('**/api/requests?*', route => route.fulfill({ json: { items: [detail], total: 1, page: 1, pageSize: 20 } }));
+  await page.route('**/api/requests/' + id, route => route.fulfill({ json: detail }));
+  await page.route('**/api/labels/containers/' + cid, route => route.fulfill({ json: { containerId: cid, requestVersion: 2, containerVersion: 1, requestState: 'RECEIVED', jobs: [job] } }));
+  await page.route('**/api/labels/jobs/' + jobId, route => route.fulfill({ json: { job, events: [] } }));
+  await page.getByRole('button', { name: '刷新', exact: true }).click();
+  await page.getByRole('button', { name: '查看 DEV-AP-LABEL', exact: true }).click();
+  await page.getByRole('button', { name: '处理此申请标签', exact: true }).click();
+  await page.getByLabel('选择容器实体').click(); await page.getByText(cid, { exact: true }).last().click();
+  await page.getByRole('button', { name: '查看任务 ' + jobId, exact: true }).click();
+  await page.getByRole('button', { name: '打开标签预览', exact: true }).click();
+  await expect(page.getByLabel('合成容器标签预览')).toContainText(barcode);
+  await expect(page.getByRole('img', { name: 'Code39 ' + barcode })).toBeVisible();
+  await page.screenshot({ path: 'test-results/label-preview-desktop.png', fullPage: true });
+  await page.getByRole('button', { name: '关闭标签预览', exact: true }).click();
+  await expect(page.getByLabel('合成容器标签预览')).toHaveCount(0);
+  await page.getByRole('button', { name: '同实体重打', exact: true }).click();
+  await expect(page.getByText('请填写1–2000字的操作原因')).toBeVisible();
+  const writes: { key: string | undefined; body: string | null }[] = [];
+  await page.route('**/api/labels/jobs/' + jobId + '/reprint', async route => { writes.push({ key: route.request().headers()['idempotency-key'], body: route.request().postData() }); await route.abort(); });
+  await page.getByLabel('重打 / 重试 / 取消 / 模拟失败原因').fill('合成损坏重打');
+  await page.getByRole('button', { name: '同实体重打', exact: true }).dblclick();
+  await expect(page.getByText('标签操作结果待确认；请保留原任务与请求键重试。')).toBeVisible(); expect(writes).toHaveLength(1);
+  await expect(page.getByLabel('重打 / 重试 / 取消 / 模拟失败原因')).toBeDisabled();
+  await page.getByRole('button', { name: '申请单查询', exact: true }).click();
+  await expect(page.getByText('原请求结果尚未确认，请先使用页面上的原请求确认结果。')).toBeVisible();
+  await page.getByRole('button', { name: '重试原标签请求', exact: true }).click();
+  await expect.poll(() => writes.length).toBe(2); expect(writes[1]).toEqual(writes[0]);
+});

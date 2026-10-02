@@ -13,7 +13,7 @@ class ReceptionMigrationTest {
             try(var connection=db.connection()) {
                 var jdbc=new JdbcTemplate(new SingleConnectionDataSource(connection,true));
                 var before=jdbc.queryForList("SELECT version,checksum FROM flyway_schema_history WHERE version IS NOT NULL ORDER BY installed_rank");
-                var latest=db.configuration("classpath:db/migration").load();
+                var latest=db.configuration("classpath:db/migration").target("6").load();
                 assertThat(latest.migrate().migrationsExecuted).isEqualTo(1);
                 assertThat(latest.validateWithResult().validationSuccessful).isTrue();
                 assertThat(latest.migrate().migrationsExecuted).isZero();
