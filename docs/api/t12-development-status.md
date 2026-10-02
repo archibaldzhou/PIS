@@ -40,3 +40,5 @@ V9创建technical_task与technical_event及PROCESS/HANDOFF默认false授权列�
 新增TechnicalDomainBoundaryTest检查accession/grossing/processing三个工作流域的源码引用无环，以及processing只引用公开跨域服务边界；这是有界源码检查，不宣称全项目字节码架构分析。其执行同样待Java CI。
 
 最终验收：父会话确认验证SHA `5a1bae318a337626e1ca709acd15c2e4e24661f4` 的 [CI 37046573244](https://github.com/archibaldzhou/PIS/actions/runs/37046573244) completed success，verify 110969371987 与独立依赖审计成功，PR-only review按原条件跳过。main整理保留此已验证实现，仅更新说明和移除验证分支触发；无部署/真实工艺验收。
+
+父会话另已确认 main `f6da5454b7a3b87564a3cf212fe897e1e6c57b25` 的 CI 37047155677 success。
