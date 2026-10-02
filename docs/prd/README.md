@@ -24,3 +24,5 @@
 [T12 技术任务与交接开发规格](development-processing-v1.md)定义合成演练边界，真实设备与T13实体未包含。
 
 [T13 材料身份与重切开发规格](development-materials-v1.md)定义常规及明确直制的合成登记，未知临床路线保持不支持。
+
+[T14 技术QC、隔离与返工开发规格](development-quality-v1.md)要求确切版本、追加判定和隔离消费门禁；医院审批规则未批准，异常放行持续禁用。

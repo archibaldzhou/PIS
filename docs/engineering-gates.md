@@ -56,3 +56,5 @@ T01 只新增规范、ADR、需求登记和本文，并更新 README 导航。�
 T12新增 `architecture/TechnicalDomainBoundaryTest`：三个工作流域的显式源码引用无环与processing公开服务边界检查，随backend verify执行。它不是完整Java解析器或全仓字节码依赖检查，既有全局架构门禁缺口仍保留。
 
 T13 将上述有界源码无环检查扩展至 accession/grossing/processing/specimen/label/material 六域；保留 processing 公开服务边界断言。执行结果待 T13 Java CI，不扩大为完整架构分析声明。
+
+T14源码引用检查扩展到quality共七域，并增加QC与消费竞态PG测试、迁移与真实UI/API返工链。具体已运行/待CI结果见[T14记录](api/t14-development-status.md)，不由测试源码存在推断通过。

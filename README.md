@@ -10,6 +10,8 @@ T12 技术任务与人员交接开发实现已通过验证分支完整 CI，见[
 
 T13 蜡块/玻片身份、重切加深、直制路径与标签复用已实现，完整验证分支 CI 已通过，见[T13 记录](docs/api/t13-development-status.md)。
 
+T14 技术QC、隔离和返工已实现，本地前端检查通过，完整验证分支CI待核验，见[T14记录](docs/api/t14-development-status.md)。异常放行仍禁用。
+
 开发连通性与认证验证：React + Ant Design 登录后调用 Spring Boot 的 `GET /api/hello`，显示 **Hello World**。
 
 ## 范围

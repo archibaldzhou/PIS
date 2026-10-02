@@ -31,11 +31,11 @@ public class E2eFixtureConfiguration {
         jdbc.update("INSERT INTO department_campus VALUES(?,?,?,statement_timestamp())",hospital,campus,department);
         jdbc.update("INSERT INTO source_system(id,hospital_id,code,name) VALUES(?,?,'synthetic-e2e','合成来源')",source,hospital);
         jdbc.update("INSERT INTO workflow_scope(id,hospital_id,campus_id,department_id,source_system_id,name,enabled) VALUES(?,?,?,?,?,'合成申请工作范围',true)",scope,hospital,campus,department,source);
-        jdbc.update("INSERT INTO workflow_grant(user_id,scope_id,can_read,can_write,can_receive,can_exception,can_print,can_reprint,can_gross,can_process,can_handoff,can_material) SELECT id,?,true,true,true,true,true,true,true,true,true,true FROM app_user WHERE username=?",scope,username);
+        jdbc.update("INSERT INTO workflow_grant(user_id,scope_id,can_read,can_write,can_receive,can_exception,can_print,can_reprint,can_gross,can_process,can_handoff,can_material,can_qc) SELECT id,?,true,true,true,true,true,true,true,true,true,true,true FROM app_user WHERE username=?",scope,username);
         jdbc.update("INSERT INTO workflow_grant(user_id,scope_id,can_read,can_process,can_handoff) SELECT id,?,true,true,true FROM app_user WHERE username=?",scope,value("PIS_E2E_HANDOFF_USERNAME", "synthetic.technician"));
         jdbc.update("INSERT INTO patient(id,hospital_id,display_name) VALUES(?,?,'合成申请患者')",patient,hospital);
         jdbc.update("INSERT INTO encounter(hospital_id,patient_id,source_system_id,encounter_number,department_id) VALUES(?,?,?,'SYN-WORKFLOW-001',?)",hospital,patient,source,department);
-        for(var number:java.util.List.of("SYN-RECEIVE-001","SYN-RETURN-001","SYN-RESOLVE-001","SYN-LABEL-001","SYN-GROSS-001","SYN-TECH-001","SYN-MATERIAL-001","SYN-DIRECT-001")) {
+        for(var number:java.util.List.of("SYN-RECEIVE-001","SYN-RETURN-001","SYN-RESOLVE-001","SYN-LABEL-001","SYN-GROSS-001","SYN-TECH-001","SYN-MATERIAL-001","SYN-DIRECT-001","SYN-QC-001")) {
             // Independent patient/encounter per scenario; shared list still exercises exact resource selection.
             var scenarioPatient=java.util.UUID.randomUUID();
             jdbc.update("INSERT INTO patient(id,hospital_id,display_name) VALUES(?,?,'合成申请患者')",scenarioPatient,hospital);

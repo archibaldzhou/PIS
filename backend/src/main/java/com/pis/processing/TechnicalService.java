@@ -26,12 +26,19 @@ public class TechnicalService {
     @Transactional(timeout=10)
     public List<MaterialTask> materialTasks(UUID rid) {
         requests.detail(rid);
-        return jdbc.query("SELECT id,version,request_id,case_id,record_id,cassette_id,kind FROM technical_task WHERE request_id=? AND state='SIMULATED_DONE' ORDER BY created_at,id LIMIT 50",(r,i)->new MaterialTask(r.getObject(1,UUID.class),r.getLong(2),r.getObject(3,UUID.class),r.getObject(4,UUID.class),r.getObject(5,UUID.class),r.getObject(6,UUID.class),r.getString(7)),rid);
+        return jdbc.query("SELECT id,version,request_id,case_id,record_id,cassette_id,kind FROM technical_task WHERE request_id=? AND state='SIMULATED_DONE' AND NOT EXISTS (SELECT 1 FROM technical_task child WHERE child.rework_of=technical_task.id) ORDER BY created_at,id LIMIT 50",(r,i)->new MaterialTask(r.getObject(1,UUID.class),r.getLong(2),r.getObject(3,UUID.class),r.getObject(4,UUID.class),r.getObject(5,UUID.class),r.getObject(6,UUID.class),r.getString(7)),rid);
+    }
+    public record QualityTask(UUID id,long version,String state) { }
+    @Transactional(timeout=10)
+    public List<QualityTask> qualityTasks(UUID rid) {
+        requests.detail(rid);
+        return jdbc.query("SELECT id,version,CASE WHEN EXISTS (SELECT 1 FROM technical_task child WHERE child.rework_of=technical_task.id) THEN 'SUPERSEDED' ELSE state END FROM technical_task WHERE request_id=? ORDER BY id LIMIT 50",(r,i)->new QualityTask(r.getObject(1,UUID.class),r.getLong(2),r.getString(3)),rid);
     }
     private final JdbcTemplate jdbc; private final RequestService requests; private final WorkflowAccess access;
+    private final com.pis.quality.QualityGate quality;
     private final GrossService gross; private final IdempotentCommands commands; private final Validator validator;
-    public TechnicalService(JdbcTemplate jdbc,RequestService requests,WorkflowAccess access,GrossService gross,IdempotentCommands commands,Validator validator) {
-        this.jdbc=jdbc; this.requests=requests; this.access=access; this.gross=gross; this.commands=commands; this.validator=validator;
+    public TechnicalService(JdbcTemplate jdbc,RequestService requests,WorkflowAccess access,GrossService gross,IdempotentCommands commands,Validator validator,com.pis.quality.QualityGate quality) {
+        this.quality=quality; this.jdbc=jdbc; this.requests=requests; this.access=access; this.gross=gross; this.commands=commands; this.validator=validator;
     }
     private GrossService.Released context(UUID rid,boolean handoff) {
         var request=requests.detail(rid);
@@ -67,7 +74,8 @@ public class TechnicalService {
     }
     private void predecessor(UUID rid,UUID cassette,UUID predecessor) {
         if(predecessor==null) return;
-        if(jdbc.queryForObject("SELECT count(*) FROM technical_task WHERE id=? AND request_id=? AND cassette_id=? AND state='SIMULATED_DONE'",Long.class,predecessor,rid,cassette)!=1) throw conflict("TECH_PREDECESSOR_NOT_READY");
+        if(jdbc.queryForObject("SELECT count(*) FROM technical_task WHERE id=? AND request_id=? AND cassette_id=? AND state='SIMULATED_DONE' AND NOT EXISTS (SELECT 1 FROM technical_task child WHERE child.rework_of=technical_task.id)",Long.class,predecessor,rid,cassette)!=1) throw conflict("TECH_PREDECESSOR_NOT_READY");
+        quality.task(predecessor,task(predecessor).version());
     }
     private void capacity(UUID rid) { if(jdbc.queryForObject("SELECT count(*) FROM technical_task WHERE request_id=?",Long.class,rid)>=50) throw conflict("TECH_LIMIT_REACHED"); }
     private void insert(GrossService.Released s,UUID id,UUID cassette,String kind,UUID predecessor,UUID rework,UUID actor) {
@@ -75,6 +83,23 @@ public class TechnicalService {
     }
     private void event(UUID id,long version,String action,UUID actor,UUID previous,UUID next,UUID related,String reason) {
         jdbc.update("INSERT INTO technical_event(task_id,task_version,action,actor_id,previous_owner_id,next_owner_id,related_task_id,reason) VALUES(?,?,?,?,?,?,?,?)",id,version,action,actor,previous,next,related,reason);
+    }
+    /** Called only inside the QC command transaction; no nested idempotency transaction. */
+    @Transactional(propagation=org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public UUID qualityRework(UUID material,UUID id,Decision input) {
+        UUID rid=requestId(id); access.require(requests.detail(rid).scopeId(),Permission.QC);
+        var released=context(rid,false); jdbc.queryForList("SELECT id FROM pathology_request WHERE id=? FOR UPDATE",rid);
+        jdbc.queryForList("SELECT id FROM technical_task WHERE id=? FOR UPDATE",id); var old=task(id); var actor=access.actor();
+        if(old.version()!=input.expectedVersion()) throw conflict("VERSION_CONFLICT");
+        if(!old.cassetteId().equals(input.confirmedCassetteId())) throw conflict("TECH_SOURCE_MISMATCH");
+        quality.recovery(rid,old.cassetteId(),material,id); source(released,old.cassetteId()); predecessor(rid,old.cassetteId(),old.predecessorId());
+        if(!List.of("ABORTED","SIMULATED_DONE").contains(old.state())) throw conflict("TECH_STATE_CONFLICT");
+        if(jdbc.queryForObject("SELECT count(*) FROM technical_task WHERE rework_of=?",Long.class,id)>0) throw conflict("TECH_REWORK_EXISTS");
+        capacity(rid); UUID result=UUID.randomUUID(); insert(released,result,old.cassetteId(),old.kind(),old.predecessorId(),id,actor.id());
+        event(result,0,"REWORK_CREATED",actor.id(),null,null,id,input.reason());
+        if(jdbc.update("UPDATE technical_task SET version=version+1 WHERE id=? AND version=?",id,old.version())!=1) throw conflict("VERSION_CONFLICT");
+        quality.reworkTask(id,result,actor.id(),input.reason()); event(id,old.version()+1,"REWORK",actor.id(),old.ownerId(),old.ownerId(),result,input.reason());
+        return result;
     }
     private IdempotentCommands.Result command(UUID rid,UUID id,Object input,String key,String action) {
         var errors=validator.validate(input); if(!errors.isEmpty()) throw new jakarta.validation.ConstraintViolationException(errors);
@@ -86,7 +111,7 @@ public class TechnicalService {
                 jdbc.queryForList("SELECT id FROM pathology_request WHERE id=? FOR UPDATE",rid); var released=context(rid,handoff);
                 if(action.equals("CREATE")) {
                     var c=(Create)input; if(released.requestVersion()!=c.requestVersion()) throw conflict("VERSION_CONFLICT");
-                    source(released,c.cassetteId()); predecessor(rid,c.cassetteId(),c.predecessorId()); capacity(rid);
+                    quality.cassette(rid,c.cassetteId(),null); source(released,c.cassetteId()); predecessor(rid,c.cassetteId(),c.predecessorId()); capacity(rid);
                     var result=UUID.randomUUID(); insert(released,result,c.cassetteId(),c.kind().name(),c.predecessorId(),null,actor.id());
                     event(result,0,"CREATE",actor.id(),null,null,c.predecessorId(),c.reason());
                     return new IdempotentCommands.Mutation(new CommandReceipt(201,"TECHNICAL_TASK",result,0),null);
@@ -94,6 +119,7 @@ public class TechnicalService {
                 jdbc.queryForList("SELECT id FROM technical_task WHERE id=? FOR UPDATE",id); var old=task(id); var d=(Decision)input;
                 if(old.version()!=d.expectedVersion()) throw conflict("VERSION_CONFLICT");
                 if(!old.cassetteId().equals(d.confirmedCassetteId())) throw conflict("TECH_SOURCE_MISMATCH");
+                if(!action.equals("ABORT")) quality.cassette(rid,old.cassetteId(),old.reworkOf()==null?null:id);
                 source(released,old.cassetteId()); predecessor(rid,old.cassetteId(),old.predecessorId());
                 String state=old.state(); UUID owner=old.ownerId(); UUID result=id; long version=old.version()+1;
                 switch(action) {
@@ -112,6 +138,7 @@ public class TechnicalService {
                     default -> throw new IllegalArgumentException("Unknown technical action");
                 }
                 if(jdbc.update("UPDATE technical_task SET state=?,owner_id=?,version=version+1 WHERE id=? AND version=?",state,owner,id,old.version())!=1) throw conflict("VERSION_CONFLICT");
+                if(action.equals("REWORK")) quality.reworkTask(id,result,actor.id(),d.reason());
                 event(id,version,action,actor.id(),old.ownerId(),owner,result.equals(id)?null:result,d.reason());
                 boolean created=!result.equals(id);
                 return new IdempotentCommands.Mutation(new CommandReceipt(created?201:200,"TECHNICAL_TASK",result,created?0:version),created?null:old.version());

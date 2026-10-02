@@ -22,10 +22,11 @@ import org.springframework.transaction.annotation.Transactional;
 import static com.pis.material.MaterialContracts.*;
 @Service
 public class MaterialService {
+    private final com.pis.quality.QualityGate quality;
     private final JdbcTemplate jdbc; private final RequestService requests; private final WorkflowAccess access; private final ReceptionService reception;
     private final TechnicalService technical; private final LabelService labels; private final MaterialQueries queries; private final IdempotentCommands commands; private final Validator validator;
-    public MaterialService(JdbcTemplate jdbc,RequestService requests,WorkflowAccess access,ReceptionService reception,TechnicalService technical,LabelService labels,MaterialQueries queries,IdempotentCommands commands,Validator validator) {
-        this.jdbc=jdbc; this.requests=requests; this.access=access; this.reception=reception; this.technical=technical; this.labels=labels; this.queries=queries; this.commands=commands; this.validator=validator;
+    public MaterialService(JdbcTemplate jdbc,RequestService requests,WorkflowAccess access,ReceptionService reception,TechnicalService technical,LabelService labels,MaterialQueries queries,IdempotentCommands commands,Validator validator,com.pis.quality.QualityGate quality) {
+        this.quality=quality; this.jdbc=jdbc; this.requests=requests; this.access=access; this.reception=reception; this.technical=technical; this.labels=labels; this.queries=queries; this.commands=commands; this.validator=validator;
     }
     private record Context(com.pis.accession.RequestContracts.Detail request,ReceptionService.ReceivedSource received) { }
     private Context context(UUID rid) {
@@ -57,6 +58,7 @@ public class MaterialService {
     public IdempotentCommands.Result voidMaterial(UUID id,VoidMaterial input,String key) { return execute(queries.row(id).requestId(),id,input,key,"VOID"); }
     private TechnicalService.MaterialTask task(Context c,UUID id,long version,String kind,UUID cassette) {
         var t=technical.materialTasks(c.request().id()).stream().filter(v->v.id().equals(id)).findFirst().orElseThrow(()->conflict("MATERIAL_TASK_NOT_READY"));
+        quality.task(t.id(),t.version()); quality.cassette(c.request().id(),t.cassetteId(),t.id());
         if(t.version()!=version) throw conflict("VERSION_CONFLICT");
         if(!t.kind().equals(kind)||!t.caseId().equals(c.received().caseId())||(cassette!=null&&!cassette.equals(t.cassetteId()))) throw conflict("MATERIAL_SOURCE_MISMATCH"); return t;
     }
@@ -68,6 +70,7 @@ public class MaterialService {
     }
     private void bump(Entity source,String action,UUID related,String reason,UUID actor) {
         if(jdbc.update("UPDATE material_entity SET version=version+1 WHERE id=? AND version=?",source.id(),source.version())!=1) throw conflict("VERSION_CONFLICT");
+        quality.invalidateMaterial(source.id(),actor,reason);
         event(source.id(),source.version()+1,action,related,reason,actor);
     }
     private IdempotentCommands.Result execute(UUID rid,UUID parent,Object input,String key,String action) {
@@ -85,6 +88,7 @@ public class MaterialService {
                     var affected=jdbc.query("SELECT * FROM material_entity WHERE state='ACTIVE' AND (id=? OR (? AND block_id=?)) ORDER BY id",MaterialQueries.MAPPER,parent,root.kind().equals("BLOCK"),parent);
                     for(var item:affected) {
                         if(jdbc.update("UPDATE material_entity SET state='VOID',version=version+1 WHERE id=? AND version=? AND state='ACTIVE'",item.id(),item.version())!=1) throw conflict("VERSION_CONFLICT");
+                        quality.invalidateMaterial(item.id(),actor.id(),v.reason());
                         event(item.id(),item.version()+1,item.id().equals(parent)?"VOID":"SOURCE_VOIDED",item.id().equals(parent)?null:parent,v.reason(),actor.id());
                     }
                     return new IdempotentCommands.Mutation(new CommandReceipt(200,"MATERIAL",parent,root.version()+1),root.version());
@@ -110,10 +114,10 @@ public class MaterialService {
                     } else {
                         var v=(Repeat)input; identity(parent,v.confirmedSourceSlideId()); version(source.version(),v.sourceSlideVersion());
                         if(!source.kind().equals("SLIDE")||!source.route().equals("BLOCK_BASED")) throw conflict("MATERIAL_ROUTE_UNSUPPORTED");
-                        blockSource=queries.row(source.blockId()); sourceSlide=parent; operation=action; reason=v.reason();
+                        quality.repair(source.id(),v.taskId()); blockSource=queries.row(source.blockId()); sourceSlide=parent; operation=action; reason=v.reason();
                         var t=task(c,v.taskId(),v.taskVersion(),"SECTIONING",blockSource.cassetteId()); taskId=t.id();
                     }
-                    active(blockSource); block=blockSource.id(); record=blockSource.recordId(); cassette=blockSource.cassetteId(); route="BLOCK_BASED";
+                    active(blockSource); queries.requireQuality(blockSource); block=blockSource.id(); record=blockSource.recordId(); cassette=blockSource.cassetteId(); route="BLOCK_BASED";
                 }
                 String number=(kind.equals("BLOCK")?"DEV-B-":"DEV-S-")+id,barcode=LabelBarcode.create(id);
                 jdbc.update("""

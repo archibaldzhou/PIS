@@ -59,7 +59,7 @@ public class SecurityConfiguration {
                 .requestMatchers(HttpMethod.GET, "/api/auth/csrf", "/actuator/health",
                     "/actuator/health/readiness", "/actuator/health/liveness").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/auth/me", "/api/hello").authenticated()
-                .requestMatchers("/api/requests", "/api/requests/**", "/api/receptions/**", "/api/labels/**", "/api/grossing/**", "/api/technical/**", "/api/materials/**").authenticated()
+                .requestMatchers("/api/requests", "/api/requests/**", "/api/receptions/**", "/api/labels/**", "/api/grossing/**", "/api/technical/**", "/api/materials/**", "/api/quality/**").authenticated()
                 .anyRequest().denyAll());
         return http.build();
     }
