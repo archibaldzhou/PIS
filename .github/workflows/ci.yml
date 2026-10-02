@@ -26,12 +26,17 @@ jobs:
       - name: Backend test and package
         working-directory: backend
         run: ./mvnw -B -ntp verify
+      - name: Install pinned npm
+        run: npm install --global npm@11.21.0 --no-audit --no-fund
       - name: Frontend install
         working-directory: frontend
         run: npm ci --no-audit --no-fund
       - name: Frontend unit tests
         working-directory: frontend
         run: npm test
+      - name: Frontend lint
+        working-directory: frontend
+        run: npm run lint
       - name: Frontend typecheck and build
         working-directory: frontend
         run: npm run build
@@ -41,3 +46,32 @@ jobs:
       - name: Browser integration tests
         working-directory: frontend
         run: npm run test:e2e
+  frontend-dependencies:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install pinned npm
+        run: npm install --global npm@11.21.0 --no-audit --no-fund
+      - name: Audit all frontend dependencies, including development tools
+        working-directory: frontend
+        run: npm run audit:dependencies
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Review changed npm and Maven dependencies
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+          fail-on-scopes: runtime,development,unknown
+          comment-summary-in-pr: never
+          license-check: false
