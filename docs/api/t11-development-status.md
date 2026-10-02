@@ -45,3 +45,5 @@ V8 增量扩展 GROSS（默认false）与六张表，复合FK约束申请/病例
 本次修复本地结果：63项Vitest、8项UI浏览器测试、lint、类型与构建通过。Java测试fixture及真实后端E2E复验交由新SHA完整CI执行，本地未宣称运行成功。
 
 最终验收：父会话确认验证SHA `f458370628eed14001a0adabc8efff594b760ab0` 的 [CI 37043411839](https://github.com/archibaldzhou/PIS/actions/runs/37043411839) completed success，verify 110958811739 的后端、前端、真实浏览器及合成UI门禁通过，独立依赖审计通过，PR-only review按原条件跳过。main整理保留此已验证实现，仅更新验收说明与移除验证分支触发；没有部署或临床验收。
+
+父会话确认 main SHA `026209433fbcc6838358201b88004fbc34024f04` 的 [CI 37044094239](https://github.com/archibaldzhou/PIS/actions/runs/37044094239) 为 success。

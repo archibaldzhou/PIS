@@ -7,11 +7,12 @@ import { accessionApi, type AccessionApi, type RequestDetail } from './features/
 import { ReadController, type RequestReader, type RequestSummary } from './shared/workflow';
 import { ReadPanel } from './shared/WorkflowElements';
 import './workflow.css';
+import { Technical } from './features/processing/Technical';
 import { Grossing } from './features/grossing/Grossing';
 import { Labels } from './features/labels/Labels';
 import { Reception } from './features/specimen/Reception';
 
-const pages = { requests: '申请单查询', registration: '病理申请录入', reception: '标本接收与异常', labels: '标签打印与重打', grossing: '取材记录与取材盒' };
+const pages = { requests: '申请单查询', registration: '病理申请录入', reception: '标本接收与异常', labels: '标签打印与重打', grossing: '取材记录与取材盒', technical: '技术任务与交接' };
 type Page = keyof typeof pages;
 export function WorkflowWorkspace({ onClose, onLogout, onExpired, api = accessionApi }: {
   onClose: () => void; onLogout: () => void; onExpired: () => void; api?: AccessionApi;
@@ -90,10 +91,11 @@ export function WorkflowWorkspace({ onClose, onLogout, onExpired, api = accessio
       </div>}</ReadPanel>
       {scopeState.status !== 'ready' && <Button onClick={() => void scopes.run(null)}>重试加载范围</Button>}
       {scope && page === 'requests' && <RequestList key={scope} reader={reader} onSelect={selected => navigate('registration', selected)} />}
-      {scope && page === 'registration' && (record ? <><Button onClick={() => navigate('reception', record)}>处理此申请接收与异常</Button><Button onClick={() => navigate('labels', record)}>处理此申请标签</Button><Button onClick={() => navigate('grossing', record)}>处理此病例取材</Button><ReadPanel state={detailState}>{registration}</ReadPanel></> : registration())}
+      {scope && page === 'registration' && (record ? <><Button onClick={() => navigate('reception', record)}>处理此申请接收与异常</Button><Button onClick={() => navigate('labels', record)}>处理此申请标签</Button><Button onClick={() => navigate('grossing', record)}>处理此病例取材</Button><Button onClick={() => navigate('technical', record)}>处理此病例技术任务</Button><ReadPanel state={detailState}>{registration}</ReadPanel></> : registration())}
       {scope && page === 'reception' && (record ? <Reception key={record.id} id={record.id} onDirty={() => setDirty(true)} onClean={() => setDirty(false)} onPending={setUnresolved} onExpired={onExpired} /> : <Alert type="info" title="请从申请列表查看申请，再进入接收与异常处理" />)}
       {scope && page === 'labels' && (record ? <ReadPanel state={detailState}>{data => <Labels key={data.id} containerIds={data.containers.map(c => c.id)} onDirty={() => setDirty(true)} onClean={() => setDirty(false)} onPending={setUnresolved} onExpired={onExpired} />}</ReadPanel> : <Alert type="info" title="请从申请详情选择标签任务" />)}
       {scope && page === 'grossing' && (record ? <Grossing key={record.id} requestId={record.id} onDirty={() => setDirty(true)} onClean={() => setDirty(false)} onPending={setUnresolved} onExpired={onExpired} /> : <Alert type="info" title="请从已接收申请详情进入取材" />)}
+      {scope && page === 'technical' && (record ? <Technical key={record.id} requestId={record.id} onDirty={() => setDirty(true)} onClean={() => setDirty(false)} onPending={setUnresolved} onExpired={onExpired} /> : <Alert type="info" title="请从取材已完成的申请详情进入技术任务" />)}
       {!scope && page === 'registration' && <Alert type="info" title="先选择授权工作范围，再登记申请" />}
     </section>
     <Modal title="放弃未保存的本地输入？" open={confirming} okText="放弃并继续" cancelText="继续编辑"
