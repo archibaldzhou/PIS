@@ -1,11 +1,9 @@
+import { signInWorkflow } from './workflow-login';
 import { test, expect } from '@playwright/test';
 
 test('labels preserve identity through preview, simulated failure, retry, cancel and reprint', async ({ page }) => {
   await page.addInitScript(() => { window.print = () => { document.documentElement.dataset.printRequests = String(Number(document.documentElement.dataset.printRequests ?? '0') + 1); }; });
-  await page.goto('/');
-  await page.getByLabel('用户名').fill(process.env.PIS_E2E_USERNAME ?? 'synthetic.reader');
-  await page.getByLabel('密码', { exact: true }).fill(process.env.PIS_E2E_PASSWORD ?? 'Synthetic-test-only-42!');
-  await page.getByRole('button', { name: '登录', exact: true }).click();
+  await signInWorkflow(page);
   await page.getByRole('button', { name: '申请登记工作区' }).click();
   const scopes = await (await page.request.get('/api/requests/scopes')).json() as { id: string }[];
   const encounters = await (await page.request.get('/api/requests/encounters', { params: { scopeId: scopes[0].id, number: 'SYN-LABEL-001' } })).json() as { id: string; patientId: string }[];

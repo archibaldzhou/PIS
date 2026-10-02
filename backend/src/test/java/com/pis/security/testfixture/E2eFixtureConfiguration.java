@@ -16,7 +16,9 @@ public class E2eFixtureConfiguration {
             insert(jdbc, encoder, value("PIS_E2E_DISABLED_USERNAME", "synthetic.disabled"),
                 value("PIS_E2E_DISABLED_PASSWORD", "Synthetic-test-only-42!"), "停用的合成测试用户", false);
             insert(jdbc, encoder, value("PIS_E2E_HANDOFF_USERNAME", "synthetic.technician"), value("PIS_E2E_HANDOFF_PASSWORD", "Synthetic-handoff-only-42!"), "合成交接用户", true);
-            workflow(jdbc, value("PIS_E2E_USERNAME", "synthetic.reader"));
+            insert(jdbc, encoder, value("PIS_E2E_WORKFLOW_USERNAME", "synthetic.workflow"),
+                value("PIS_E2E_WORKFLOW_PASSWORD", "Synthetic-workflow-only-42!"), "合成工作流用户", true);
+            workflow(jdbc, value("PIS_E2E_WORKFLOW_USERNAME", "synthetic.workflow"));
         };
     }
     private static void workflow(JdbcTemplate jdbc, String username) {

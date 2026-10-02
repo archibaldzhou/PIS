@@ -1,11 +1,9 @@
+import { signInWorkflow } from './workflow-login';
 import { test, expect } from '@playwright/test';
 
 // Actual login, CSRF/session, application and PostgreSQL. No routes are mocked in this suite.
 test('synthetic request registration, editing and submission persist through real API', async ({ page }) => {
-  await page.goto('/');
-  await page.getByLabel('用户名').fill(process.env.PIS_E2E_USERNAME ?? 'synthetic.reader');
-  await page.getByLabel('密码', { exact: true }).fill(process.env.PIS_E2E_PASSWORD ?? 'Synthetic-test-only-42!');
-  await page.getByRole('button', { name: '登录', exact: true }).click();
+  await signInWorkflow(page);
   await page.getByRole('button', { name: '申请登记工作区' }).click();
   await page.getByLabel('授权工作范围').click();
   await page.getByText('合成申请工作范围', { exact: true }).last().click();

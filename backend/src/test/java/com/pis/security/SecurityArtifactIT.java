@@ -18,7 +18,7 @@ class SecurityArtifactIT {
             for (var entry : jar.stream().filter(item -> !item.isDirectory() && item.getName().startsWith("BOOT-INF/classes/")).toList()) {
                 String content = new String(jar.getInputStream(entry).readAllBytes(), StandardCharsets.ISO_8859_1);
                 assertThat(content).doesNotContain("synthetic.reader", "synthetic.disabled", "Synthetic-test-only-42!", "Synthetic-http-test-42!",
-                    "synthetic.technician", "Synthetic-handoff-only-42!", "Synthetic-technical-http-42!", "Synthetic-material-http-42!", "Synthetic-api-http-42!", "/test/api-contract", "http_probe_resource", "command_test_resource");
+                    "synthetic.workflow", "Synthetic-workflow-only-42!", "synthetic.technician", "Synthetic-handoff-only-42!", "Synthetic-technical-http-42!", "Synthetic-material-http-42!", "Synthetic-api-http-42!", "/test/api-contract", "http_probe_resource", "command_test_resource");
             }
         }
     }

@@ -59,3 +59,5 @@ SIMULATED_DONE仅表示用户记录合成演练步骤，不是实际脱水/包�
 普通 dev 独立授予 READ+MATERIAL；标签仍需 PRINT/REPRINT。测试classpath新增独立合成患者/就诊 SYN-MATERIAL-001 和 SYN-DIRECT-001。通过材料标签操作复用原预览和重打，条码保持稳定。作废蜡块同时作废全部有效玻片并留历史；不会修改已打印纸面。按确切条码反查完整来源和事件。
 
 权限、版本或来源变化后刷新重审；网络结果未知时保留原幂等键确认，不能换键重建材料。V10标签兼容迁移有表锁，真实环境需另行评估，不在生产执行此开发说明。细节见[T13验收记录](../api/t13-development-status.md)。
+
+浏览器测试账号隔离：认证/错误登录场景使用 PIS_E2E_USERNAME/PIS_E2E_PASSWORD；业务场景使用测试classpath中独立的 PIS_E2E_WORKFLOW_USERNAME/PIS_E2E_WORKFLOW_PASSWORD（默认 synthetic.workflow），具有显式合成工作流授权。交接接收者仍使用独立 HANDOFF 账号。不要把两类账号配置成同一用户名；认证账号不再自动获得工作流授权。此隔离避免不同测试共耗每账号登录预算，生产20次/5分钟及每来源100次限流保持原样；测试也不绕过来源限制。业务登录先核验204、当前用户身份及界面身份，再进入工作区，不自动重试登录。

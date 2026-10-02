@@ -1,10 +1,8 @@
+import { signInWorkflow } from './workflow-login';
 import { test, expect } from '@playwright/test';
 
 test('material identity, recut/deeper, same-entity reprint and source void survive real API refresh', async ({ page }) => {
-  await page.goto('/');
-  await page.getByLabel('用户名').fill(process.env.PIS_E2E_USERNAME ?? 'synthetic.reader');
-  await page.getByLabel('密码', { exact: true }).fill(process.env.PIS_E2E_PASSWORD ?? 'Synthetic-test-only-42!');
-  await page.getByRole('button', { name: '登录', exact: true }).click();
+  await signInWorkflow(page);
   await page.getByRole('button', { name: '申请登记工作区' }).click();
   const scopes = await (await page.request.get('/api/requests/scopes')).json() as { id: string }[];
   const encounters = await (await page.request.get('/api/requests/encounters', { params: { scopeId: scopes[0].id, number: 'SYN-MATERIAL-001' } })).json() as { id: string; patientId: string }[];
@@ -79,10 +77,7 @@ test('material identity, recut/deeper, same-entity reprint and source void survi
 });
 
 test('explicit direct cytology registers a slide without inventing a block or technical task', async ({ page }) => {
-  await page.goto('/');
-  await page.getByLabel('用户名').fill(process.env.PIS_E2E_USERNAME ?? 'synthetic.reader');
-  await page.getByLabel('密码', { exact: true }).fill(process.env.PIS_E2E_PASSWORD ?? 'Synthetic-test-only-42!');
-  await page.getByRole('button', { name: '登录', exact: true }).click();
+  await signInWorkflow(page);
   await page.getByRole('button', { name: '申请登记工作区' }).click();
   const scopes = await (await page.request.get('/api/requests/scopes')).json() as { id: string }[];
   const encounters = await (await page.request.get('/api/requests/encounters', { params: { scopeId: scopes[0].id, number: 'SYN-DIRECT-001' } })).json() as { id: string; patientId: string }[];
