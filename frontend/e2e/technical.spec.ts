@@ -1,10 +1,8 @@
+import { signInWorkflow } from './workflow-login';
 import { test, expect, type Page } from '@playwright/test';
 
 test('two synthetic users confirm handoff and keep aborted/rework task history', async ({ page, browser }) => {
-  await page.goto('/');
-  await page.getByLabel('用户名').fill(process.env.PIS_E2E_USERNAME ?? 'synthetic.reader');
-  await page.getByLabel('密码', { exact: true }).fill(process.env.PIS_E2E_PASSWORD ?? 'Synthetic-test-only-42!');
-  await page.getByRole('button', { name: '登录', exact: true }).click();
+  await signInWorkflow(page);
   await page.getByRole('button', { name: '申请登记工作区' }).click();
   const scopes = await (await page.request.get('/api/requests/scopes')).json() as { id: string }[];
   const encounters = await (await page.request.get('/api/requests/encounters', { params: { scopeId: scopes[0].id, number: 'SYN-TECH-001' } })).json() as { id: string; patientId: string }[];

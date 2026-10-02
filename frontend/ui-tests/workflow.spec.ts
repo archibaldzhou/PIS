@@ -267,3 +267,59 @@ test('technical task changes clear local identity and unknown claim retains orig
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: 'test-results/technical-mobile.png', fullPage: true });
 });
+
+test('material path switch discards hidden inputs and uncertain registration never creates an identity locally', async ({ page }) => {
+  await start(page);
+  const id = '44444444-4444-4444-8444-444444444444', cid = '55555555-5555-4555-8555-555555555555';
+  const detail = { id, scopeId: scope, version: 2, state: 'RECEIVED', requestNumber: 'DEV-AP-MATERIAL', patientId: encounter.patientId, patientLabel: encounter.patientLabel, encounterId: encounter.id, encounterNumber: encounter.encounterNumber,
+    department: '合成科室', requestedAt: '2026-01-01T08:00:00Z', clinicalHistory: '合成资料', sampledAt: '2026-01-01T08:00:00Z', containers: [{ id: cid, site: '合成部位', laterality: 'UNKNOWN', materialQuantity: 1, fixative: '合成固定液', fixedAt: '2026-01-01T08:10:00Z' }] };
+  await page.route('**/api/requests?*', route => route.fulfill({ json: { items: [detail], total: 1, page: 1, pageSize: 20 } }));
+  await page.route('**/api/requests/' + id, route => route.fulfill({ json: detail }));
+  await page.route('**/api/materials/requests/' + id, route => route.fulfill({ json: { request: detail, caseNumber: 'DEV-P-MATERIAL', entities: [], tasks: [] } }));
+  await page.getByRole('button', { name: '刷新', exact: true }).click();
+  await page.getByTestId('request-row-' + id).getByRole('button', { name: '查看 DEV-AP-MATERIAL', exact: true }).click();
+  await page.getByRole('button', { name: '处理此病例材料谱系', exact: true }).click();
+  await page.getByLabel('核对来源盒 UUID').fill('66666666-6666-4666-8666-666666666666');
+  await page.getByLabel('材料登记 / 重切 / 作废原因').fill('合成旧路径原因');
+  await page.getByLabel('材料操作', { exact: true }).click(); await page.getByRole('option', { name: '登记细胞学直制玻片', exact: true }).click();
+  await page.getByRole('button', { name: '放弃并切换', exact: true }).click();
+  await expect(page.getByLabel('核对直制容器 UUID')).toHaveValue(''); await expect(page.getByLabel('材料登记 / 重切 / 作废原因')).toHaveValue(''); await expect(page.getByLabel('前置合成技术任务')).toHaveCount(0);
+  await page.getByLabel('核对直制容器 UUID').fill(cid); await page.getByLabel('材料登记 / 重切 / 作废原因').fill('合成明确直制');
+  const writes: { key: string | undefined; body: string | null }[] = [];
+  await page.route('**/api/materials/requests/' + id + '/direct-slides', async route => { writes.push({ key: route.request().headers()['idempotency-key'], body: route.request().postData() }); await route.abort(); });
+  await page.getByRole('button', { name: '登记细胞学直制玻片', exact: true }).dblclick();
+  await expect(page.getByText('材料操作结果待确认；保留原身份、输入和请求键重试。')).toBeVisible(); expect(writes).toHaveLength(1);
+  await expect(page.getByLabel('材料实体身份')).toHaveCount(0); await expect(page.getByLabel('材料操作', { exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: '申请单查询', exact: true }).click(); await expect(page.getByText('原请求结果尚未确认，请先使用页面上的原请求确认结果。')).toBeVisible();
+  await page.getByRole('button', { name: '重试原材料请求', exact: true }).click(); await expect.poll(() => writes.length).toBe(2); expect(writes[1]).toEqual(writes[0]);
+  expect(JSON.parse(writes[0].body ?? '{}')).toEqual({ requestVersion: 2, confirmedContainerId: cid, reason: '合成明确直制' });
+  await page.screenshot({ path: 'test-results/materials-desktop.png', fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 }); await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: 'test-results/materials-mobile.png', fullPage: true });
+});
+
+test('material label preview rechecks server invalidation before displaying cached identity', async ({ page }) => {
+  await start(page);
+  const rid = '44444444-4444-4444-8444-444444444444', cid = '55555555-5555-4555-8555-555555555555', mid = '66666666-6666-4666-8666-666666666666', jid = '77777777-7777-4777-8777-777777777777';
+  const barcode = 'S' + '0'.repeat(32) + 'S';
+  const detail = { id: rid, scopeId: scope, version: 2, state: 'RECEIVED', requestNumber: 'DEV-AP-MATERIAL-LABEL', patientId: encounter.patientId, patientLabel: encounter.patientLabel, encounterId: encounter.id, encounterNumber: encounter.encounterNumber, department: '合成科室', requestedAt: '2026-01-01T08:00:00Z', clinicalHistory: '合成资料', sampledAt: '2026-01-01T08:00:00Z', containers: [] };
+  const entity = { id: mid, requestId: rid, patientId: encounter.patientId, caseId: 'synthetic-case', kind: 'SLIDE', route: 'DIRECT_CYTOLOGY', operation: 'ORIGINAL', number: 'DEV-S-SYNTHETIC', barcode, recordId: null, cassetteId: null, containerId: cid, blockId: null, sourceSlideId: null, technicalTaskId: null, state: 'ACTIVE', version: 0 };
+  const job = { id: jid, containerId: null, materialId: mid, targetId: mid, barcode, parentJobId: null, templateVersion: 'SYN-MATERIAL-1', state: 'PREVIEW_READY', version: 0, attempts: 1, patientId: encounter.patientId, patientLabel: encounter.patientLabel, encounterNumber: encounter.encounterNumber, requestNumber: detail.requestNumber, caseNumber: 'DEV-P-SYNTHETIC', site: 'DEV-S-SYNTHETIC / SLIDE / DIRECT_CYTOLOGY', laterality: 'UNKNOWN', reason: 'Synthetic initial', createdBy: 'synthetic-user', createdAt: '2026-01-01T08:00:00Z' };
+  await page.route('**/api/requests?*', route => route.fulfill({ json: { items: [detail], total: 1, page: 1, pageSize: 20 } }));
+  await page.route('**/api/requests/' + rid, route => route.fulfill({ json: detail }));
+  await page.route('**/api/materials/requests/' + rid, route => route.fulfill({ json: { request: detail, caseNumber: 'DEV-P-SYNTHETIC', entities: [entity], tasks: [] } }));
+  await page.route('**/api/materials/' + mid, route => route.fulfill({ json: { entity, events: [] } }));
+  await page.route('**/api/labels/materials/' + mid, route => route.fulfill({ json: { materialId: mid, requestVersion: 2, materialVersion: 0, state: 'ACTIVE', jobs: [job] } }));
+  let invalidated = false; let reads = 0;
+  await page.route('**/api/labels/jobs/' + jid, route => { reads++; return invalidated ? route.fulfill({ status: 409, json: { code: 'MATERIAL_INACTIVE' } }) : route.fulfill({ json: { job, events: [] } }); });
+  await page.getByRole('button', { name: '刷新', exact: true }).click(); await page.getByTestId('request-row-' + rid).getByRole('button', { name: '查看 ' + detail.requestNumber, exact: true }).click();
+  await page.getByRole('button', { name: '处理此病例材料谱系', exact: true }).click(); await page.getByRole('button', { name: '查看材料 ' + mid, exact: true }).click();
+  await page.getByLabel('材料操作', { exact: true }).click(); await page.getByRole('option', { name: '标签预览与同实体重打', exact: true }).click();
+  await page.getByLabel('选择材料实体').click(); await page.getByRole('option', { name: mid, exact: true }).click();
+  await page.getByRole('button', { name: '查看任务 ' + jid, exact: true }).click();
+  await page.getByRole('button', { name: '打开标签预览', exact: true }).click(); await expect(page.getByLabel('合成材料标签预览')).toContainText(mid);
+  await page.getByRole('button', { name: '关闭标签预览', exact: true }).click(); invalidated = true;
+  await page.getByRole('button', { name: '打开标签预览', exact: true }).click();
+  await expect(page.getByText('材料或源蜡块已作废，操作被阻断')).toBeVisible(); await expect(page.getByLabel('合成材料标签预览')).toHaveCount(0);
+  expect(reads).toBe(3);
+});

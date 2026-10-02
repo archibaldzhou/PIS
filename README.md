@@ -8,6 +8,8 @@ T11 取材描述、受控合成图像与取材盒已通过验证分支完整 CI�
 
 T12 技术任务与人员交接开发实现已通过验证分支完整 CI，见[T12 记录](docs/api/t12-development-status.md)。
 
+T13 蜡块/玻片身份、重切加深、直制路径与标签复用已实现，完整验证分支 CI 已通过，见[T13 记录](docs/api/t13-development-status.md)。
+
 开发连通性与认证验证：React + Ant Design 登录后调用 Spring Boot 的 `GET /api/hello`，显示 **Hello World**。
 
 ## 范围

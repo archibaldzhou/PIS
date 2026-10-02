@@ -20,6 +20,14 @@ import static com.pis.specimen.ReceptionContracts.*;
 
 @Service
 public class ReceptionService {
+    public record ReceivedSource(UUID hospitalId,UUID caseId,String caseNumber) { }
+    @Transactional(timeout=10)
+    public ReceivedSource receivedSource(UUID rid) {
+        var q=requests.detail(rid);
+        if(!q.state().equals("RECEIVED")) throw new ApiException(HttpStatus.CONFLICT,"MATERIAL_SOURCE_NOT_READY","Received material is required");
+        var rows=jdbc.query("SELECT p.hospital_id,p.id,p.case_number FROM specimen_reception s JOIN pathology_case p ON p.id=s.case_id WHERE s.request_id=?",(r,i)->new ReceivedSource(r.getObject(1,UUID.class),r.getObject(2,UUID.class),r.getString(3)),rid);
+        if(rows.size()!=1) throw new ApiException(HttpStatus.CONFLICT,"MATERIAL_SOURCE_NOT_READY","Received material is required"); return rows.getFirst();
+    }
     private final JdbcTemplate jdbc;
     private final RequestService requests;
     private final WorkflowAccess access;

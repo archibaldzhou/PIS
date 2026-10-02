@@ -21,6 +21,16 @@ class LoginAttemptLimiterTest {
         for (int i = 0; i < 100; i++) { assertThat(limiter.allow("unknown-" + i, "one-source")).isTrue(); }
         assertThat(limiter.allow("another-unknown", "one-source")).isFalse();
     }
+    @Test void independentSyntheticSuitesKeepUserBudgetsSeparateWithoutRelaxingLimits() {
+        var limiter = new LoginAttemptLimiter(new MutableClock());
+        for (int i=0;i<20;i++) assertThat(limiter.allow("auth-suite", "shared-runner")).isTrue();
+        assertThat(limiter.allow("auth-suite", "shared-runner")).isFalse();
+        for (int i=0;i<20;i++) assertThat(limiter.allow("workflow-suite", "shared-runner")).isTrue();
+        assertThat(limiter.allow("workflow-suite", "shared-runner")).isFalse();
+        // Distinct users still share the original 100-attempt source ceiling.
+        for (int i=0;i<58;i++) assertThat(limiter.allow("other-"+i, "shared-runner")).isTrue();
+        assertThat(limiter.allow("one-more", "shared-runner")).isFalse();
+    }
     private static final class MutableClock extends Clock {
         Instant now = Instant.parse("2026-01-01T00:00:00Z");
         @Override public ZoneId getZone() { return ZoneOffset.UTC; }

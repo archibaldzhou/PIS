@@ -22,3 +22,5 @@
 后续开发规格：[T10 标签](development-labels-v1.md)、[T11 取材](development-grossing-v1.md)。均为合成开发依据，不替代医院批准。
 
 [T12 技术任务与交接开发规格](development-processing-v1.md)定义合成演练边界，真实设备与T13实体未包含。
+
+[T13 材料身份与重切开发规格](development-materials-v1.md)定义常规及明确直制的合成登记，未知临床路线保持不支持。
