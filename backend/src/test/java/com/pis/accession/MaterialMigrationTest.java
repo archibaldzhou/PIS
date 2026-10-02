@@ -29,7 +29,7 @@ class MaterialMigrationTest {
                 var v10=db.configuration("classpath:db/migration").target("10").load(); assertThat(v10.migrate().migrationsExecuted).isEqualTo(1);
                 assertThatThrownBy(()->j.update("UPDATE label_job SET version=version+1 WHERE id=?",job)).isInstanceOf(org.springframework.dao.DataAccessException.class);
                 var v10Checksums=j.queryForList("SELECT version,checksum FROM flyway_schema_history WHERE version IS NOT NULL ORDER BY installed_rank");
-                var latest=db.configuration("classpath:db/migration").load(); assertThat(latest.migrate().migrationsExecuted).isEqualTo(1); assertThat(latest.validateWithResult().validationSuccessful).isTrue(); assertThat(latest.migrate().migrationsExecuted).isZero();
+                var latest=db.configuration("classpath:db/migration").target("11").load(); assertThat(latest.migrate().migrationsExecuted).isEqualTo(1); assertThat(latest.validateWithResult().validationSuccessful).isTrue(); assertThat(latest.migrate().migrationsExecuted).isZero();
                 assertThat(j.queryForList(history)).isEqualTo(oldChecksums);
                 assertThat(j.queryForList("SELECT version,checksum FROM flyway_schema_history WHERE version IS NOT NULL AND version::integer<=10 ORDER BY installed_rank")).isEqualTo(v10Checksums);
                 assertThat(j.queryForList("SELECT container_id,hospital_id,request_id,barcode FROM label_identity")).isEqualTo(oldIdentity);
@@ -73,7 +73,7 @@ class MaterialMigrationTest {
                 var checksums=j.queryForList("SELECT version,checksum FROM flyway_schema_history WHERE version IS NOT NULL ORDER BY installed_rank");
                 assertThatThrownBy(()->j.update("UPDATE material_entity SET version=version+1 WHERE id=?",m)).isInstanceOf(org.springframework.dao.DataAccessException.class);
                 assertThatThrownBy(()->j.update("UPDATE material_entity SET state='VOID',version=version+1 WHERE id=?",m)).isInstanceOf(org.springframework.dao.DataAccessException.class);
-                var latest=db.configuration("classpath:db/migration").load(); assertThat(latest.migrate().migrationsExecuted).isEqualTo(1); assertThat(latest.validateWithResult().validationSuccessful).isTrue();
+                var latest=db.configuration("classpath:db/migration").target("11").load(); assertThat(latest.migrate().migrationsExecuted).isEqualTo(1); assertThat(latest.validateWithResult().validationSuccessful).isTrue();
                 assertThat(j.queryForList("SELECT version,checksum FROM flyway_schema_history WHERE version IS NOT NULL AND version::integer<=10 ORDER BY installed_rank")).isEqualTo(checksums);
                 assertThat(j.queryForList("SELECT * FROM material_entity")).isEqualTo(before); assertThat(j.queryForList("SELECT * FROM material_event")).isEqualTo(events);
                 assertThat(j.update("UPDATE material_entity SET version=version+1 WHERE id=? AND version=0",m)).isEqualTo(1);

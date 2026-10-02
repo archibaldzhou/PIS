@@ -45,6 +45,7 @@ class RequestWorkflowTest {
     @Autowired com.pis.grossing.GrossService gross;
     @Autowired com.pis.processing.TechnicalService technical;
     @Autowired com.pis.material.MaterialService materials;
+    @Autowired com.pis.quality.QualityService quality;
     @Autowired org.springframework.security.crypto.password.PasswordEncoder encoder;
     @org.springframework.boot.test.web.server.LocalServerPort int port;
     static final Draft COMPLETE=new Draft("Synthetic history",Instant.parse("2026-01-01T08:00:00Z"),
@@ -926,6 +927,162 @@ class RequestWorkflowTest {
         assertThat(b.send("POST",path+"/direct-slides",body,null,false).statusCode()).isEqualTo(403);
         assertThat(b.send("POST",path+"/direct-slides",body.replace("\"reason\":","\"ownerId\":\"client\",\"reason\":"),csrf,false).statusCode()).isEqualTo(400);
         assertThat(b.send("POST",path+"/direct-slides",body,csrf,false).statusCode()).isEqualTo(201);
+    }
+    private void qcGrant(Fixture f) { jdbc.update("UPDATE workflow_grant SET can_qc=true WHERE user_id=?",f.user); }
+    private com.pis.quality.QualityContracts.Assess qa(UUID id,long qc,long material,Long task,com.pis.quality.QualityContracts.Outcome outcome) { return new com.pis.quality.QualityContracts.Assess(qc,material,task,id,"SYN-MATERIAL-QC-1",outcome,"Synthetic quality evidence"); }
+    private com.pis.quality.QualityContracts.Decision qd(UUID id,long version) { return new com.pis.quality.QualityContracts.Decision(version,id,"Synthetic quality review reason"); }
+    @Test void qualityQuarantineReworkAndNewSlideKeepExactVersionsAndIndependentOutcomes() {
+        var f=new Fixture(); var s=materialSetup(f); qcGrant(f); printGrant(f);
+        f.as(()->{
+            var block=materials.block(s.request(),blockInput(s),"b").receipt().resourceId();
+            var slide=materials.slide(block,new com.pis.material.MaterialContracts.SlideCreate(0L,s.sectioning(),2L,block,"Synthetic original"),"s").receipt().resourceId();
+            var pass=qa(slide,-1,0,2L,com.pis.quality.QualityContracts.Outcome.PASS);
+            quality.assess(slide,pass,"qc-pass"); assertThat(quality.assess(slide,pass,"qc-pass").replayed()).isTrue();
+            var label=labels.createMaterial(slide,new com.pis.label.LabelContracts.MaterialCreate(2L,0L),"label").receipt().resourceId();
+            assertCode(()->quality.assess(slide,qa(slide,-1,0,2L,com.pis.quality.QualityContracts.Outcome.FAIL),"qc-pass"),"IDEMPOTENCY_KEY_REUSED");
+            quality.assess(slide,qa(slide,0,0,2L,com.pis.quality.QualityContracts.Outcome.FAIL),"qc-fail");
+            assertCode(()->labels.view(label),"QC_QUARANTINED");
+            assertCode(()->technical.create(s.request(),new com.pis.processing.TechnicalContracts.Create(2L,s.cassette(),com.pis.processing.TechnicalContracts.Kind.SECTIONING,null,"Bypass attempt"),"bypass"),"QC_QUARANTINED");
+            assertCode(()->quality.decide(slide,qd(slide,1),"release","EXCEPTION_RELEASE"),"QC_EXCEPTION_RELEASE_DISABLED");
+            quality.decide(slide,qd(slide,1),"rework","REWORK");
+            var repair=quality.detail(slide).item().head().repairTaskId(); assertThat(repair).isNotNull().isNotEqualTo(s.sectioning());
+            assertThat(technical.detail(repair).task().reworkOf()).isEqualTo(s.sectioning());
+            technical.decide(repair,td(0,s.cassette()),"repair-claim","CLAIM"); technical.decide(repair,td(1,s.cassette()),"repair-finish","FINISH_SIMULATION");
+            var next=materials.repeat(slide,new com.pis.material.MaterialContracts.Repeat(0L,repair,2L,slide,"Synthetic corrected recut"),"corrected","RECUT").receipt().resourceId();
+            assertThat(materials.detail(next).entity().sourceSlideId()).isEqualTo(slide);
+            assertThat(quality.detail(slide).item().effectiveState()).isEqualTo("REWORK_REQUIRED");
+            assertThat(quality.detail(next).item().effectiveState()).isEqualTo("NOT_ASSESSED");
+            quality.assess(next,qa(next,-1,0,2L,com.pis.quality.QualityContracts.Outcome.PENDING),"pending");
+            assertCode(()->labels.createMaterial(next,new com.pis.label.LabelContracts.MaterialCreate(2L,0L),"pending-label"),"QC_QUARANTINED");
+            quality.assess(next,qa(next,0,0,2L,com.pis.quality.QualityContracts.Outcome.PASS),"next-pass");
+            var nextLabel=labels.createMaterial(next,new com.pis.label.LabelContracts.MaterialCreate(2L,0L),"next-label").receipt().resourceId();
+            quality.decide(next,qd(next,1),"revoke","REVOKE");
+            assertCode(()->labels.view(nextLabel),"QC_QUARANTINED");
+            assertThat(quality.detail(next).assessments()).hasSize(2); assertThat(quality.detail(next).events()).hasSize(3);
+            assertThat(quality.detail(slide).events()).anySatisfy(e->{ assertThat(e.action()).isEqualTo("REWORK"); assertThat(e.relatedTaskId()).isEqualTo(repair); assertThat(e.actorId()).isEqualTo(f.user); assertThat(e.reason()).isEqualTo("Synthetic quality review reason"); assertThat(e.version()).isEqualTo(2); });
+            assertThatThrownBy(()->jdbc.update("UPDATE quality_assessment SET outcome='PASS' WHERE material_id=?",slide)).isInstanceOf(org.springframework.dao.DataAccessException.class);
+            assertThatThrownBy(()->jdbc.update("DELETE FROM quality_event WHERE material_id=?",slide)).isInstanceOf(org.springframework.dao.DataAccessException.class); return null;
+        });
+    }
+    @Test void qualityIdentityHoldIsStickyAndPermissionsVersionsScopesRemainEnforced() {
+        var f=new Fixture(); var s=materialSetup(f); var foreign=new Fixture(); var fs=materialSetup(foreign); qcGrant(foreign);
+        var id=f.as(()->materials.block(s.request(),blockInput(s),"b")).receipt().resourceId();
+        f.as(()->{ assertCode(()->quality.detail(id),"QC_NOT_FOUND"); return null; }); qcGrant(f);
+        var other=foreign.as(()->materials.block(fs.request(),blockInput(fs),"b")).receipt().resourceId();
+        f.as(()->{
+            assertCode(()->quality.detail(other),"REQUEST_NOT_FOUND");
+            assertCode(()->quality.assess(id,qa(other,-1,0,2L,com.pis.quality.QualityContracts.Outcome.PASS),"wrong-id"),"QC_IDENTITY_MISMATCH");
+            assertCode(()->quality.assess(id,qa(id,-1,0,1L,com.pis.quality.QualityContracts.Outcome.PASS),"old-task"),"VERSION_CONFLICT");
+            var input=qa(id,-1,0,2L,com.pis.quality.QualityContracts.Outcome.IDENTITY_MISMATCH); quality.assess(id,input,"identity");
+            assertCode(()->quality.assess(id,qa(id,0,0,2L,com.pis.quality.QualityContracts.Outcome.PASS),"bypass"),"QC_IDENTITY_LOCKED");
+            assertCode(()->quality.decide(id,qd(id,0),"revoke","REVOKE"),"QC_IDENTITY_LOCKED");
+            assertCode(()->quality.decide(id,qd(id,0),"release","EXCEPTION_RELEASE"),"QC_EXCEPTION_RELEASE_DISABLED");
+            assertCode(()->materials.slide(id,new com.pis.material.MaterialContracts.SlideCreate(0L,s.sectioning(),2L,id,"Blocked ancestor"),"blocked"),"QC_QUARANTINED");
+            assertThatThrownBy(()->jdbc.update("UPDATE quality_head SET state='PASS' WHERE material_id=?",id)).isInstanceOf(org.springframework.dao.DataAccessException.class);
+            jdbc.update("UPDATE workflow_grant SET can_qc=false WHERE user_id=?",f.user);
+            assertCode(()->quality.assess(id,input,"identity"),"QC_NOT_FOUND"); return null;
+        });
+    }
+    @Test void qualityAuditFailureRollsBackJudgementAndReworkTaskTogether() {
+        var f=new Fixture(); var s=materialSetup(f); qcGrant(f);
+        var block=f.as(()->materials.block(s.request(),blockInput(s),"b")).receipt().resourceId();
+        var input=qa(block,-1,0,2L,com.pis.quality.QualityContracts.Outcome.FAIL);
+        jdbc.execute("CREATE FUNCTION reject_quality_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.hospital_id='"+f.hospital+"'::uuid AND NEW.operation_code LIKE 'QC_%' THEN RAISE EXCEPTION 'synthetic failure'; END IF; RETURN NEW; END $$");
+        jdbc.execute("CREATE TRIGGER reject_quality_audit BEFORE INSERT ON audit_event FOR EACH ROW EXECUTE FUNCTION reject_quality_audit()");
+        try {
+            f.as(()->{ assertThatThrownBy(()->quality.assess(block,input,"recover")).isInstanceOf(org.springframework.dao.DataAccessException.class); return null; });
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM quality_head WHERE material_id=?",Long.class,block)).isZero();
+        } finally { jdbc.execute("DROP TRIGGER reject_quality_audit ON audit_event"); }
+        f.as(()->quality.assess(block,input,"recover"));
+        jdbc.execute("CREATE TRIGGER reject_quality_audit BEFORE INSERT ON audit_event FOR EACH ROW EXECUTE FUNCTION reject_quality_audit()");
+        try {
+            f.as(()->{ assertThatThrownBy(()->quality.decide(block,qd(block,0),"repair-recover","REWORK")).isInstanceOf(org.springframework.dao.DataAccessException.class); return null; });
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM technical_task WHERE rework_of=?",Long.class,s.embedding())).isZero();
+            assertThat(f.as(()->quality.detail(block)).item().head().state()).isEqualTo("FAIL");
+        } finally { jdbc.execute("DROP TRIGGER reject_quality_audit ON audit_event"); jdbc.execute("DROP FUNCTION reject_quality_audit()"); }
+        f.as(()->quality.decide(block,qd(block,0),"repair-recover","REWORK"));
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM technical_task WHERE rework_of=?",Long.class,s.embedding())).isEqualTo(1);
+    }
+    @Test void qualityRevocationRacingLabelConsumptionObservesDatabaseLocksAndBlocksFurtherUse() throws Exception {
+        var f=new Fixture(); var s=materialSetup(f); qcGrant(f); printGrant(f);
+        var block=f.as(()->materials.block(s.request(),blockInput(s),"b")).receipt().resourceId();
+        f.as(()->quality.assess(block,qa(block,-1,0,2L,com.pis.quality.QualityContracts.Outcome.PASS),"pass"));
+        try(var blocker=DB.connection();var executor=Executors.newVirtualThreadPerTaskExecutor()) {
+            blocker.setAutoCommit(false); try(var statement=blocker.prepareStatement("SELECT id FROM pathology_request WHERE id=? FOR UPDATE")) { statement.setObject(1,s.request()); statement.executeQuery().close(); }
+            var revoke=executor.submit(()->f.as(()->quality.decide(block,qd(block,0),"revoke","REVOKE")));
+            var consume=executor.submit(()->f.as(()->{ try { labels.createMaterial(block,new com.pis.label.LabelContracts.MaterialCreate(2L,0L),"label"); return "CREATED_BEFORE_REVOKE"; } catch(ApiException e) { return e.code(); } }));
+            try {
+                long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(2); boolean waiting=false;
+                while(System.nanoTime()<deadline) { if(jdbc.queryForObject("SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%SELECT id FROM pathology_request WHERE id=%'",Long.class)>=2) { waiting=true; break; } Thread.sleep(10); } assertThat(waiting).isTrue();
+            } finally { blocker.rollback(); }
+            assertThat(revoke.get(5,TimeUnit.SECONDS).receipt().version()).isEqualTo(1);
+            String result=consume.get(5,TimeUnit.SECONDS); assertThat(result).isIn("CREATED_BEFORE_REVOKE","QC_QUARANTINED");
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM label_job WHERE material_id=?",Long.class,block)).isEqualTo(result.equals("CREATED_BEFORE_REVOKE")?1:0);
+            f.as(()->{ assertCode(()->labels.createMaterial(block,new com.pis.label.LabelContracts.MaterialCreate(2L,0L),"after"),"QC_QUARANTINED"); return null; });
+        }
+    }
+    @Test void directQualityUsesNullTaskAndHttpRequiresQcCsrfAndStrictDto() throws Exception {
+        var f=new Fixture(); var rid=grossRequest(f); materialGrant(f); qcGrant(f); technicalGrant(f,f,true);
+        var cid=f.as(()->service.detail(rid)).containers().getFirst().id();
+        var id=f.as(()->materials.direct(rid,new com.pis.material.MaterialContracts.DirectCreate(2L,cid,"Synthetic direct QC"),"direct")).receipt().resourceId();
+        f.as(()->{
+            quality.assess(id,qa(id,-1,0,null,com.pis.quality.QualityContracts.Outcome.PENDING),"pending");
+            assertThat(quality.detail(id).assessments().getFirst().taskId()).isNull();
+            var initialQc=quality.detail(id); var initialEvent=initialQc.events().getFirst();
+            assertThat(initialEvent.version()).isZero(); assertThat(initialEvent.action()).isEqualTo("ASSESS");
+            assertThat(initialEvent.assessmentId()).isEqualTo(initialQc.assessments().getFirst().id());
+            assertThat(initialEvent.relatedTaskId()).isNull(); assertThat(initialEvent.actorId()).isEqualTo(f.user);
+            assertThat(initialEvent.reason()).isEqualTo("Synthetic quality evidence");
+            assertCode(()->quality.decide(id,qd(id,0),"rework","REWORK"),"QC_REWORK_UNSUPPORTED");
+            quality.assess(id,qa(id,0,0,null,com.pis.quality.QualityContracts.Outcome.PASS),"pass");
+            materials.voidMaterial(id,new com.pis.material.MaterialContracts.VoidMaterial(0L,id,"Synthetic withdrawal"),"void");
+            assertThat(quality.detail(id).item().effectiveState()).isEqualTo("INVALIDATED");
+            assertThat(quality.detail(id).events()).anySatisfy(e->assertThat(e.action()).isEqualTo("INVALIDATE")); return null;
+        });
+        String password="Synthetic-quality-http-42!"; jdbc.update("UPDATE app_user SET password_hash=? WHERE id=?",encoder.encode(password),f.user);
+        var b=new Browser(); String path="/api/quality/materials/"+id;
+        assertThat(b.send("GET",path,null,null,false).statusCode()).isEqualTo(401);
+        String login="username="+f.principal.getUsername()+"&password="+java.net.URLEncoder.encode(password,java.nio.charset.StandardCharsets.UTF_8);
+        assertThat(b.send("POST","/api/auth/login",login,b.csrf(),true).statusCode()).isEqualTo(204); String csrf=b.csrf();
+        String body="{\"expectedVersion\":2,\"confirmedMaterialId\":\""+id+"\",\"reason\":\"Synthetic prohibited release\"}";
+        assertThat(b.send("POST",path+"/exception-release",body,null,false).statusCode()).isEqualTo(403);
+        assertThat(b.send("POST",path+"/exception-release",body,csrf,false).statusCode()).isEqualTo(409);
+        assertThat(b.send("POST",path+"/exception-release",body.replace("\"reason\":","\"adminOverride\":true,\"reason\":"),csrf,false).statusCode()).isEqualTo(400);
+        jdbc.update("UPDATE workflow_grant SET can_qc=false WHERE user_id=?",f.user);
+        assertThat(b.send("GET",path,null,null,false).statusCode()).isEqualTo(404);
+    }
+    @Test void normalTechnicalReworkInvalidatesItsMaterialQcWithoutOverwritingJudgement() {
+        var f=new Fixture(); var s=materialSetup(f); qcGrant(f);
+        f.as(()->{
+            var block=materials.block(s.request(),blockInput(s),"b").receipt().resourceId();
+            quality.assess(block,qa(block,-1,0,2L,com.pis.quality.QualityContracts.Outcome.PASS),"pass");
+            technical.decide(s.embedding(),td(2,s.cassette()),"ordinary-rework","REWORK");
+            var q=quality.detail(block); assertThat(q.item().effectiveState()).isEqualTo("REWORK_REQUIRED");
+            assertThat(q.assessments().getFirst().outcome()).isEqualTo("PASS"); assertThat(q.assessments().getFirst().taskVersion()).isEqualTo(2);
+            assertThat(q.events()).anySatisfy(e->assertThat(e.action()).isEqualTo("REWORK"));
+            assertCode(()->quality.assess(block,qa(block,1,0,3L,com.pis.quality.QualityContracts.Outcome.PASS),"old-source-pass"),"QC_SOURCE_INVALID");
+            assertCode(()->materials.slide(block,new com.pis.material.MaterialContracts.SlideCreate(0L,s.sectioning(),2L,block,"Blocked stale QC"),"blocked"),"QC_QUARANTINED"); return null;
+        });
+    }
+    @Test void sourceQcRevocationRacingSlideCreationCannotLeaveAConsumableDescendant() throws Exception {
+        var f=new Fixture(); var s=materialSetup(f); qcGrant(f); printGrant(f);
+        var block=f.as(()->materials.block(s.request(),blockInput(s),"b")).receipt().resourceId();
+        f.as(()->quality.assess(block,qa(block,-1,0,2L,com.pis.quality.QualityContracts.Outcome.PASS),"pass"));
+        try(var blocker=DB.connection();var executor=Executors.newVirtualThreadPerTaskExecutor()) {
+            blocker.setAutoCommit(false); try(var statement=blocker.prepareStatement("SELECT id FROM pathology_request WHERE id=? FOR UPDATE")) { statement.setObject(1,s.request()); statement.executeQuery().close(); }
+            var revoke=executor.submit(()->f.as(()->{ try { quality.decide(block,qd(block,0),"revoke","REVOKE"); return "REVOKED"; } catch(ApiException e) { return e.code(); } }));
+            var consume=executor.submit(()->f.as(()->{ try { materials.slide(block,new com.pis.material.MaterialContracts.SlideCreate(0L,s.sectioning(),2L,block,"Synthetic race source"),"slide"); return "CREATED_THEN_INVALIDATED"; } catch(ApiException e) { return e.code(); } }));
+            try {
+                long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(2); boolean waiting=false;
+                while(System.nanoTime()<deadline) { if(jdbc.queryForObject("SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%SELECT id FROM pathology_request WHERE id=%'",Long.class)>=2) { waiting=true; break; } Thread.sleep(10); } assertThat(waiting).isTrue();
+            } finally { blocker.rollback(); }
+            String decision=revoke.get(5,TimeUnit.SECONDS), creation=consume.get(5,TimeUnit.SECONDS);
+            if(decision.equals("REVOKED")) assertThat(creation).isEqualTo("QC_QUARANTINED");
+            else { assertThat(decision).isEqualTo("VERSION_CONFLICT"); assertThat(creation).isEqualTo("CREATED_THEN_INVALIDATED"); }
+            var entities=f.as(()->materials.view(s.request())).entities(); assertThat(entities).hasSize(creation.equals("QC_QUARANTINED")?1:2);
+            for(var entity:entities) f.as(()->{ assertCode(()->labels.createMaterial(entity.id(),new com.pis.label.LabelContracts.MaterialCreate(2L,entity.version()),"blocked-"+entity.id()),"QC_QUARANTINED"); return null; });
+            assertThat(f.as(()->quality.detail(block)).item().effectiveState()).isIn("REVOKED","INVALIDATED");
+        }
     }
     private String editResult(Fixture f,UUID id,String key) { return f.as(()->{ try { service.edit(id,new Edit(0L,COMPLETE),key); return "SUCCESS"; } catch(ApiException e) { return e.code(); } }); }
     private static void assertCode(Runnable action,String code) { assertThatThrownBy(action::run).isInstanceOfSatisfying(ApiException.class,e->assertThat(e.code()).isEqualTo(code)); }

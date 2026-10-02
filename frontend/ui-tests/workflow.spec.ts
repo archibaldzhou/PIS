@@ -323,3 +323,32 @@ test('material label preview rechecks server invalidation before displaying cach
   await expect(page.getByText('材料或源蜡块已作废，操作被阻断')).toBeVisible(); await expect(page.getByLabel('合成材料标签预览')).toHaveCount(0);
   expect(reads).toBe(3);
 });
+
+test('quality preserves pending identity, confirms dirty operation changes and reuses uncertain intent', async ({ page }) => {
+  await start(page);
+  const rid = '44444444-4444-4444-8444-444444444444', mid = '66666666-6666-4666-8666-666666666666';
+  const detail = { id: rid, scopeId: scope, version: 2, state: 'RECEIVED', requestNumber: 'DEV-AP-QC', patientId: encounter.patientId, patientLabel: encounter.patientLabel, encounterId: encounter.id, encounterNumber: encounter.encounterNumber, department: '合成科室', requestedAt: '2026-01-01T08:00:00Z', clinicalHistory: '合成资料', sampledAt: '2026-01-01T08:00:00Z', containers: [] };
+  const item = { subject: { id: mid, requestId: rid, patientId: encounter.patientId, caseId: 'synthetic-case', number: 'DEV-S-QC', kind: 'SLIDE', route: 'DIRECT_CYTOLOGY', state: 'ACTIVE', version: 0, taskId: null, taskVersion: null, blockId: null }, head: { materialId: mid, state: 'PENDING', version: 0, assessmentId: 'synthetic-assessment', repairTaskId: null }, effectiveState: 'PENDING' };
+  await page.route('**/api/requests?*', route => route.fulfill({ json: { items: [detail], total: 1, page: 1, pageSize: 20 } }));
+  await page.route('**/api/requests/' + rid, route => route.fulfill({ json: detail }));
+  await page.route('**/api/quality/requests/' + rid, route => route.fulfill({ json: { requestId: rid, items: [item] } }));
+  await page.route('**/api/quality/materials/' + mid, route => route.fulfill({ json: { item, assessments: [], events: [], exceptionReleaseEnabled: false } }));
+  await page.getByRole('button', { name: '刷新', exact: true }).click(); await page.getByTestId('request-row-' + rid).getByRole('button', { name: '查看 ' + detail.requestNumber, exact: true }).click();
+  await page.getByRole('button', { name: '处理此病例技术QC', exact: true }).click(); await page.getByRole('button', { name: '质检材料 ' + mid, exact: true }).click();
+  await expect(page.getByLabel('质检材料身份')).toContainText('PENDING'); await expect(page.getByRole('button', { name: '异常放行（未批准）' })).toBeDisabled();
+  await page.getByLabel('核对质检材料 UUID').fill(mid); await page.getByLabel('QC事实与处置原因').fill('合成旧输入');
+  await page.getByLabel('质检操作', { exact: true }).click(); await page.getByRole('option', { name: '撤销当前QC', exact: true }).click();
+  await page.getByRole('button', { name: '继续编辑', exact: true }).click(); await expect(page.getByLabel('QC事实与处置原因')).toHaveValue('合成旧输入');
+  await page.getByLabel('质检操作', { exact: true }).click(); await page.getByRole('option', { name: '撤销当前QC', exact: true }).click(); await page.getByRole('button', { name: '清除并切换' }).click();
+  await expect(page.getByLabel('明确质检结论')).toHaveCount(0); await expect(page.getByLabel('核对质检材料 UUID')).toHaveValue('');
+  await page.getByLabel('核对质检材料 UUID').fill(mid); await page.getByLabel('QC事实与处置原因').fill('合成撤销');
+  const writes: { key: string | undefined; body: string | null }[] = [];
+  await page.route('**/api/quality/materials/' + mid + '/revoke', async route => { writes.push({ key: route.request().headers()['idempotency-key'], body: route.request().postData() }); await route.abort(); });
+  await page.getByRole('button', { name: '提交明确QC操作' }).dblclick(); await expect(page.getByText('QC结果待确认；保留原对象、输入和请求键重试。')).toBeVisible(); expect(writes).toHaveLength(1);
+  await expect(page.getByLabel('质检材料身份')).toContainText('PENDING'); await expect(page.getByLabel('质检操作', { exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: '申请单查询', exact: true }).click(); await expect(page.getByText('原请求结果尚未确认，请先使用页面上的原请求确认结果。')).toBeVisible();
+  await page.getByRole('button', { name: '重试原QC请求' }).click(); await expect.poll(() => writes.length).toBe(2); expect(writes[1]).toEqual(writes[0]);
+  expect(JSON.parse(writes[0].body ?? '{}')).toEqual({ expectedVersion: 0, confirmedMaterialId: mid, reason: '合成撤销' });
+  await page.screenshot({ path: 'test-results/quality-desktop.png', fullPage: true }); await page.setViewportSize({ width: 390, height: 844 });
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true); await page.screenshot({ path: 'test-results/quality-mobile.png', fullPage: true });
+});
