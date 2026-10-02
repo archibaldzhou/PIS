@@ -33,7 +33,7 @@ public class WorkflowAccess {
         }
         return actor;
     }
-    public enum Permission { READ, WRITE, RECEIVE, EXCEPTION, PRINT, REPRINT }
+    public enum Permission { READ, WRITE, RECEIVE, EXCEPTION, PRINT, REPRINT, GROSS }
     public Scope require(UUID scopeId, boolean write) { return require(scopeId,write?Permission.WRITE:Permission.READ); }
     public Scope require(UUID scopeId, Permission permission) {
         var actor = actor();
@@ -45,12 +45,12 @@ public class WorkflowAccess {
         }
         var rows = jdbc.query("""
             SELECT s.* FROM workflow_scope s JOIN workflow_grant g ON g.scope_id = s.id
-            WHERE s.id = ? AND s.enabled AND g.user_id = ? AND g.can_read AND (NOT ? OR g.can_write) AND (NOT ? OR g.can_receive) AND (NOT ? OR g.can_exception) AND (NOT ? OR g.can_print) AND (NOT ? OR g.can_reprint)
+            WHERE s.id = ? AND s.enabled AND g.user_id = ? AND g.can_read AND (NOT ? OR g.can_write) AND (NOT ? OR g.can_receive) AND (NOT ? OR g.can_exception) AND (NOT ? OR g.can_print) AND (NOT ? OR g.can_reprint) AND (NOT ? OR g.can_gross)
               AND g.revoked_at IS NULL AND g.valid_from <= statement_timestamp()
               AND (g.valid_until IS NULL OR g.valid_until > statement_timestamp())
             """, (r, i) -> new Scope(r.getObject("id", UUID.class), r.getObject("hospital_id", UUID.class),
                 r.getObject("campus_id", UUID.class), r.getObject("department_id", UUID.class),
-                r.getObject("source_system_id", UUID.class), r.getString("name")), scopeId, actor.id(), permission==Permission.WRITE, permission==Permission.RECEIVE, permission==Permission.EXCEPTION, permission==Permission.PRINT || permission==Permission.REPRINT, permission==Permission.REPRINT);
+                r.getObject("source_system_id", UUID.class), r.getString("name")), scopeId, actor.id(), permission==Permission.WRITE, permission==Permission.RECEIVE, permission==Permission.EXCEPTION, permission==Permission.PRINT || permission==Permission.REPRINT, permission==Permission.REPRINT, permission==Permission.GROSS);
         if (rows.isEmpty()) throw new AccessDeniedException("Workflow scope is not permitted");
         return rows.getFirst();
     }

@@ -141,3 +141,47 @@ test('label preview closes without printing and unknown reprint retains identity
   await page.getByRole('button', { name: '重试原标签请求', exact: true }).click();
   await expect.poll(() => writes.length).toBe(2); expect(writes[1]).toEqual(writes[0]);
 });
+
+test('grossing resets modes, revokes photo URLs and freezes an uncertain command', async ({ page }) => {
+  const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
+  await start(page);
+  const id = '44444444-4444-4444-8444-444444444444', cid = '55555555-5555-4555-8555-555555555555', recordId = '66666666-6666-4666-8666-666666666666', photoId = '77777777-7777-4777-8777-777777777777';
+  const detail = { id, scopeId: scope, version: 2, state: 'RECEIVED', requestNumber: 'DEV-AP-GROSS', patientId: encounter.patientId, patientLabel: encounter.patientLabel, encounterId: encounter.id, encounterNumber: encounter.encounterNumber,
+    department: '合成科室', requestedAt: '2026-01-01T08:00:00Z', clinicalHistory: '合成资料', sampledAt: '2026-01-01T08:00:00Z', containers: [{ id: cid, site: '合成部位', laterality: 'UNKNOWN', materialQuantity: 1, fixative: '合成固定液', fixedAt: '2026-01-01T08:10:00Z' }] };
+  const { readFile } = await import('node:fs/promises');
+  const png = await readFile(new URL('../../backend/src/main/resources/grossing-assets/synthetic-v1.png', import.meta.url));
+  const record = { id: recordId, version: 0, state: 'DRAFT', description: '合成已保存描述', cassettes: [], revisions: [], events: [], photos: [{ id: photoId, containerId: cid, caption: '合成图像', sha256: 'adaacd24ed0218efbde244a9a0c314cf26b8f27f612146bd9d164971fcb92623', bytes: 656, width: 256, height: 160, withdrawnAt: null }] };
+  await page.route('**/api/requests?*', route => route.fulfill({ json: { items: [detail], total: 1, page: 1, pageSize: 20 } }));
+  await page.route('**/api/requests/' + id, route => route.fulfill({ json: detail }));
+  await page.route('**/api/grossing/requests/' + id, route => route.fulfill({ json: { request: detail, caseId: 'synthetic-case', caseNumber: 'DEV-P-GROSS', record } }));
+  await page.route('**/api/grossing/photos/' + photoId + '/content', route => route.fulfill({ contentType: 'image/png', body: png }));
+  await page.getByRole('button', { name: '刷新', exact: true }).click();
+  await page.getByRole('button', { name: '查看 DEV-AP-GROSS', exact: true }).click();
+  await page.getByRole('button', { name: '处理此病例取材', exact: true }).click();
+  await page.getByRole('button', { name: '查看合成图像', exact: true }).click();
+  const img = page.getByRole('img', { name: '合成取材示意图，不是真实照片，无测量校准' });
+  await expect(img).toBeVisible(); const url = await img.getAttribute('src');
+  await page.getByRole('button', { name: '关闭合成图像', exact: true }).click(); await expect(img).toHaveCount(0);
+  expect(await page.evaluate(async source => { try { await fetch(source ?? ''); return false; } catch { return true; } }, url)).toBe(true);
+  const mode = async (name: string) => { await page.getByLabel('取材操作', { exact: true }).click(); await page.getByRole('option', { name, exact: true }).click(); };
+  await page.getByLabel('大体描述', { exact: true }).fill('合成未保存描述'); await mode('添加合成图像');
+  await page.getByRole('button', { name: '放弃并切换', exact: true }).click();
+  let photoWrites = 0; await page.route('**/api/grossing/records/' + recordId + '/photos', route => { photoWrites++; return route.abort(); });
+  await page.getByLabel('导入同一受控PNG').setInputFiles({ name: 'synthetic-invalid.png', mimeType: 'image/png', buffer: Buffer.from('<svg/>') });
+  await expect(page.getByText('只接受随程序发布的合成PNG，不发送或保存其他照片。')).toBeVisible(); expect(photoWrites).toBe(0);
+  await mode('保存大体描述'); await expect(page.getByLabel('大体描述', { exact: true })).toHaveValue('合成已保存描述');
+  await page.getByLabel('大体描述', { exact: true }).fill('合成待确认描述'); await page.getByLabel('操作原因 / 更正说明').fill('合成修改原因');
+  const writes: { key: string | undefined; body: string | null }[] = [];
+  await page.route('**/api/grossing/records/' + recordId + '/description', async route => { writes.push({ key: route.request().headers()['idempotency-key'], body: route.request().postData() }); await route.abort(); });
+  await page.getByRole('button', { name: '保存大体描述', exact: true }).dblclick();
+  await expect(page.getByText('取材操作结果待确认；请保留原输入与请求键重试。')).toBeVisible(); expect(writes).toHaveLength(1);
+  await expect(page.getByLabel('大体描述', { exact: true })).toBeDisabled(); await expect(page.getByLabel('取材操作', { exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: '申请单查询', exact: true }).click(); await expect(page.getByText('原请求结果尚未确认，请先使用页面上的原请求确认结果。')).toBeVisible();
+  await page.getByRole('button', { name: '重试原取材请求', exact: true }).click(); await expect.poll(() => writes.length).toBe(2); expect(writes[1]).toEqual(writes[0]);
+  expect(JSON.parse(writes[0].body ?? '{}')).toEqual({ expectedVersion: 0, description: '合成待确认描述', reason: '合成修改原因' });
+  await page.screenshot({ path: 'test-results/grossing-desktop.png', fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: 'test-results/grossing-mobile.png', fullPage: true });
+  expect(errors).toEqual([]);
+});
