@@ -144,3 +144,5 @@ T19本地实现：[固定合成PDF与打印记录](docs/api/t19-development-stat
 T20本地实现：[补充、更正与新版本链](docs/api/t20-development-status.md)。原冻结报告/PDF不可变，新草稿独立复核及合成模拟签署，替代关系只标记待替换、未发送。完整后端、真实E2E和CI未验证。
 
 T21本地实现：[合成投递、ACK、重试与对账](docs/api/t21-development-status.md)。人工驱动持久化outbox/inbox，仅本地数据库模拟端，无外部传输；CA仅NOT_CONFIGURED/UNVERIFIED。完整后端、真实E2E和CI未验证。
+
+T22 已增加独立术中冰冻合成工作站：人工时间、更正、草稿/复核、转交、本地沟通/回读/确认及确切常规报告版本关联。仅本地开发，默认关闭，无真实通信或临床用途。范围、实际检查和 Maven/真实 E2E/CI 阻塞见 [T22 交付记录](docs/api/t22-development-status.md)。

@@ -13,7 +13,7 @@ class IdentityAccessMigrationTest {
     void emptySchemaGetsNineAccessTablesAndOnlyThreeRoleTemplatesWithoutAccountsOrClinicalSeeds() throws Exception {
         try (var f = new AccessPolicyTestFixture()) {
             var flyway = f.database.configuration("classpath:db/migration").load();
-            assertThat(flyway.info().current().getVersion().toString()).isEqualTo("19");
+            assertThat(flyway.info().current().getVersion().toString()).isEqualTo("20");
             assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
             assertThat(flyway.migrate().migrationsExecuted).isZero();
             var tables = f.jdbc.queryForList("SELECT tablename FROM pg_tables WHERE schemaname = current_schema()", String.class);

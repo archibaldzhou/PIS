@@ -31,7 +31,7 @@ public class AmendmentService {
  @Transactional(timeout=10) public Snapshot snapshot(UUID id,UUID signature){
   var c=reviews.outputAccess(id);jdbc.queryForList("SELECT id FROM pathology_request WHERE id=? FOR SHARE",c.requestId());reviews.outputAccess(id);
   var rows=jdbc.queryForList("SELECT revision_id FROM report_review_event WHERE case_id=? AND id=? AND action='SIMULATE_SIGN'",UUID.class,id,signature);if(rows.isEmpty())throw missing();
-  var revision=reports.revision(id,rows.getFirst());var artifacts=jdbc.queryForList("SELECT id FROM report_artifact WHERE case_id=? AND signature_id=?",UUID.class,id,signature);return new Snapshot(id,signature,signed(id).id().equals(signature),revision,artifacts.isEmpty()?null:artifacts.getFirst());
+  var revision=reports.revision(id,rows.getFirst());var artifacts=jdbc.queryForList("SELECT id FROM report_artifact WHERE case_id=? AND signature_id=?",UUID.class,id,signature);return new Snapshot(id,signature,signed(id).id().equals(signature),revision,artifacts.isEmpty()?null:artifacts.getFirst(),jdbc.queryForObject("SELECT occurred_at FROM report_review_event WHERE case_id=? AND id=?",OffsetDateTime.class,id,signature).toInstant());
  }
  public IdempotentCommands.Result create(UUID id,Create input,String key){
   var errors=validator.validate(input);if(!errors.isEmpty())throw new jakarta.validation.ConstraintViolationException(errors);

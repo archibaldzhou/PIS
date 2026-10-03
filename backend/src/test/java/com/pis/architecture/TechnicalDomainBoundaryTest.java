@@ -11,11 +11,11 @@ import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** Source-reference guard for the eleven workflow domains; not a full bytecode architecture analyzer. */
+/** Source-reference guard for the twelve workflow domains; not a full bytecode architecture analyzer. */
 class TechnicalDomainBoundaryTest {
     @Test void technicalDomainUsesPublicBoundariesAndAddsNoWorkflowDomainCycle() throws Exception {
-        var domains=List.of("accession","grossing","processing","specimen","label","material","quality","worklist","diagnosis","report","integration");
-        var references=Pattern.compile("com\\.pis\\.(accession|grossing|processing|specimen|label|material|quality|worklist|diagnosis|report|integration)\\.([A-Z][A-Za-z0-9]*)");
+        var domains=List.of("accession","grossing","processing","specimen","label","material","quality","worklist","diagnosis","report","integration","frozen");
+        var references=Pattern.compile("com\\.pis\\.(accession|grossing|processing|specimen|label|material|quality|worklist|diagnosis|report|integration|frozen)\\.([A-Z][A-Za-z0-9]*)");
         Map<String,Set<String>> edges=new HashMap<>();
         for(String domain:domains) {
             edges.put(domain,new HashSet<>());

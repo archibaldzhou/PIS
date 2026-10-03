@@ -40,3 +40,5 @@
 [T20补充、更正与版本链开发PRD](development-report-amendments-v1.md)已对照授权UI-023实际图片。新草稿重新复核/模拟签署，原冻结报告/PDF保留，下游仅待替换；不含T21送达、ACK或真实临床签署。架构见[ADR 0010](../adr/0010-append-only-report-amendment-chain.md)。
 
 [T21本地合成投递开发PRD](development-delivery-v1.md)已查看UI-024实际原型；仅本地outbox/inbox、完整业务ACK与对账，CA无真实签署能力。见[ADR 0011](../adr/0011-local-synthetic-delivery.md)。
+
+[T22术中冰冻开发PRD](development-frozen-v1.md)已对照 UI-016/UI-025 实际图片。独立冰冻材料与工作流、人工时间、版本化草稿、合成复核、独立回读/确认及确切常规版本差异关联；没有真实通信或临床动作。见[ADR 0012](../adr/0012-independent-frozen-workflow.md)与[本地交付记录](../api/t22-development-status.md)。

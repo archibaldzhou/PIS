@@ -641,3 +641,52 @@ test('delivery wrong ACK conflict keeps input; dirty cancel and late case respon
  await page.getByRole('button', { name: '处理投递 ' + op }).click(); await page.getByLabel('本地投递动作').click(); await page.getByRole('option', { name: '验证本地业务ACK', exact: true }).click(); await page.getByLabel('核对投递病例UUID').fill(b); await page.getByLabel('本地投递操作原因').fill('合成错误ACK保留原因'); await page.route('**/deliveries/' + op + '/ACK', r => r.fulfill({ status: 409, json: { code: 'DELIVERY_ACK_MISMATCH' } })); await page.getByRole('button', { name: '提交本地投递操作' }).click(); await expect(page.getByText('缺少匹配的本地业务接收证据，不能确认ACK。')).toBeVisible();
  await page.getByRole('button', { name: '新建本地投递', exact: true }).click(); await page.getByRole('button', { name: '继续当前投递' }).click(); await expect(page.getByLabel('本地投递操作原因')).toHaveValue('合成错误ACK保留原因'); await page.getByRole('button', { name: '查看本地投递 ' + a }).click(); await page.getByRole('button', { name: '继续编辑', exact: true }).click(); await expect(page.getByLabel('核对投递病例UUID')).toHaveValue(b);
 });
+
+async function startFrozen(page: Page, ids: string[]) {
+ await start(page);
+ const rid = '44444444-4444-4444-8444-444444444444', cid = '55555555-5555-4555-8555-555555555555';
+ const detail = { id: rid, scopeId: scope, version: 2, state: 'RECEIVED', requestNumber: 'DEV-AP-FROZEN', patientId: encounter.patientId, patientLabel: encounter.patientLabel, encounterId: encounter.id, encounterNumber: encounter.encounterNumber, department: '合成科室', requestedAt: '2026-01-01T08:00:00Z', clinicalHistory: '合成资料', sampledAt: '2026-01-01T08:00:00Z', containers: [{ id: cid, site: '合成冰冻部位', laterality: 'UNKNOWN', materialQuantity: 1, fixative: '合成', fixedAt: '2026-01-01T08:10:00Z' }] };
+ await page.route('**/api/requests?*', r => r.fulfill({ json: { items: [detail], total: 1, page: 1, pageSize: 20 } }));
+ await page.route('**/api/requests/' + rid, r => r.fulfill({ json: detail }));
+ await page.route('**/api/requests/' + rid + '/frozen-cases', r => r.fulfill({ json: ids.map(id => ({ id, number: 'SYN-FROZEN' })) }));
+ await page.getByRole('button', { name: '刷新', exact: true }).click(); await page.getByRole('button', { name: '查看 DEV-AP-FROZEN', exact: true }).click(); await page.getByRole('button', { name: '处理此申请冰冻', exact: true }).click();
+}
+function frozenView(id: string) { return { reviewToken: null, caseId: id, number: 'SYN-FROZEN', actorId: 'synthetic-user', head: null, gateReady: true, reviewValid: false, receivedAt: null, preparedAt: null, elapsedSeconds: null, page: 1, sources: [{ id: '55555555-5555-4555-8555-555555555555', site: '合成冰冻部位' }], candidates: [], events: [] }; }
+test('frozen dirty stage and case navigation can cancel; switching clears inputs and mobile stays bounded', async ({ page }) => {
+ const a = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', b = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+ await page.route('**/api/requests/frozen/cases/*?page=1', route => route.fulfill({ json: frozenView(new URL(route.request().url()).pathname.split('/').pop() ?? '') }));
+ await startFrozen(page, [a, b]); await page.getByRole('button', { name: 'SYN-FROZEN / ' + a, exact: true }).click();
+ await page.getByLabel('本次记录／迟补／更正原因').fill('Synthetic unsaved frozen text');
+ await page.getByLabel('冰冻阶段操作').click(); await page.getByRole('option', { name: '保存人工结果新修订', exact: true }).click();
+ await expect(page.getByRole('dialog')).toBeVisible(); await page.getByRole('button', { name: '继续编辑', exact: true }).click(); await expect(page.getByLabel('本次记录／迟补／更正原因')).toHaveValue('Synthetic unsaved frozen text');
+ await page.getByRole('button', { name: 'SYN-FROZEN / ' + b, exact: true }).click(); await page.getByRole('button', { name: '放弃并切换', exact: true }).click();
+ await expect(page.getByLabel('冰冻病例身份')).toContainText(b); await expect(page.getByLabel('本次记录／迟补／更正原因')).toBeEmpty();
+ await page.screenshot({ path: 'test-results/frozen-desktop.png', fullPage: true, animations: 'disabled' });
+ await page.setViewportSize({ width: 390, height: 844 }); await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true); await page.screenshot({ path: 'test-results/frozen-mobile.png', fullPage: true, animations: 'disabled' });
+});
+test('frozen unknown double click keeps original identity time and idempotency key; conflict permits explicit refresh', async ({ page }) => {
+ const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+ await page.route('**/api/requests/frozen/cases/' + id + '?page=1', r => r.fulfill({ json: frozenView(id) }));
+ const writes: { key: string | undefined; body: string | null }[] = [];
+ await page.route('**/api/requests/frozen/cases/' + id + '/RECEIVE', async r => { writes.push({ key: r.request().headers()['idempotency-key'], body: r.request().postData() }); if (writes.length === 1) await r.abort(); else await r.fulfill({ status: 409, json: { code: 'VERSION_CONFLICT', detail: 'Synthetic stale version' } }); });
+ await startFrozen(page, [id]); await page.getByRole('button', { name: 'SYN-FROZEN / ' + id, exact: true }).click();
+ await page.getByLabel('核对冰冻病例 UUID').fill(id); await page.getByLabel('人工发生时间（含 offset）').fill('2026-01-01T12:00:00+08:00'); await page.getByLabel('发生地 IANA 时区').fill('Asia/Shanghai'); await page.getByLabel('核对来源容器').click(); await page.getByRole('option', { name: /合成冰冻部位/ }).click(); await page.getByLabel('冰冻材料人工部位').fill('Synthetic frozen source'); await page.getByLabel('本次记录／迟补／更正原因').fill('Synthetic late entry');
+ await page.getByRole('button', { name: '登记冰冻接收并保存', exact: true }).dblclick(); await expect(page.getByRole('button', { name: '确认原冰冻请求' })).toBeVisible(); expect(writes).toHaveLength(1);
+ await expect(page.getByLabel('冰冻阶段操作')).toBeDisabled(); await page.getByRole('button', { name: '申请单查询', exact: true }).click(); await expect(page.getByText('原请求结果尚未确认，请先使用页面上的原请求确认结果。')).toBeVisible();
+ await page.getByRole('button', { name: '确认原冰冻请求' }).click(); await expect.poll(() => writes.length).toBe(2); expect(writes[1]).toEqual(writes[0]); await expect(page.getByLabel('冰冻阶段操作')).toBeEnabled();
+ await page.getByRole('button', { name: '重新读取冰冻版本' }).click(); await page.getByRole('button', { name: '清除并继续' }).click(); await expect(page.getByLabel('本次记录／迟补／更正原因')).toBeEmpty();
+});
+test('frozen late case response is discarded and read failure remains distinct', async ({ page }) => {
+ const a = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', b = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'; let release: (() => void) | undefined; const wait = new Promise<void>(resolve => { release = resolve; }); let called = false;
+ await page.route('**/api/requests/frozen/cases/' + a + '?page=1', async r => { called = true; await wait; await r.fulfill({ json: frozenView(a) }).catch(() => {}); });
+ await page.route('**/api/requests/frozen/cases/' + b + '?page=1', r => r.fulfill({ status: 404, json: { code: 'FROZEN_NOT_FOUND' } }));
+ await startFrozen(page, [a, b]); await page.getByRole('button', { name: 'SYN-FROZEN / ' + a, exact: true }).click(); await expect.poll(() => called).toBe(true); await page.getByRole('button', { name: 'SYN-FROZEN / ' + b, exact: true }).click(); release?.(); await expect(page.getByLabel('冰冻病例身份')).toHaveCount(0);
+ await page.route('**/api/requests/frozen/cases/' + b + '?page=1', r => r.fulfill({ json: frozenView(b) })); await page.getByRole('button', { name: '重新读取冰冻版本' }).click(); await expect(page.getByLabel('冰冻病例身份')).toContainText(b); await expect(page.getByLabel('冰冻病例身份')).not.toContainText(a);
+});
+test('frozen history exposes exact revisions and local readback without inferring confirmation or delivery', async ({ page }) => {
+ const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+ const detail = { ...frozenView(id), head: { id: 'frozen-synthetic', materialId: 'frozen-material', containerId: 'source', site: 'Synthetic', version: 5, ownerId: 'synthetic-user', ownerActive: true, receivedId: 'receive', preparedId: 'prepare', revisionId: 'draft-exact', reviewId: 'review-exact', qcId: 'qc', qcState: 'PASS', stage: 'REVIEWED' }, reviewValid: true, receivedAt: '2026-01-01T08:00:00Z', preparedAt: '2026-01-01T09:00:00Z', elapsedSeconds: 3600, events: [{ id: 'readback-exact', version: 5, action: 'READBACK', actorId: 'receiver-synthetic', targetUserId: 'receiver-synthetic', resultId: 'draft-exact', relatedId: 'communication-exact', occurredAt: '2026-01-01T12:00:00Z', recordedAt: '2026-01-01T13:00:00Z', zoneId: 'UTC', offsetSeconds: 0, reason: 'Synthetic evidence only', content: 'Synthetic manual readback', dependency: null, routineSignatureId: null, routineRevisionId: null, routineTemplateCode: null, routineTemplateVersion: null, comparison: null, communicationMethod: 'LOCAL_SIMULATION' }] };
+ await page.route('**/api/requests/frozen/cases/' + id + '?page=1', r => r.fulfill({ json: detail })); await startFrozen(page, [id]); await page.getByRole('button', { name: 'SYN-FROZEN / ' + id, exact: true }).click();
+ const history = page.getByRole('row').filter({ hasText: 'readback-exact' }); await expect(history).toContainText('接收者记录合成回读'); await expect(history).toContainText('draft-exact'); await expect(history).toContainText('communication-exact'); await expect(history).toContainText('方式：本地合成记录'); await expect(history).not.toContainText('接收者记录合成确认'); await expect(history).not.toContainText('已送达');
+ await expect(page.getByText(/两个记录间隔 3600 秒/)).toBeVisible();
+});

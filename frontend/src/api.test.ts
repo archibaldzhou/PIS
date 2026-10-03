@@ -114,3 +114,12 @@ describe('failure classification', () => {
     await expect(fetchHello(controller.signal)).rejects.toBe(error);
   });
 });
+
+describe('frozen errors remain definitive and do not echo supplied content', () => {
+  it.each(['FROZEN_REVIEW_INVALIDATED', 'FROZEN_READBACK_REQUIRED', 'FROZEN_TIME_ORDER'])('preserves %s for safe correction and retry', async code => {
+    respond({ code, detail: 'untrusted synthetic server text' }, 409);
+    const { request } = await import('./api');
+    await expect(request('/api/requests/frozen/cases/synthetic/DRAFT')).rejects.toMatchObject({ status: 409, code });
+    await expect(request('/api/requests/frozen/cases/synthetic/DRAFT')).rejects.not.toThrow('untrusted synthetic server text');
+  });
+});

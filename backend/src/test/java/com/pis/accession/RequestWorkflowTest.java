@@ -1727,4 +1727,123 @@ class RequestWorkflowTest {
         f.as(()->{var retry=dc(id,op);var claim=new com.pis.report.DeliveryContracts.Command(id,retry.artifactId(),retry.signatureId(),retry.revisionId(),retry.sha256(),retry.destination(),retry.expectedVersion(),null,retry.reason());deliveries.step(id,op,claim,"recover-next",com.pis.report.DeliveryContracts.Action.CLAIM);var fresh=dc(id,op);assertThat(fresh.attemptId()).isNotEqualTo(old.attemptId());var late=new com.pis.report.DeliveryContracts.Command(id,fresh.artifactId(),fresh.signatureId(),fresh.revisionId(),fresh.sha256(),fresh.destination(),fresh.expectedVersion(),old.attemptId(),"Synthetic stale worker");assertCode(()->deliveries.step(id,op,late,"late-old-ack",com.pis.report.DeliveryContracts.Action.ACK),"DELIVERY_STALE_ATTEMPT");deliveries.step(id,op,fresh,"recover-receive-again",com.pis.report.DeliveryContracts.Action.RECEIVE);deliveries.step(id,op,dc(id,op),"recover-ack",com.pis.report.DeliveryContracts.Action.ACK);assertThat(jdbc.queryForObject("SELECT count(*) FROM report_local_inbox WHERE delivery_id=?",Long.class,op)).isEqualTo(1);return null;});
     }
 
+    @Autowired com.pis.frozen.FrozenService frozen;
+    private void frozenGrant(Fixture actor,Fixture owner){
+        diagnosisGrant(actor,owner,false,true);
+        jdbc.update("INSERT INTO frozen_grant(scope_id,user_id,qualification,can_record,can_review,can_qc) VALUES(?,?,'SYN-FROZEN-1',true,true,true)",owner.scope,actor.user);
+    }
+    private com.pis.frozen.FrozenContracts.Command fc(UUID id,UUID related,UUID target,String text){
+        var d=frozen.detail(id,1);var h=d.head();return new com.pis.frozen.FrozenContracts.Command(id,h==null?-1L:h.version(),java.time.OffsetDateTime.parse("2026-01-01T12:00:00Z"),"UTC","Synthetic manual reason",d.sources().getFirst().id(),"Synthetic frozen site",h==null?null:h.revisionId(),related,target,text,null,null,d.reviewToken());
+    }
+    private void frozenStep(UUID id,String action,UUID related,UUID target,String text){frozen.command(id,com.pis.frozen.FrozenContracts.Action.valueOf(action),fc(id,related,target,text),UUID.randomUUID().toString());}
+    private UUID frozenSetup(Fixture owner,Fixture reviewer){
+        var request=grossRequest(owner);frozenGrant(owner,owner);if(reviewer!=null)frozenGrant(reviewer,owner);
+        UUID id=owner.as(()->frozen.cases(request)).getFirst().id();
+        owner.as(()->{for(String action:List.of("RECEIVE","PREPARE","QC_PASS","DRAFT"))frozenStep(id,action,null,null,"Synthetic human text");return null;});return id;
+    }
+    @Test void frozenIsIndependentOfRoutineRoutingAndCommunicationProofIsSeparate(){
+        var owner=new Fixture();var reviewer=new Fixture();UUID id=frozenSetup(owner,reviewer);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM diagnosis_assignment WHERE case_id=?",Long.class,id)).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM material_entity WHERE case_id=?",Long.class,id)).isZero();
+        owner.as(()->{assertCode(()->frozenStep(id,"REVIEW",null,null,""),"FROZEN_SEPARATION_REQUIRED");assertCode(()->frozenStep(id,"COMMUNICATE",null,reviewer.user,""),"FROZEN_REVIEW_INVALIDATED");return null;});
+        reviewer.as(()->{frozenStep(id,"REVIEW",null,null,"");return null;});
+        UUID communication=owner.as(()->{assertThat(frozen.detail(id,1).reviewValid()).isTrue();frozenStep(id,"COMMUNICATE",null,reviewer.user,"Synthetic local simulation only");return frozen.detail(id,1).events().getFirst().id();});
+        owner.as(()->{assertCode(()->frozenStep(id,"READBACK",communication,null,"Synthetic evidence"),"FROZEN_COMMUNICATION_MISMATCH");return null;});
+        reviewer.as(()->{
+            assertCode(()->frozenStep(id,"CONFIRM",communication,null,"Synthetic confirmation"),"FROZEN_READBACK_REQUIRED");
+            frozenStep(id,"READBACK",communication,null,"Synthetic independently recorded readback");
+            assertThat(frozen.detail(id,1).events()).noneMatch(e->e.action()==com.pis.frozen.FrozenContracts.Action.CONFIRM);
+            var command=fc(id,communication,null,"Synthetic independent confirmation");
+            frozen.command(id,com.pis.frozen.FrozenContracts.Action.CONFIRM,command,"confirm-once");
+            assertThat(frozen.command(id,com.pis.frozen.FrozenContracts.Action.CONFIRM,command,"confirm-once").replayed()).isTrue();
+            assertCode(()->frozenStep(id,"CONFIRM",communication,null,"Synthetic duplicate"),"FROZEN_ALREADY_RECORDED");return null;
+        });
+        assertThatThrownBy(()->jdbc.update("UPDATE frozen_event SET content='changed' WHERE case_id=?",id)).isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+    }
+    @Test void frozenRevocationQcDraftAndHandoffInvalidateExactReviews(){
+        var owner=new Fixture();var reviewer=new Fixture();UUID id=frozenSetup(owner,reviewer);
+        reviewer.as(()->{frozenStep(id,"REVIEW",null,null,"");return null;});
+        jdbc.update("UPDATE frozen_grant SET can_review=false WHERE scope_id=? AND user_id=?",owner.scope,reviewer.user);
+        jdbc.update("UPDATE frozen_grant SET can_review=true WHERE scope_id=? AND user_id=?",owner.scope,reviewer.user);
+        owner.as(()->{assertThat(frozen.detail(id,1).reviewValid()).isFalse();return null;});
+        reviewer.as(()->{frozenStep(id,"REVIEW",null,null,"");return null;});
+        owner.as(()->{frozenStep(id,"QC_FAIL",null,null,"");assertThat(frozen.detail(id,1).reviewValid()).isFalse();assertCode(()->frozenStep(id,"DRAFT",null,null,"Synthetic"),"FROZEN_NOT_READY");frozenStep(id,"QC_PASS",null,null,"");return null;});
+        reviewer.as(()->{frozenStep(id,"REVIEW",null,null,"");return null;});
+        owner.as(()->{frozenStep(id,"DRAFT",null,null,"Synthetic revised human text");assertThat(frozen.detail(id,1).reviewValid()).isFalse();return null;});
+        reviewer.as(()->{frozenStep(id,"REVIEW",null,null,"");return null;});
+        owner.as(()->{frozenStep(id,"TRANSFER",null,reviewer.user,"");assertThat(frozen.detail(id,1).reviewValid()).isFalse();assertCode(()->frozenStep(id,"DRAFT",null,null,"Synthetic old holder"),"FROZEN_NOT_FOUND");return null;});
+        reviewer.as(()->{assertCode(()->frozenStep(id,"DRAFT",null,null,"Synthetic before claim"),"FROZEN_NOT_FOUND");frozenStep(id,"CLAIM",null,null,"");frozenStep(id,"DRAFT",null,null,"Synthetic new holder");return null;});
+        owner.as(()->{frozenStep(id,"REVIEW",null,null,"");return null;});
+        jdbc.update("UPDATE diagnosis_grant SET revoked_at=statement_timestamp() WHERE scope_id=? AND user_id=?",owner.scope,reviewer.user);
+        owner.as(()->{assertThat(frozen.detail(id,1).reviewValid()).isFalse();return null;});
+    }
+    @Test void frozenTimeCorrectionIsAppendOnlyAndCannotReverseDependentTimes(){
+        var owner=new Fixture();var reviewer=new Fixture();UUID id=frozenSetup(owner,reviewer);reviewer.as(()->{frozenStep(id,"REVIEW",null,null,"");return null;});
+        owner.as(()->{
+            var before=frozen.detail(id,1);var input=fc(id,before.head().receivedId(),null,"");
+            var earlier=new com.pis.frozen.FrozenContracts.Command(id,input.expectedVersion(),java.time.OffsetDateTime.parse("2026-01-01T11:00:00Z"),"UTC","Synthetic late correction",null,null,input.resultId(),input.relatedId(),null,"",null,null,null);
+            frozen.command(id,com.pis.frozen.FrozenContracts.Action.CORRECT_TIME,earlier,"earlier-time");
+            var after=frozen.detail(id,1);assertThat(after.elapsedSeconds()).isEqualTo(3600L);assertThat(after.reviewValid()).isFalse();assertThat(after.events()).anyMatch(e->e.id().equals(before.head().receivedId()));
+            var invalid=new com.pis.frozen.FrozenContracts.Command(id,after.head().version(),java.time.OffsetDateTime.parse("2026-01-01T13:00:00Z"),"UTC","Synthetic impossible order",null,null,null,after.head().receivedId(),null,"",null,null,null);
+            assertCode(()->frozen.command(id,com.pis.frozen.FrozenContracts.Action.CORRECT_TIME,invalid,"later-time"),"FROZEN_TIME_ORDER");return null;
+        });
+    }
+    @Test void frozenAuditFailureRollsBackEventHeadAndIdempotency(){
+        var owner=new Fixture();var reviewer=new Fixture();UUID id=frozenSetup(owner,reviewer);var before=owner.as(()->frozen.detail(id,1));var input=owner.as(()->fc(id,null,null,"Synthetic next draft"));
+        jdbc.execute("CREATE FUNCTION reject_frozen_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.operation_code='FROZEN_DRAFT_V1' THEN RAISE EXCEPTION 'synthetic audit outage'; END IF; RETURN NEW; END $$");jdbc.execute("CREATE TRIGGER reject_frozen_audit BEFORE INSERT ON audit_event FOR EACH ROW EXECUTE FUNCTION reject_frozen_audit()");
+        try{owner.as(()->{assertThatThrownBy(()->frozen.command(id,com.pis.frozen.FrozenContracts.Action.DRAFT,input,"atomic-frozen")).isInstanceOf(org.springframework.dao.DataAccessException.class);return null;});}finally{jdbc.execute("DROP TRIGGER reject_frozen_audit ON audit_event");jdbc.execute("DROP FUNCTION reject_frozen_audit()");}
+        assertThat(owner.as(()->frozen.detail(id,1)).head()).isEqualTo(before.head());assertThat(owner.as(()->frozen.detail(id,1)).events()).isEqualTo(before.events());
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM idempotency_command WHERE hospital_id=? AND operation_code='FROZEN_DRAFT_V1'",Long.class,owner.hospital)).isEqualTo(1); // only initial draft
+        owner.as(()->{assertThat(frozen.command(id,com.pis.frozen.FrozenContracts.Action.DRAFT,input,"atomic-frozen").replayed()).isFalse();return null;});
+    }
+    @Test void frozenDraftAndReviewRacesHaveOneCasWinnerAfterObservedRootLockWait() throws Exception {
+        for(boolean reviewRace:List.of(false,true)){
+        var owner=new Fixture();var reviewer=new Fixture();UUID id=frozenSetup(owner,reviewer);UUID request=jdbc.queryForObject("SELECT request_id FROM pathology_case WHERE id=?",UUID.class,id);var input=owner.as(()->fc(id,null,null,"Synthetic concurrent draft"));var reviewInput=reviewer.as(()->fc(id,null,null,"Synthetic concurrent draft"));
+        try(var blocker=DB.connection();var executor=Executors.newVirtualThreadPerTaskExecutor()){
+            blocker.setAutoCommit(false);try(var st=blocker.prepareStatement("SELECT id FROM pathology_request WHERE id=? FOR UPDATE")){st.setObject(1,request);st.executeQuery().close();}
+            java.util.function.Function<String,String> run=k->(reviewRace&&k.endsWith("b")?reviewer:owner).as(()->{try{frozen.command(id,reviewRace&&k.endsWith("b")?com.pis.frozen.FrozenContracts.Action.REVIEW:com.pis.frozen.FrozenContracts.Action.DRAFT,reviewRace&&k.endsWith("b")?reviewInput:input,k);return "SUCCESS";}catch(ApiException e){return e.code();}});
+            var a=executor.submit(()->run.apply("frozen-race-a"));var b=executor.submit(()->run.apply("frozen-race-b"));
+            try{long end=System.nanoTime()+TimeUnit.SECONDS.toNanos(2);boolean waiting=false;while(System.nanoTime()<end){if(jdbc.queryForObject("SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%SELECT id FROM pathology_request WHERE id=%'",Long.class)>=2){waiting=true;break;}Thread.sleep(10);}assertThat(waiting).isTrue();}finally{blocker.rollback();}
+            assertThat(List.of(a.get(5,TimeUnit.SECONDS),b.get(5,TimeUnit.SECONDS))).containsExactlyInAnyOrder("SUCCESS","VERSION_CONFLICT");
+        }
+        }
+    }
+    @Test void frozenForeignScopesAdminAndRevokedReplaysCannotAccess(){
+        var owner=new Fixture();UUID id=frozenSetup(owner,null);var other=new Fixture();frozenGrant(other,other);
+        jdbc.update("INSERT INTO user_role_scope(user_id,role_code,hospital_id,scope_kind,case_filter) VALUES(?,'SECURITY_ADMIN_TEMPLATE',?,'HOSPITAL','ALL_IN_SCOPE')",other.user,owner.hospital);
+        diagnosisGrant(other,owner,false,true);
+        other.as(()->{assertCode(()->frozen.detail(id,1),"FROZEN_NOT_FOUND");return null;});
+        var input=owner.as(()->fc(id,null,null,"Synthetic replay"));owner.as(()->frozen.command(id,com.pis.frozen.FrozenContracts.Action.DRAFT,input,"revoke-replay"));
+        jdbc.update("UPDATE frozen_grant SET revoked_at=statement_timestamp() WHERE scope_id=? AND user_id=?",owner.scope,owner.user);
+        owner.as(()->{assertCode(()->frozen.command(id,com.pis.frozen.FrozenContracts.Action.DRAFT,input,"revoke-replay"),"FROZEN_NOT_FOUND");return null;});
+    }
+    @Test void frozenRoutineDiscrepancyLinkKeepsBothVersionsAndOriginalResult(){
+        var owner=new Fixture();var d=outputSetup(owner);var reviewer=new Fixture();frozenGrant(owner,owner);frozenGrant(reviewer,owner);
+        UUID id=d.caseId();owner.as(()->{for(String a:List.of("RECEIVE","PREPARE","QC_PASS","DRAFT"))frozenStep(id,a,null,null,"Synthetic frozen original");return null;});reviewer.as(()->{frozenStep(id,"REVIEW",null,null,"");return null;});
+        owner.as(()->{
+            var original=frozen.detail(id,1).head().revisionId();var signature=amendments.detail(id,1).frozenSignatureId();var input=fc(id,null,null,"Synthetic difference explanation");
+            var link=new com.pis.frozen.FrozenContracts.Command(id,input.expectedVersion(),java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC),input.zoneId(),input.reason(),null,null,input.resultId(),null,null,input.content(),signature,"DISCREPANCY",null);
+            frozen.command(id,com.pis.frozen.FrozenContracts.Action.LINK_ROUTINE,link,"routine-link");var event=frozen.detail(id,1).events().getFirst();assertThat(event.resultId()).isEqualTo(original);assertThat(event.routineSignatureId()).isEqualTo(signature);assertThat(event.comparison()).isEqualTo("DISCREPANCY");assertThat(event.routineRevisionId()).isEqualTo(amendments.snapshot(id,signature).revision().id());
+            frozenStep(id,"DRAFT",null,null,"Synthetic later frozen draft");assertThat(frozen.detail(id,1).events()).anyMatch(e->e.id().equals(event.id())&&e.resultId().equals(original));return null;
+        });
+    }
+    @Test void frozenSourceQcIsolationBlocksWorkflowWithoutForcingRoutineMaterialCreation(){
+        var owner=new Fixture();var source=diagnosisSetup(owner);frozenGrant(owner,owner);UUID id=source.caseId();
+        owner.as(()->{for(String a:List.of("RECEIVE","PREPARE","QC_PASS","DRAFT"))frozenStep(id,a,null,null,"Synthetic");quality.assess(source.slide(),qa(source.slide(),0,0,null,com.pis.quality.QualityContracts.Outcome.IDENTITY_MISMATCH),"source-identity");assertThat(frozen.detail(id,1).gateReady()).isFalse();assertCode(()->frozenStep(id,"DRAFT",null,null,"Synthetic blocked"),"QC_QUARANTINED");assertCode(()->frozenStep(id,"QC_PASS",null,null,"Synthetic blocked"),"QC_QUARANTINED");return null;});
+    }
+    @Test void frozenHttpRequiresCsrfAndRejectsUnknownFieldsAndForeignObjects(){
+        var owner=new Fixture();UUID id=frozenSetup(owner,null);String password="Synthetic-frozen-http-only-42!";
+        jdbc.update("UPDATE app_user SET password_hash=? WHERE id=?",encoder.encode(password),owner.user);var b=new Browser();String login="username="+owner.principal.getUsername()+"&password="+java.net.URLEncoder.encode(password,java.nio.charset.StandardCharsets.UTF_8);assertThat(b.send("POST","/api/auth/login",login,b.csrf(),true).statusCode()).isEqualTo(204);String csrf=b.csrf(),path="/api/requests/frozen/cases/"+id;
+        assertThat(b.send("GET",path,null,null,false).statusCode()).isEqualTo(200);assertThat(b.send("GET","/api/requests/frozen/cases/"+UUID.randomUUID(),null,null,false).statusCode()).isEqualTo(404);
+        String body="{\"confirmedCaseId\":\""+id+"\",\"expectedVersion\":3,\"occurredAt\":\"2026-01-01T12:00:00Z\",\"zoneId\":\"UTC\",\"reason\":\"Synthetic HTTP\",\"content\":\"Synthetic manual text\"}";
+        assertThat(b.send("POST",path+"/DRAFT",body,null,false).statusCode()).isEqualTo(403);assertThat(b.send("POST",path+"/DRAFT",body.replace("\"reason\":","\"adminOverride\":true,\"reason\":"),csrf,false).statusCode()).isEqualTo(400);assertThat(b.send("POST",path+"/DRAFT",body,csrf,false).statusCode()).isEqualTo(200);
+        jdbc.update("UPDATE workflow_grant SET revoked_at=statement_timestamp() WHERE user_id=?",owner.user);assertThat(b.send("GET",path,null,null,false).statusCode()).isEqualTo(404);assertThat(b.send("POST",path+"/DRAFT",body,csrf,false).statusCode()).isEqualTo(404);
+    }
+    @Test void frozenReviewCannotSilentlyBindUnseenChangedSourceQc(){
+        var owner=new Fixture();var source=diagnosisSetup(owner);var reviewer=new Fixture();frozenGrant(owner,owner);frozenGrant(reviewer,owner);UUID id=source.caseId();
+        owner.as(()->{for(String a:List.of("RECEIVE","PREPARE","QC_PASS","DRAFT"))frozenStep(id,a,null,null,"Synthetic");return null;});
+        var stale=reviewer.as(()->fc(id,null,null,""));
+        owner.as(()->quality.assess(source.slide(),qa(source.slide(),0,0,null,com.pis.quality.QualityContracts.Outcome.PASS),"updated-source-qc"));
+        reviewer.as(()->{assertCode(()->frozen.command(id,com.pis.frozen.FrozenContracts.Action.REVIEW,stale,"stale-review-dependency"),"FROZEN_REVIEW_INVALIDATED");frozenStep(id,"REVIEW",null,null,"");return null;});
+    }
 }
