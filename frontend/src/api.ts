@@ -66,6 +66,7 @@ export async function request(path: string, options: RequestInit = {}): Promise<
   GROSS_NOT_FOUND: '取材资源不存在或无权操作', GROSS_REQUIRES_RECEIVED: '病例和容器必须先完成接收', GROSS_ALREADY_EXISTS: '已有取材记录，请刷新',
     GROSS_SOURCE_MISMATCH: '来源容器不属于当前已接收病例或有重复，已阻断', GROSS_STATE_CONFLICT: '当前取材状态不允许此操作', GROSS_TARGET_MISMATCH: '取材盒或图像不属于此记录或已失效',
     GROSS_INCOMPLETE: '完成取材前须填写描述并保留至少一个取材盒', GROSS_LIMIT_REACHED: '开发记录数量已达到上限', GROSS_PHOTO_TOO_LARGE: '合成图像请求超过大小上限', GROSS_PHOTO_REJECTED: '仅接受随包合成PNG样本', GROSS_PHOTO_WITHDRAWN: '图像已撤回或记录已取消，禁止下载',
+    ARCHIVE_NOT_FOUND: '档案或本范围有效资格不可用', ARCHIVE_INPUT_INVALID: '请核对必填人工记录、期限和范围', ARCHIVE_IDENTITY_MISMATCH: '档案身份或位置核对不一致', ARCHIVE_BARCODE_MISMATCH: '条码不匹配，未操作该物品', ARCHIVE_LOCATION_OCCUPIED: '目标库位已占用或重复', ARCHIVE_ITEM_OCCUPIED: '该物品已预约或在借', ARCHIVE_ALREADY_REGISTERED: '来源已归档，请查看原档案项', ARCHIVE_LIMIT: '达到开发台账数量限制', ARCHIVE_STATE: '保管或借阅状态已变化，请刷新核对', ARCHIVE_SEPARATION: '申请人与审批人须为不同合格人员', ARCHIVE_OUTSTANDING: '仍有在借项，不能释放预约并结束', ARCHIVE_SOURCE_UNSUITABLE: '材料身份、QC或保管异常阻断借出', ARCHIVE_SNAPSHOT_STALE: '盘点依据已失效，请重新核对快照',
     WORKFLOW_DISABLED: '开发工作流未启用', VERSION_CONFLICT: '版本已变化，请刷新并复核',
     REQUEST_NOT_DRAFT: '当前申请不是可编辑草稿', REQUEST_INCOMPLETE: '请补齐病史、采样和各容器固定信息',
     DUPLICATE_REVIEW_REQUIRED: '同一就诊已有提交申请，需要人工复核，本版不允许绕过',

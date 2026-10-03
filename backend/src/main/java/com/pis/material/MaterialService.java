@@ -28,6 +28,13 @@ public class MaterialService {
     public MaterialService(JdbcTemplate jdbc,RequestService requests,WorkflowAccess access,ReceptionService reception,TechnicalService technical,LabelService labels,MaterialQueries queries,IdempotentCommands commands,Validator validator,com.pis.quality.QualityGate quality) {
         this.quality=quality; this.jdbc=jdbc; this.requests=requests; this.access=access; this.reception=reception; this.technical=technical; this.labels=labels; this.queries=queries; this.commands=commands; this.validator=validator;
     }
+    /** Authorized nonclinical custody projection; includes quarantined/void items without making them usable. */
+    public record ArchiveSource(UUID id,String kind,String barcode,long version,String status) { }
+    @Transactional(timeout=10)
+    public List<ArchiveSource> archiveSources(UUID rid) {
+        var q=requests.detail(rid); access.require(q.scopeId(),Permission.READ); reception.receivedSource(rid);
+        return jdbc.query("SELECT m.id,m.kind,m.barcode,m.version,CASE WHEN EXISTS(SELECT 1 FROM quality_head h WHERE h.request_id=m.request_id AND h.state='IDENTITY_MISMATCH') OR EXISTS(SELECT 1 FROM cytology_specimen s WHERE s.request_id=m.request_id AND s.qc_state='IDENTITY_MISMATCH') THEN 'IDENTITY_MISMATCH' WHEN m.state<>'ACTIVE' THEN m.state ELSE q.state END AS status FROM material_entity m JOIN workflow_quality_projection q ON q.id=m.id WHERE m.request_id=? ORDER BY m.id LIMIT 100",(r,i)->new ArchiveSource(r.getObject("id",UUID.class),r.getString("kind"),r.getString("barcode"),r.getLong("version"),r.getString("status")),rid);
+    }
     private record Context(com.pis.accession.RequestContracts.Detail request,ReceptionService.ReceivedSource received) { }
     private Context context(UUID rid) {
         var q=requests.detail(rid);

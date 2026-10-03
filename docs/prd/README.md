@@ -48,3 +48,5 @@
 [T24特殊染色/IHC开发PRD](development-staining-v1.md)已查看UI-013/017/018实际原型。单病例冻结成员、明确人工对照、版本化技术结果、新身份来源链及失效门禁；无厂商方案或临床推荐。见[ADR0014](../adr/0014-synthetic-stain-batches.md)和[本地交付记录](../api/t24-development-status.md)。
 
 [T25院内会诊/复阅开发PRD](development-consultation-v1.md)已查看UI-021实际原型，限定病例、目的与期限，汇总需人工处理及明确确认；非签署采纳保留原草稿。见[ADR0015](../adr/0015-case-scoped-consultation.md)及[交付记录](../api/t25-development-status.md)。
+
+[T26人工归档/借阅/盘点开发PRD](development-archive-v1.md)已查看UI-026/027实际图片，区分人工登记和未验证的物理事实，保留确切报告产物与不可变盘点历史，无销毁或外部分享。见[ADR0016](../adr/0016-manual-archive-custody.md)和[本地交付记录](../api/t26-development-status.md)。

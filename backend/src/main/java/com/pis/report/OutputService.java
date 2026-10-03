@@ -16,6 +16,13 @@ import static com.pis.report.OutputContracts.*;
 public class OutputService {
  private final JdbcTemplate jdbc;private final ReviewService reviews;private final IdempotentCommands commands;private final Validator validator;private final JsonMapper json;private final com.pis.accession.WorkflowAccess access;
  public OutputService(JdbcTemplate jdbc,ReviewService reviews,IdempotentCommands commands,Validator validator,JsonMapper json,com.pis.accession.WorkflowAccess access) { this.jdbc=jdbc;this.reviews=reviews;this.commands=commands;this.validator=validator;this.json=json;this.access=access; }
+ /** Metadata only; this does not authorize PDF bytes or grant report editing/signing. */
+ public record ArchiveArtifact(UUID id,UUID revisionId,long version,String sha256) { }
+ @Transactional(timeout=10) public List<ArchiveArtifact> archiveArtifacts(UUID request,UUID scope) {
+  access.require(scope,com.pis.accession.WorkflowAccess.Permission.READ);
+  if(jdbc.queryForObject("SELECT count(*) FROM request_workflow WHERE request_id=? AND scope_id=?",Long.class,request,scope)!=1)throw missing();
+  return jdbc.query("SELECT a.id,a.revision_id,a.version,a.sha256 FROM report_artifact a JOIN pathology_case c ON c.id=a.case_id WHERE c.request_id=? ORDER BY a.created_at,a.id LIMIT 100",(r,i)->new ArchiveArtifact(r.getObject("id",UUID.class),r.getObject("revision_id",UUID.class),r.getLong("version"),r.getString("sha256")),request);
+ }
  private static final String METADATA="SELECT id,case_id,version,signature_id,signature_version,revision_id,draft_version,template_code,template_version,schema_code,dependency_token,renderer_version,font_hash,sha256,byte_size,pages,created_at FROM report_artifact";
  private Artifact map(java.sql.ResultSet r,int i) throws java.sql.SQLException { return new Artifact(r.getObject("id",UUID.class),r.getObject("case_id",UUID.class),r.getLong("version"),r.getObject("signature_id",UUID.class),r.getLong("signature_version"),r.getObject("revision_id",UUID.class),r.getLong("draft_version"),r.getString("template_code"),r.getInt("template_version"),r.getString("schema_code"),r.getString("dependency_token"),r.getString("renderer_version"),r.getString("font_hash"),r.getString("sha256"),r.getInt("byte_size"),r.getInt("pages"),r.getObject("created_at",OffsetDateTime.class).toInstant()); }
  private Artifact find(UUID caseId,UUID signature) { var rows=jdbc.query(METADATA+" WHERE case_id=? AND signature_id=?",this::map,caseId,signature);return rows.isEmpty()?null:rows.getFirst(); }
