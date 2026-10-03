@@ -5,9 +5,9 @@ import { ReadController } from '../../shared/workflow';
 import { ReadPanel } from '../../shared/WorkflowElements';
 import { CommandIntent } from '../../shared/command';
 import { loadList, loadDetail, send, type Filter, type Command, type Detail } from './api';
-type Callbacks = { onDirty: () => void; onClean: () => void; onPending: (v: boolean) => void; onExpired: () => void };
+export type DiagnosisCallbacks = { onDirty: () => void; onClean: () => void; onPending: (v: boolean) => void; onExpired: () => void };
 function unavailable(e: unknown, expired: () => void) { if (e instanceof ApiError && e.status === 401) expired(); if (e instanceof ApiError && [403, 404].includes(e.status)) return { status: 'forbidden' as const, message: '诊断对象或范围不可用，或没有诊断授权。' }; throw e; }
-export function Diagnosis({ scopeId, ...callbacks }: Callbacks & { scopeId: string }) {
+export function Diagnosis({ scopeId, renderEditor, ...callbacks }: DiagnosisCallbacks & { scopeId: string; renderEditor?: (id: string, callbacks: DiagnosisCallbacks & { onSaved: () => void }) => React.ReactNode }) {
   const [filter, setFilter] = useState<Filter>({ page: 1, state: 'ALL' }), [selected, setSelected] = useState(''), [revision, setRevision] = useState(0), [dirty, setDirty] = useState(false), [pending, setPending] = useState(false), [confirming, setConfirming] = useState(false);
   const next = useRef<(() => void) | undefined>(undefined);
   const [reader] = useState(() => new ReadController(async (f: Filter, signal: AbortSignal) => { try { return { status: 'ready' as const, data: await loadList(scopeId, f, signal) }; } catch (e) { return unavailable(e, callbacks.onExpired); } }));
@@ -15,17 +15,17 @@ export function Diagnosis({ scopeId, ...callbacks }: Callbacks & { scopeId: stri
   function clean() { setDirty(false); callbacks.onClean(); }
   function change(action: () => void) { if (pending) return; if (dirty) { next.current = action; setConfirming(true); } else action(); }
   return <>
-    <Alert type="warning" title="诊断分配演练 · 仅合成资格与材料QC就绪病例" description="转交后须由受让人领取。不包含报告编辑、签署或发布；管理员不自动获得资格。" />
+    <Alert type="warning" title={renderEditor ? '合成报告草稿 · 仅当前已领取的合格医生可编辑' : '诊断分配演练 · 仅合成资格与材料QC就绪病例'} description={renderEditor ? '人工输入，保存受病例归属和QC门禁约束；无复核、签署或发送。' : '转交后须由受让人领取。不包含报告编辑、签署或发布；管理员不自动获得资格。'} />
     <label htmlFor="diagnosis-state">诊断队列状态</label><Select id="diagnosis-state" virtual={false} value={filter.state} disabled={pending} options={['ALL', 'UNASSIGNED', 'ASSIGNED', 'ACTIVE'].map(value => ({ value, label: value }))} onChange={v => change(() => { clean(); setSelected(''); setFilter({ page: 1, state: v }); })} />
     <Button disabled={pending} onClick={() => change(() => { clean(); setRevision(v => v + 1); void reader.run(filter); })}>刷新诊断队列与资格</Button>
     <ReadPanel state={state}>{data => <Table rowKey="caseId" dataSource={data.items} scroll={{ x: 1100 }} pagination={{ current: filter.page, pageSize: 10, total: data.total, showSizeChanger: false, disabled: pending, onChange: page => change(() => { clean(); setSelected(''); setFilter({ ...filter, page }); }) }} columns={[
-      { title: '病例 / 患者', key: 'identity', render: (_, i) => <span>{i.number}<br />{i.caseId}<br />患者 {i.patientId}</span> }, { title: '状态', dataIndex: 'state' }, { title: '版本', dataIndex: 'version' }, { title: '当前人员ID', dataIndex: 'ownerId' }, { title: '材料就绪', key: 'ready', render: (_, i) => i.ready ? '合成QC门禁通过' : '未就绪 / 隔离，禁止操作' }, { title: '操作', key: 'select', render: (_, i) => <Button disabled={pending} onClick={() => { if (selected !== i.caseId) change(() => { clean(); setSelected(i.caseId); }); }}>处理诊断分配 {i.caseId}</Button> },
+      { title: '病例 / 患者', key: 'identity', render: (_, i) => <span>{i.number}<br />{i.caseId}<br />患者 {i.patientId}</span> }, { title: '状态', dataIndex: 'state' }, { title: '版本', dataIndex: 'version' }, { title: '当前人员ID', dataIndex: 'ownerId' }, { title: '材料就绪', key: 'ready', render: (_, i) => i.ready ? '合成QC门禁通过' : '未就绪 / 隔离，禁止操作' }, { title: '操作', key: 'select', render: (_, i) => <Button disabled={pending} onClick={() => { if (selected !== i.caseId) change(() => { clean(); setSelected(i.caseId); }); }}>{renderEditor ? '编辑报告草稿 ' : '处理诊断分配 '}{i.caseId}</Button> },
     ]} />}</ReadPanel>
-    {selected && <Editor key={selected + ':' + revision} id={selected} {...callbacks} onDirty={() => { setDirty(true); callbacks.onDirty(); }} onPending={v => { setPending(v); callbacks.onPending(v); }} onSaved={() => { clean(); setRevision(v => v + 1); void reader.run(filter); }} />}
-    <Modal open={confirming} title="放弃未保存的诊断分配输入？" okText="放弃并切换" cancelText="继续编辑" onCancel={() => { next.current = undefined; setConfirming(false); }} onOk={() => { const action = next.current; next.current = undefined; setConfirming(false); action?.(); }}><p>切换后重新核对病例、人员和版本。</p></Modal>
+    {selected && <div key={selected + ':' + revision}>{renderEditor ? renderEditor(selected, { ...callbacks, onDirty: () => { setDirty(true); callbacks.onDirty(); }, onPending: v => { setPending(v); callbacks.onPending(v); }, onSaved: () => { clean(); setRevision(v => v + 1); void reader.run(filter); } }) : <Editor id={selected} {...callbacks} onDirty={() => { setDirty(true); callbacks.onDirty(); }} onPending={v => { setPending(v); callbacks.onPending(v); }} onSaved={() => { clean(); setRevision(v => v + 1); void reader.run(filter); }} />}</div>}
+    <Modal open={confirming} title={renderEditor ? '放弃未保存的报告草稿输入？' : '放弃未保存的诊断分配输入？'} okText="放弃并切换" cancelText="继续编辑" onCancel={() => { next.current = undefined; setConfirming(false); }} onOk={() => { const action = next.current; next.current = undefined; setConfirming(false); action?.(); }}><p>切换后重新核对病例、人员和版本。</p></Modal>
   </>;
 }
-function Editor({ id, onSaved, ...callbacks }: Callbacks & { id: string; onSaved: () => void }) {
+function Editor({ id, onSaved, ...callbacks }: DiagnosisCallbacks & { id: string; onSaved: () => void }) {
   const [reader] = useState(() => new ReadController(async (id: string, signal: AbortSignal) => { try { return { status: 'ready' as const, data: await loadDetail(id, signal) }; } catch (e) { return unavailable(e, callbacks.onExpired); } }));
   const state = useSyncExternalStore(reader.subscribe, reader.getSnapshot); useEffect(() => { void reader.run(id); return reader.stop; }, [reader, id]);
   return <ReadPanel state={state}>{detail => <>
@@ -36,7 +36,7 @@ function Editor({ id, onSaved, ...callbacks }: Callbacks & { id: string; onSaved
   </>}</ReadPanel>;
 }
 interface Values { confirmedId: string; target: string; reason: string }
-function AssignmentForm({ detail, onSaved, onDirty, onPending, onExpired }: Pick<Callbacks, 'onDirty' | 'onPending' | 'onExpired'> & { detail: Detail; onSaved: () => void }) {
+function AssignmentForm({ detail, onSaved, onDirty, onPending, onExpired }: Pick<DiagnosisCallbacks, 'onDirty' | 'onPending' | 'onExpired'> & { detail: Detail; onSaved: () => void }) {
   const [action, setAction] = useState('claim'), [next, setNext] = useState(''), [busy, setBusy] = useState(false), [uncertain, setUncertain] = useState(false), [message, setMessage] = useState('');
   const active = useRef(false), alive = useRef(true), original = useRef<Command | undefined>(undefined); const [intent] = useState(() => new CommandIntent<Command>()); const [form] = Form.useForm<Values>();
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);

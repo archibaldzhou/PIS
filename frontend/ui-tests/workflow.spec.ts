@@ -448,3 +448,45 @@ test('late diagnosis detail cannot replace the newly selected case', async ({ pa
   await page.getByRole('button', { name: '处理诊断分配 ' + b }).click(); await expect(page.getByLabel('诊断分配身份')).toContainText(b);
   release(); await finished; await expect(page.getByLabel('诊断分配身份')).toContainText(b); await expect(page.getByLabel('诊断分配身份')).not.toContainText(a);
 });
+
+test('report template cancel preserves draft; switch clears fields; uncertain save retries exact revision', async ({ page }) => {
+  await start(page); const id = '88888888-8888-4888-8888-888888888888'; let saved = false;
+  const item = { caseId: id, requestId: 'synthetic-request', patientId: encounter.patientId, number: 'SYN-REPORT', state: 'ACTIVE', version: 0, ownerId: 'synthetic-user', ready: true };
+  const templates = [{ code: 'SYN-REPORT', version: 1, title: '合成文本草稿', schemaCode: 'SYN-TEXT-1' }, { code: 'SYN-REPORT', version: 2, title: '合成结构草稿', schemaCode: 'SYN-STRUCTURED-2' }];
+  const fields = { gross: '', microscopy: '', diagnosis: '合成人工输入二', notes: '', sampleCount: 2, manualChecked: false };
+  const revision = { id: 'synthetic-revision', caseId: id, version: 0, templateCode: 'SYN-REPORT', templateVersion: 2, fields, assignmentVersion: 0, authorId: 'synthetic-user', reason: '合成修订', createdAt: '2026-10-03T00:00:00Z' };
+  await page.route('**/api/requests/diagnosis/scopes/*', r => r.fulfill({ json: { total: 1, page: 1, pageSize: 10, items: [item] } }));
+  await page.route('**/api/requests/reports/cases/' + id, r => r.fulfill({ json: { context: { ...item, assignmentVersion: 0 }, current: saved ? revision : null, templates } }));
+  await page.route('**/api/requests/reports/cases/' + id + '/history?*', r => r.fulfill({ json: { caseId: id, page: 1, revisions: saved ? [revision] : [] } }));
+  const sent: { body: unknown; key: string }[] = [];
+  await page.route('**/api/requests/reports/cases/' + id + '/draft', async r => { sent.push({ body: r.request().postDataJSON() as unknown, key: r.request().headers()['idempotency-key'] }); if (sent.length === 1) await r.abort('failed'); else { saved = true; await r.fulfill({ json: { receipt: { resourceId: id, resourceType: 'REPORT_DRAFT', status: 200, version: 0 }, replayed: true } }); } });
+  await page.getByRole('button', { name: '报告草稿', exact: true }).click(); await page.getByRole('button', { name: '编辑报告草稿 ' + id }).click();
+  await page.getByLabel('不可变模板版本').click(); await page.getByRole('option', { name: '合成文本草稿 / SYN-REPORT v1', exact: true }).click();
+  await page.getByLabel('诊断草稿（人工）').fill('合成人工输入一');
+  await page.getByLabel('不可变模板版本').click(); await page.getByRole('option', { name: '合成结构草稿 / SYN-REPORT v2', exact: true }).click();
+  await page.getByRole('button', { name: '保留当前草稿', exact: true }).click(); await expect(page.getByLabel('诊断草稿（人工）')).toHaveValue('合成人工输入一');
+  await page.getByLabel('不可变模板版本').click(); await page.getByRole('option', { name: '合成结构草稿 / SYN-REPORT v2', exact: true }).click(); await page.getByRole('button', { name: '清除并切换模板' }).click();
+  await expect(page.getByLabel('诊断草稿（人工）')).toHaveValue(''); await page.getByLabel('诊断草稿（人工）').fill('合成人工输入二'); await page.getByLabel('合成样本计数').fill('2');
+  await page.getByLabel('合成字段已人工核对').click(); await page.getByRole('option', { name: '否', exact: true }).click();
+  await page.getByLabel('核对报告病例 UUID').fill(id); await page.getByLabel('草稿修订原因').fill('合成修订');
+  await page.getByRole('button', { name: '保存人工草稿' }).dblclick(); await expect(page.getByRole('button', { name: '确认原草稿请求' })).toBeVisible(); expect(sent).toHaveLength(1);
+  await page.getByRole('button', { name: '申请单查询', exact: true }).click(); await expect(page.getByText('原请求结果尚未确认，请先使用页面上的原请求确认结果。')).toBeVisible();
+  await page.getByRole('button', { name: '确认原草稿请求' }).click(); await expect(page.getByLabel('报告草稿身份')).toContainText('草稿版本 0'); expect(sent[1]).toEqual(sent[0]);
+  await page.screenshot({ path: 'test-results/report-desktop.png', fullPage: true }); await page.setViewportSize({ width: 390, height: 844 }); await page.screenshot({ path: 'test-results/report-mobile.png', fullPage: true }); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('report case switch discards late responses and confirms dirty leave or cancellation', async ({ page }) => {
+  await start(page); const a = '88888888-8888-4888-8888-888888888888', b = '99999999-9999-4999-8999-999999999999';
+  const item = (id: string) => ({ caseId: id, requestId: 'request-' + id, patientId: encounter.patientId, number: 'SYN-' + id, state: 'ACTIVE', version: 0, ownerId: 'synthetic-user', ready: true });
+  const detail = (id: string) => ({ context: { ...item(id), assignmentVersion: 0 }, templates: [{ code: 'SYN-REPORT', version: 1, title: '合成文本', schemaCode: 'SYN-TEXT-1' }], current: { id: 'revision-' + id, caseId: id, version: 0, templateCode: 'SYN-REPORT', templateVersion: 1, assignmentVersion: 0, fields: { gross: '', microscopy: '', diagnosis: '合成原稿-' + id, notes: '' }, authorId: 'synthetic-user', reason: 'Synthetic', createdAt: '2026-10-03T00:00:00Z' } });
+  await page.route('**/api/requests/diagnosis/scopes/*', r => r.fulfill({ json: { total: 2, page: 1, pageSize: 10, items: [item(a), item(b)] } }));
+  for (const id of [a, b]) await page.route('**/api/requests/reports/cases/' + id + '/history?*', r => r.fulfill({ json: { caseId: id, page: 1, revisions: [] } }));
+  let release: () => void = () => {}; const hold = new Promise<void>(r => { release = r; }); let finish: () => void = () => {}; const finished = new Promise<void>(r => { finish = r; }); let slow = true;
+  await page.route('**/api/requests/reports/cases/' + a, async r => { if (slow) { slow = false; await hold; try { await r.fulfill({ json: detail(a) }); } finally { finish(); } } else await r.fulfill({ json: detail(a) }); });
+  await page.route('**/api/requests/reports/cases/' + b, r => r.fulfill({ json: detail(b) }));
+  await page.getByRole('button', { name: '报告草稿', exact: true }).click(); const started = page.waitForRequest(r => r.url().endsWith('/reports/cases/' + a)); await page.getByRole('button', { name: '编辑报告草稿 ' + a }).click(); await started;
+  await page.getByRole('button', { name: '编辑报告草稿 ' + b }).click(); await expect(page.getByLabel('报告草稿身份')).toContainText(b); release(); await finished; await expect(page.getByLabel('诊断草稿（人工）')).toHaveValue('合成原稿-' + b);
+  await page.getByLabel('诊断草稿（人工）').fill('合成未保存B'); await page.getByRole('button', { name: '编辑报告草稿 ' + a }).click(); await page.getByRole('button', { name: '继续编辑', exact: true }).click(); await expect(page.getByLabel('诊断草稿（人工）')).toHaveValue('合成未保存B');
+  await page.getByRole('button', { name: '编辑报告草稿 ' + a }).click(); await page.getByRole('button', { name: '放弃并切换', exact: true }).click(); await expect(page.getByLabel('诊断草稿（人工）')).toHaveValue('合成原稿-' + a);
+  await page.getByLabel('诊断草稿（人工）').fill('合成未保存A'); await page.getByRole('button', { name: '申请单查询', exact: true }).click(); await page.getByRole('button', { name: '继续编辑', exact: true }).click(); await expect(page.getByLabel('诊断草稿（人工）')).toHaveValue('合成未保存A');
+});

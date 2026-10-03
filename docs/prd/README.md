@@ -30,3 +30,5 @@
 [T15 工作列表、批量领取、合成超期与追踪开发规格](development-worklist-v1.md)仅聚合既有流程；当前页批量领取逐项独立校验。开发阈值不是医院TAT，未来模块不进入虚构统计。完整CI待核验。
 
 [T16 诊断分配、领取与转交开发 PRD](development-diagnosis-assignment-v1.md)依据用户本次明确范围，已查看 UI-019；独立合成人员资格与材料QC门禁。无T17报告/签署，按最新指示仅本地开发和中文提交，不等待GitHub。
+
+[T17结构化报告草稿开发PRD](development-report-drafts-v1.md)已对照授权UI-020实际图片；仅人工合成草稿，不含T18复核/签署/发送。

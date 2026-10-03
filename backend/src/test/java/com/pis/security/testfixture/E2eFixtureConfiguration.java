@@ -18,6 +18,7 @@ public class E2eFixtureConfiguration {
             insert(jdbc, encoder, value("PIS_E2E_HANDOFF_USERNAME", "synthetic.technician"), value("PIS_E2E_HANDOFF_PASSWORD", "Synthetic-handoff-only-42!"), "合成交接用户", true);
             insert(jdbc, encoder, value("PIS_E2E_WORKFLOW_USERNAME", "synthetic.workflow"),
                 value("PIS_E2E_WORKFLOW_PASSWORD", "Synthetic-workflow-only-42!"), "合成工作流用户", true);
+            jdbc.update("INSERT INTO report_template(code,version,title,schema_code) VALUES('SYN-REPORT',1,'合成文本草稿','SYN-TEXT-1'),('SYN-REPORT',2,'合成结构草稿','SYN-STRUCTURED-2')");
             workflow(jdbc, value("PIS_E2E_WORKFLOW_USERNAME", "synthetic.workflow"));
         };
     }
@@ -36,7 +37,7 @@ public class E2eFixtureConfiguration {
         jdbc.update("INSERT INTO diagnosis_grant(user_id,scope_id,can_assign,can_diagnose,qualification) SELECT g.user_id,g.scope_id,u.username=?,true,'SYN-DIAG-ASSIGNMENT-1' FROM workflow_grant g JOIN app_user u ON u.id=g.user_id WHERE g.scope_id=?",username,scope);
         jdbc.update("INSERT INTO patient(id,hospital_id,display_name) VALUES(?,?,'合成申请患者')",patient,hospital);
         jdbc.update("INSERT INTO encounter(hospital_id,patient_id,source_system_id,encounter_number,department_id) VALUES(?,?,?,'SYN-WORKFLOW-001',?)",hospital,patient,source,department);
-        for(var number:java.util.List.of("SYN-RECEIVE-001","SYN-RETURN-001","SYN-RESOLVE-001","SYN-LABEL-001","SYN-GROSS-001","SYN-TECH-001","SYN-MATERIAL-001","SYN-DIRECT-001","SYN-QC-001","SYN-WORKLIST-001","SYN-DIAGNOSIS-001")) {
+        for(var number:java.util.List.of("SYN-RECEIVE-001","SYN-RETURN-001","SYN-RESOLVE-001","SYN-LABEL-001","SYN-GROSS-001","SYN-TECH-001","SYN-MATERIAL-001","SYN-DIRECT-001","SYN-QC-001","SYN-WORKLIST-001","SYN-DIAGNOSIS-001","SYN-REPORT-001")) {
             // Independent patient/encounter per scenario; shared list still exercises exact resource selection.
             var scenarioPatient=java.util.UUID.randomUUID();
             jdbc.update("INSERT INTO patient(id,hospital_id,display_name) VALUES(?,?,'合成申请患者')",scenarioPatient,hospital);

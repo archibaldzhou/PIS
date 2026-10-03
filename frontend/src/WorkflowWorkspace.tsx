@@ -7,6 +7,7 @@ import { accessionApi, type AccessionApi, type RequestDetail } from './features/
 import { ReadController, type RequestReader, type RequestSummary } from './shared/workflow';
 import { ReadPanel } from './shared/WorkflowElements';
 import './workflow.css';
+import { ReportEditor } from './features/report/ReportEditor';
 import { Diagnosis } from './features/diagnosis/Diagnosis';
 import { Worklist } from './features/worklist/Worklist';
 import { Quality } from './features/quality/Quality';
@@ -16,7 +17,7 @@ import { Grossing } from './features/grossing/Grossing';
 import { Labels } from './features/labels/Labels';
 import { Reception } from './features/specimen/Reception';
 
-const pages = { requests: '申请单查询', registration: '病理申请录入', reception: '标本接收与异常', labels: '标签打印与重打', grossing: '取材记录与取材盒', technical: '技术任务与交接', materials: '蜡块与玻片谱系', quality: '技术QC与隔离', worklist: '工作列表与追踪', diagnosis: '诊断分配与领取' };
+const pages = { requests: '申请单查询', registration: '病理申请录入', reception: '标本接收与异常', labels: '标签打印与重打', grossing: '取材记录与取材盒', technical: '技术任务与交接', materials: '蜡块与玻片谱系', quality: '技术QC与隔离', worklist: '工作列表与追踪', diagnosis: '诊断分配与领取', report: '报告草稿' };
 type Page = keyof typeof pages;
 export function WorkflowWorkspace({ onClose, onLogout, onExpired, api = accessionApi }: {
   onClose: () => void; onLogout: () => void; onExpired: () => void; api?: AccessionApi;
@@ -94,6 +95,7 @@ export function WorkflowWorkspace({ onClose, onLogout, onExpired, api = accessio
         {values.length === 0 && <Alert type="warning" title="没有申请业务授权；病例权限不会自动授予申请权限" />}
       </div>}</ReadPanel>
       {scopeState.status !== 'ready' && <Button onClick={() => void scopes.run(null)}>重试加载范围</Button>}
+      {scope && page === 'report' && <Diagnosis key={scope} scopeId={scope} onDirty={() => setDirty(true)} onClean={() => setDirty(false)} onPending={v => { setUnresolved(v); if (!v) setNavWarning(''); }} onExpired={onExpired} renderEditor={(id, callbacks) => <ReportEditor id={id} {...callbacks} />} /> }
       {scope && page === 'diagnosis' && <Diagnosis key={scope} scopeId={scope} onDirty={() => setDirty(true)} onClean={() => setDirty(false)} onPending={value => { setUnresolved(value); if (!value) setNavWarning(''); }} onExpired={onExpired} />}
       {scope && page === 'worklist' && <Worklist key={scope} scopeId={scope} onDirty={() => setDirty(true)} onClean={() => setDirty(false)} onPending={setUnresolved} onExpired={onExpired} />}
       {scope && page === 'requests' && <RequestList key={scope} reader={reader} onSelect={selected => navigate('registration', selected)} />}

@@ -94,6 +94,13 @@ public class DiagnosisService {
    }
   });
  }
+ /** Public report boundary: current qualified ACTIVE holder only; caller rechecks after the request lock. */
+ public record ReportContext(UUID caseId,UUID requestId,UUID hospitalId,UUID patientId,String number,long assignmentVersion,boolean ready) { }
+ public ReportContext reportContext(UUID id) {
+  var c=context(id,Action.CLAIM);
+  if(!c.state().equals("ACTIVE")||!access.actor().id().equals(c.owner())) throw missing();
+  return new ReportContext(id,c.request(),c.hospital(),c.patient(),c.number(),c.version(),item(c,quality.diagnosisReadiness(List.of(id)).getOrDefault(id,false)).ready());
+ }
  private static ApiException missing() { return new ApiException(HttpStatus.NOT_FOUND,"DIAGNOSIS_NOT_FOUND","Diagnosis resource unavailable"); }
  private static ApiException conflict(String code) { return new ApiException(HttpStatus.CONFLICT,code,"Diagnosis command requires review"); }
 }

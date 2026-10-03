@@ -48,6 +48,7 @@ class RequestWorkflowTest {
     @Autowired com.pis.quality.QualityService quality;
     @Autowired com.pis.worklist.WorklistService worklist;
     @Autowired com.pis.diagnosis.DiagnosisService diagnosis;
+    @Autowired com.pis.report.ReportService reports;
     @Autowired WorkflowAccess workflowAccess;
     @Autowired jakarta.validation.Validator validator;
     @Autowired org.springframework.transaction.PlatformTransactionManager transactionManager;
@@ -1318,6 +1319,63 @@ class RequestWorkflowTest {
         assertThat(b.send("POST",path+"/claim",body,csrf,false).statusCode()).isEqualTo(200);
         assertThat(b.send("POST",path+"/sign",body,csrf,false).statusCode()).isEqualTo(404);
         assertThat(b.send("GET","/api/requests/diagnosis/scopes/"+f.scope+"?pageSize=51",null,null,false).statusCode()).isEqualTo(400);
+    }
+    private void reportTemplates() {
+        jdbc.update("INSERT INTO report_template(code,version,title,schema_code) VALUES('SYN-REPORT',1,'Synthetic text','SYN-TEXT-1'),('SYN-REPORT',2,'Synthetic structure','SYN-STRUCTURED-2') ON CONFLICT DO NOTHING");
+    }
+    private com.pis.report.ReportContracts.Save rs(UUID id,long version,int template,String text) {
+        var fields=tools.jackson.databind.json.JsonMapper.builder().build().readTree("{\"gross\":\"\",\"microscopy\":\"Synthetic manual\",\"diagnosis\":\""+text+"\",\"notes\":\"\""+(template==2?",\"sampleCount\":2,\"manualChecked\":false":"")+"}");
+        return new com.pis.report.ReportContracts.Save(version,0L,id,"SYN-REPORT",template,fields,"Synthetic manual revision");
+    }
+    @Test void reportDraftBindsImmutableTemplatesHistoryAndCurrentClaimedDoctor() {
+        reportTemplates();var f=new Fixture();var d=diagnosisSetup(f);var other=new Fixture();diagnosisGrant(other,f,false,true);
+        f.as(()->{ assertCode(()->reports.detail(d.caseId()),"DIAGNOSIS_NOT_FOUND");diagnosis.decide(d.caseId(),dd(d.caseId(),-1,null),"claim",com.pis.diagnosis.DiagnosisContracts.Action.CLAIM);
+            assertThat(reports.detail(d.caseId()).current()).isNull();reports.save(d.caseId(),rs(d.caseId(),-1,1,"Synthetic A"),"draft");
+            assertThat(reports.save(d.caseId(),rs(d.caseId(),-1,1,"Synthetic A"),"draft").replayed()).isTrue();
+            assertCode(()->reports.save(d.caseId(),rs(d.caseId(),-1,1,"Synthetic B"),"draft"),"IDEMPOTENCY_KEY_REUSED");
+            assertCode(()->reports.save(d.caseId(),rs(d.caseId(),-1,1,"Synthetic B"),"stale"),"VERSION_CONFLICT");
+            reports.save(d.caseId(),rs(d.caseId(),0,2,"Synthetic B"),"v2");
+            var history=reports.history(d.caseId(),1).revisions();assertThat(history).extracting(r->r.templateVersion()).containsExactly(2,1);assertThat(history.get(1).fields().get("diagnosis").stringValue()).isEqualTo("Synthetic A");
+            return null; });
+        other.as(()->{ assertCode(()->reports.detail(d.caseId()),"DIAGNOSIS_NOT_FOUND");assertCode(()->reports.save(d.caseId(),rs(d.caseId(),1,1,"Other"),"unauthorized"),"DIAGNOSIS_NOT_FOUND");return null; });
+        f.as(()->{ diagnosis.decide(d.caseId(),dd(d.caseId(),0,other.user),"transfer",com.pis.diagnosis.DiagnosisContracts.Action.TRANSFER);assertCode(()->reports.history(d.caseId(),1),"DIAGNOSIS_NOT_FOUND");assertCode(()->reports.save(d.caseId(),rs(d.caseId(),-1,1,"Synthetic A"),"draft"),"DIAGNOSIS_NOT_FOUND");return null; });
+        other.as(()->{ assertCode(()->reports.detail(d.caseId()),"DIAGNOSIS_NOT_FOUND");diagnosis.decide(d.caseId(),dd(d.caseId(),1,null),"accept",com.pis.diagnosis.DiagnosisContracts.Action.CLAIM);assertThat(reports.detail(d.caseId()).current().version()).isEqualTo(1);assertCode(()->reports.save(d.caseId(),rs(d.caseId(),1,1,"Changed"),"old-assignment"),"VERSION_CONFLICT");return null; });
+    }
+    @Test void reportQcAndAuditFailureCannotCommitPartialRevision() {
+        reportTemplates();var f=new Fixture();var d=diagnosisSetup(f);
+        f.as(()->{ diagnosis.decide(d.caseId(),dd(d.caseId(),-1,null),"claim",com.pis.diagnosis.DiagnosisContracts.Action.CLAIM);reports.save(d.caseId(),rs(d.caseId(),-1,1,"Original"),"draft");return null; });
+        jdbc.execute("CREATE FUNCTION reject_report_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.operation_code='REPORT_DRAFT_SAVE_V1' THEN RAISE EXCEPTION 'synthetic failure'; END IF; RETURN NEW; END $$");jdbc.execute("CREATE TRIGGER reject_report_audit BEFORE INSERT ON audit_event FOR EACH ROW EXECUTE FUNCTION reject_report_audit()");
+        try { f.as(()->{ assertThatThrownBy(()->reports.save(d.caseId(),rs(d.caseId(),0,2,"Changed"),"atomic")).isInstanceOf(org.springframework.dao.DataAccessException.class);return null; }); }
+        finally { jdbc.execute("DROP TRIGGER reject_report_audit ON audit_event");jdbc.execute("DROP FUNCTION reject_report_audit()"); }
+        f.as(()->{ assertThat(reports.detail(d.caseId()).current().version()).isZero();assertThat(reports.history(d.caseId(),1).revisions()).hasSize(1);reports.save(d.caseId(),rs(d.caseId(),0,2,"Changed"),"atomic");quality.decide(d.slide(),new com.pis.quality.QualityContracts.Decision(0L,d.slide(),"Synthetic revoked"),"revoke", "REVOKE");assertThat(reports.detail(d.caseId()).context().ready()).isFalse();assertCode(()->reports.save(d.caseId(),rs(d.caseId(),1,1,"Blocked"),"qc"),"DIAGNOSIS_NOT_READY");return null; });
+    }
+    @Test void concurrentReportRevisionsHaveOneWinnerAfterRealRequestLockWait() throws Exception {
+        reportTemplates();var f=new Fixture();var d=diagnosisSetup(f);f.as(()->diagnosis.decide(d.caseId(),dd(d.caseId(),-1,null),"claim",com.pis.diagnosis.DiagnosisContracts.Action.CLAIM));
+        try(var blocker=DB.connection();var executor=Executors.newVirtualThreadPerTaskExecutor()) {
+            blocker.setAutoCommit(false);try(var st=blocker.prepareStatement("SELECT id FROM pathology_request WHERE id=? FOR UPDATE")) {st.setObject(1,d.request());st.executeQuery().close();}
+            java.util.function.Function<String,String> run=key->f.as(()->{try {reports.save(d.caseId(),rs(d.caseId(),-1,1,key),key);return "SUCCESS";}catch(ApiException e){return e.code();}});
+            var a=executor.submit(()->run.apply("one"));var b=executor.submit(()->run.apply("two"));
+            try {long end=System.nanoTime()+TimeUnit.SECONDS.toNanos(2);boolean waiting=false;while(System.nanoTime()<end){if(jdbc.queryForObject("SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%SELECT id FROM pathology_request WHERE id=%'",Long.class)>=2){waiting=true;break;}Thread.sleep(10);}assertThat(waiting).isTrue();}finally{blocker.rollback();}
+            assertThat(List.of(a.get(5,TimeUnit.SECONDS),b.get(5,TimeUnit.SECONDS))).containsExactlyInAnyOrder("SUCCESS","VERSION_CONFLICT");
+        }
+        assertThat(f.as(()->reports.history(d.caseId(),1)).revisions()).hasSize(1);
+    }
+    @Test void reportHttpRequiresOwnerCsrfAndRejectsUnknownFieldsAndTemplateVersions() throws Exception {
+        reportTemplates();var f=new Fixture();var d=diagnosisSetup(f);f.as(()->diagnosis.decide(d.caseId(),dd(d.caseId(),-1,null),"claim",com.pis.diagnosis.DiagnosisContracts.Action.CLAIM));
+        var b=new Browser();String path="/api/requests/reports/cases/"+d.caseId();assertThat(b.send("GET",path,null,null,false).statusCode()).isEqualTo(401);
+        String password="Synthetic-report-http-42!";jdbc.update("UPDATE app_user SET password_hash=? WHERE id=?",encoder.encode(password),f.user);
+        String login="username="+f.principal.getUsername()+"&password="+java.net.URLEncoder.encode(password,java.nio.charset.StandardCharsets.UTF_8);
+        assertThat(b.send("POST","/api/auth/login",login,b.csrf(),true).statusCode()).isEqualTo(204);String csrf=b.csrf();
+        String body=tools.jackson.databind.json.JsonMapper.builder().build().writeValueAsString(rs(d.caseId(),-1,1,"Synthetic"));
+        assertThat(b.send("POST",path+"/draft",body,null,false).statusCode()).isEqualTo(403);
+        assertThat(b.send("POST",path+"/draft",body.replace("\"gross\":\"\"","\"gross\":1"),csrf,false).statusCode()).isEqualTo(400);
+        assertThat(b.send("POST",path+"/draft",body.replace("\"templateVersion\":1","\"templateVersion\":999"),csrf,false).statusCode()).isEqualTo(409);
+        assertThat(b.send("POST",path+"/draft",body.replace("\"reason\":","\"signed\":true,\"reason\":"),csrf,false).statusCode()).isEqualTo(400);
+        assertThat(b.send("POST",path+"/draft",body,csrf,false).statusCode()).isEqualTo(200);
+        assertThat(b.send("POST",path+"/draft",body,csrf,false).headers().firstValue("Idempotency-Replayed")).contains("true");
+        assertThat(b.send("POST",path+"/sign",body,csrf,false).statusCode()).isEqualTo(404);
+        jdbc.update("UPDATE diagnosis_grant SET revoked_at=statement_timestamp() WHERE user_id=?",f.user);
+        assertThat(b.send("GET",path,null,null,false).statusCode()).isEqualTo(404);assertThat(b.send("POST",path+"/draft",body,csrf,false).statusCode()).isEqualTo(404);
     }
     private String editResult(Fixture f,UUID id,String key) { return f.as(()->{ try { service.edit(id,new Edit(0L,COMPLETE),key); return "SUCCESS"; } catch(ApiException e) { return e.code(); } }); }
     private static void assertCode(Runnable action,String code) { assertThatThrownBy(action::run).isInstanceOfSatisfying(ApiException.class,e->assertThat(e.code()).isEqualTo(code)); }
