@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { TileQueue } from './tile-queue';
+import { TileQueue, viewerTransport } from './tile-queue';
 it('shares a fixed concurrency cap across main and navigator jobs and removes cancelled waiters', async () => {
  const queue = new TileQueue(2, 2); let active = 0, peak = 0, started = 0;
  const release: (() => void)[] = [];
@@ -20,4 +20,15 @@ it('releases capacity after failure and never starts an already aborted job', as
  const failed = queue.run(async () => { throw Error('Synthetic transport failure'); }, new AbortController().signal);
  const success = queue.run(async () => 42, new AbortController().signal);
  await expect(failed).rejects.toThrow('Synthetic transport failure'); await expect(success).resolves.toBe(42);
+});
+
+it('replacement views share capacity while old cancelled transports are still settling', async () => {
+ const old=new AbortController();let started=0;const release:(()=>void)[]=[];
+ const transport=()=>{started++;return new Promise<void>(resolve=>release.push(resolve));};
+ const oldJobs=Array.from({length:4},()=>viewerTransport.run(transport,old.signal));
+ await Promise.resolve();expect(started).toBe(4);old.abort();
+ const replacement=viewerTransport.run(transport,new AbortController().signal);
+ await Promise.resolve();expect(started).toBe(4);
+ const first=release.shift();if(!first)throw Error('Missing transport');first();await oldJobs[0];await Promise.resolve();await Promise.resolve();expect(started).toBe(5);
+ for(const done of release)done();await Promise.all([...oldJobs,replacement]);
 });

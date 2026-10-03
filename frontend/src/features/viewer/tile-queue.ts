@@ -1,4 +1,4 @@
-/** One view's main canvas and navigator share the same bounded queue. Never caches authorization. */
+/** Bounded transport work. Aborted active jobs retain capacity until their transport settles. */
 export class TileQueue {
  private active = 0;
  private waiting: (() => void)[] = [];
@@ -22,3 +22,7 @@ export class TileQueue {
   });
  }
 }
+
+// Shared across views and replacement instances: cancellation is not synchronous transport completion.
+// Pending closures are removed on cancellation/settlement; no tile or authorization cache.
+export const viewerTransport = new TileQueue(4, 80);

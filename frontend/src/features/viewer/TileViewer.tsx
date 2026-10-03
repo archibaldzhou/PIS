@@ -5,7 +5,7 @@ import { ApiError } from '../../api';
 import * as api from './api';
 import { RoiEditor } from './RoiEditor';
 import { RoiHistory } from './RoiHistory';
-import { TileQueue } from './tile-queue';
+import { viewerTransport } from './tile-queue';
 
 type Ready = { viewer: OpenSeadragon.Viewer; hash: string };
 export function TileViewer({ requestId, scanId, onExpired, onDirty, onClean, onPending }: { requestId: string; scanId: string; onExpired: () => void; onDirty: () => void; onClean: () => void; onPending: (v: boolean) => void }) {
@@ -27,7 +27,7 @@ function ImageView({ requestId, scanId, onExpired, onState, onReady, onViewport 
  const stop = useRef<(() => void) | undefined>(undefined);
  const element = useRef<HTMLDivElement>(null); const viewer = useRef<OpenSeadragon.Viewer | undefined>(undefined); const control = useRef<AbortController | undefined>(undefined); const [round, setRound] = useState(0); const [error, setError] = useState(''); const [status, setStatus] = useState('加载清单与授权'); const [manifest, setManifest] = useState<api.Manifest>(); const [pub, setPub] = useState<number>(); const [prepareNeeded, setPrepareNeeded] = useState(false); const [busy, setBusy] = useState(false); const [zoom, setZoom] = useState(''); const [position, setPosition] = useState(''); const key = useRef(crypto.randomUUID()); const write = useRef(false); const expired = useRef(onExpired); expired.current = onExpired;
  useEffect(() => {
-  const queue = new TileQueue();
+  const queue = viewerTransport;
   const root = new AbortController(); control.current = root; const jobs = new Map<OpenSeadragon.ImageJob, AbortController>(); let disposed = false; let instance: OpenSeadragon.Viewer | undefined; let timer: ReturnType<typeof setInterval> | undefined; let checking = false; let failed = false; let tileFailure: unknown;
   function destroy() { setOsd(undefined); callbacks.current.onReady(); if (instance) { instance.destroy(); instance = undefined; viewer.current = undefined; } for (const c of jobs.values()) c.abort(); jobs.clear(); element.current?.replaceChildren(); }
   stop.current = () => { root.abort(); if (timer) clearInterval(timer); destroy(); };
