@@ -2045,4 +2045,89 @@ class RequestWorkflowTest {
         f.as(()->{assertThat(archives.view(d.request(),null,1).loans().getFirst().state()).isEqualTo("CLOSED");return null;});
     }
 
+    @Autowired com.pis.statistics.StatisticsService statistics;
+    private void statisticsGrant(Fixture f,boolean all,boolean drill) {
+        jdbc.update("INSERT INTO statistics_grant(user_id,scope_id,qualification,all_requests,can_drill,can_report,valid_until) VALUES(?,?,'SYN-STATS-1',?,?,true,statement_timestamp()+interval '1 day')",f.user,f.scope,all,drill);
+    }
+    private com.pis.statistics.StatisticsContracts.Query statisticsQuery(){var now=java.time.LocalDate.now(java.time.ZoneOffset.UTC);return new com.pis.statistics.StatisticsContracts.Query(now.minusDays(1),now,"UTC");}
+    private com.pis.statistics.StatisticsContracts.View statisticsView(Fixture f,UUID id,com.pis.statistics.StatisticsContracts.Metric metric){return statistics.view(f.scope,id,metric,com.pis.statistics.StatisticsContracts.Sort.ENTITY,1);}
+    @Test void statisticsScopesBeforeAggregatingAndRevocationBlocksSavedTotalsAndReplay(){
+        var f=new Fixture();var a=grossRequest(f);statisticsGrant(f,false,true);
+        f.as(()->{var empty=statistics.create(f.scope,statisticsQuery(),"empty").receipt().resourceId();assertThat(statisticsView(f,empty,null).summaries()).allMatch(x->x.cohort()==0);return null;});
+        jdbc.update("INSERT INTO statistics_resource_grant(user_id,scope_id,request_id,valid_until) VALUES(?,?,?,statement_timestamp()+interval '1 day')",f.user,f.scope,a);
+        UUID id=f.as(()->statistics.create(f.scope,statisticsQuery(),"allowed").receipt().resourceId());
+        f.as(()->{var v=statisticsView(f,id,com.pis.statistics.StatisticsContracts.Metric.RECEPTION);assertThat(v.total()).isEqualTo(1);assertThat(v.facts()).allMatch(x->x.requestId().equals(a)&&x.status().equals("COMPLETED"));assertThat(statistics.create(f.scope,statisticsQuery(),"allowed").replayed()).isTrue();return null;});
+        var foreign=new Fixture();statisticsGrant(foreign,true,true);foreign.as(()->{assertCode(()->statistics.view(f.scope,id,null,com.pis.statistics.StatisticsContracts.Sort.ENTITY,1),"STATISTICS_NOT_FOUND");return null;});
+        jdbc.update("UPDATE statistics_resource_grant SET revoked_at=statement_timestamp() WHERE user_id=?",f.user);
+        f.as(()->{assertCode(()->statisticsView(f,id,null),"STATISTICS_NOT_FOUND");assertCode(()->statistics.create(f.scope,statisticsQuery(),"allowed"),"STATISTICS_NOT_FOUND");return null;});
+    }
+    @Test void statisticsFixedSnapshotDeduplicatesRetriesAndProtectsHistory(){
+        var f=new Fixture();var request=grossRequest(f);statisticsGrant(f,true,true);
+        f.as(()->{var id=statistics.create(f.scope,statisticsQuery(),"snapshot").receipt().resourceId();var before=statisticsView(f,id,com.pis.statistics.StatisticsContracts.Metric.RECEPTION);assertThat(before.total()).isEqualTo(1);
+            assertThat(statistics.create(f.scope,statisticsQuery(),"snapshot").receipt().resourceId()).isEqualTo(id);
+            assertThatThrownBy(()->jdbc.update("UPDATE statistics_fact SET status='UNKNOWN' WHERE snapshot_id=?",id)).isInstanceOf(org.springframework.dao.DataAccessException.class);
+            assertThatThrownBy(()->jdbc.update("DELETE FROM statistics_snapshot WHERE id=?",id)).isInstanceOf(org.springframework.dao.DataAccessException.class);
+            assertThat(before.facts().getFirst().requestId()).isEqualTo(request);return null;});
+    }
+    @Test void statisticsQcSnapshotRetainsOldEvidenceWhileNewSnapshotReflectsRevocation(){
+        var f=new Fixture();var d=diagnosisSetup(f);statisticsGrant(f,true,true);
+        f.as(()->{var id=statistics.create(f.scope,statisticsQuery(),"qc-before").receipt().resourceId();var before=statisticsView(f,id,com.pis.statistics.StatisticsContracts.Metric.QC);assertThat(before.facts()).hasSize(1);assertThat(before.facts().getFirst().status()).isEqualTo("PASS");
+            var h=quality.detail(d.slide());quality.decide(d.slide(),new com.pis.quality.QualityContracts.Decision(h.item().head().version(),d.slide(),"Synthetic revoke"),"stats-revoke","REVOKE");
+            assertThat(statisticsView(f,id,com.pis.statistics.StatisticsContracts.Metric.QC).facts()).isEqualTo(before.facts());
+            var next=statistics.create(f.scope,statisticsQuery(),"qc-after").receipt().resourceId();assertThat(statisticsView(f,next,com.pis.statistics.StatisticsContracts.Metric.QC).facts().getFirst().status()).isEqualTo("UNKNOWN");return null;});
+    }
+    @Test void statisticsAuditFailureRollsBackSnapshotAndPreservesRetryKey(){
+        var f=new Fixture();grossRequest(f);statisticsGrant(f,true,false);
+        jdbc.execute("CREATE FUNCTION reject_statistics_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.operation_code='STATISTICS_SNAPSHOT_V1' THEN RAISE EXCEPTION 'Synthetic outage'; END IF; RETURN NEW; END $$");jdbc.execute("CREATE TRIGGER reject_statistics_audit BEFORE INSERT ON audit_event FOR EACH ROW EXECUTE FUNCTION reject_statistics_audit()");
+        try{f.as(()->{assertThatThrownBy(()->statistics.create(f.scope,statisticsQuery(),"atomic-statistics")).isInstanceOf(org.springframework.dao.DataAccessException.class);assertThat(jdbc.queryForObject("SELECT count(*) FROM statistics_snapshot WHERE actor_id=?",Long.class,f.user)).isZero();return null;});}finally{jdbc.execute("DROP TRIGGER reject_statistics_audit ON audit_event");jdbc.execute("DROP FUNCTION reject_statistics_audit()");}
+        f.as(()->{var id=statistics.create(f.scope,statisticsQuery(),"atomic-statistics").receipt().resourceId();assertThat(statisticsView(f,id,null).canDrill()).isFalse();assertCode(()->statisticsView(f,id,com.pis.statistics.StatisticsContracts.Metric.RECEPTION),"STATISTICS_NOT_FOUND");return null;});
+    }
+
+    @Test void statisticsConcurrentSameKeyFreezesOneSnapshot() throws Exception {
+        var f=new Fixture();grossRequest(f);statisticsGrant(f,true,true);var query=statisticsQuery();
+        try(var pool=Executors.newVirtualThreadPerTaskExecutor()){
+            var ready=new java.util.concurrent.CountDownLatch(2);var go=new java.util.concurrent.CountDownLatch(1);
+            java.util.concurrent.Callable<com.pis.idempotency.IdempotentCommands.Result> task=()->{ready.countDown();if(!go.await(3,TimeUnit.SECONDS))throw new AssertionError("Synthetic barrier timeout");return f.as(()->statistics.create(f.scope,query,"parallel-stats"));};
+            var a=pool.submit(task);var b=pool.submit(task);assertThat(ready.await(3,TimeUnit.SECONDS)).isTrue();go.countDown();var first=a.get(8,TimeUnit.SECONDS);var second=b.get(8,TimeUnit.SECONDS);
+            assertThat(first.receipt()).isEqualTo(second.receipt());assertThat(first.replayed()).isNotEqualTo(second.replayed());
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM statistics_snapshot WHERE actor_id=?",Long.class,f.user)).isEqualTo(1);
+        }
+    }
+    @Test void statisticsHttpRequiresCsrfStrictFilterAndCurrentScope() throws Exception {
+        var f=new Fixture();grossRequest(f);statisticsGrant(f,true,true);var browser=new Browser();
+        String password="Synthetic-statistics-http-42!";jdbc.update("UPDATE app_user SET password_hash=? WHERE id=?",encoder.encode(password),f.user);
+        assertThat(browser.send("POST","/api/auth/login","username="+f.principal.getUsername()+"&password="+java.net.URLEncoder.encode(password,java.nio.charset.StandardCharsets.UTF_8),browser.csrf(),true).statusCode()).isEqualTo(204);
+        String path="/api/requests/statistics/scopes/"+f.scope;var query=statisticsQuery();String body="{\"from\":\""+query.from()+"\",\"to\":\""+query.to()+"\",\"zone\":\"UTC\"}";String csrf=browser.csrf();
+        assertHttpError(browser.send("POST",path,body,null,false),403,"CSRF_INVALID");
+        assertThat(browser.send("POST",path,body.replace("UTC","Invalid/Zone"),csrf,false).statusCode()).isEqualTo(400);
+        assertThat(browser.send("POST",path,body.replace("\"zone\":","\"allRequests\":true,\"zone\":"),csrf,false).statusCode()).isEqualTo(400);
+        var created=browser.send("POST",path,body,csrf,false);assertThat(created.statusCode()).as("Synthetic statistics response: %s",created.body()).isEqualTo(200);
+        String id=tools.jackson.databind.json.JsonMapper.builder().build().readTree(created.body()).path("receipt").path("resourceId").stringValue();
+        assertThat(browser.send("GET",path+"/"+id+"?page=251",null,null,false).statusCode()).isEqualTo(400);
+        assertThat(browser.send("GET",path+"/"+id+"?sort=UNBOUNDED",null,null,false).statusCode()).isEqualTo(400);
+        assertThat(browser.send("GET",path+"/"+id,null,null,false).statusCode()).isEqualTo(200);
+        jdbc.update("UPDATE statistics_grant SET valid_until=statement_timestamp()-interval '1 second' WHERE user_id=?",f.user);
+        assertThat(browser.send("GET",path+"/"+id,null,null,false).statusCode()).isEqualTo(404);
+        assertThat(browser.send("POST",path,body,csrf,false).statusCode()).isEqualTo(404);
+    }
+
+    @Test void statisticsConcurrentSourceRevocationCannotSplitSavedSummaryAndDrill() throws Exception {
+        var f=new Fixture();var d=diagnosisSetup(f);statisticsGrant(f,true,true);
+        var id=f.as(()->statistics.create(f.scope,statisticsQuery(),"read-race").receipt().resourceId());
+        var before=f.as(()->statisticsView(f,id,com.pis.statistics.StatisticsContracts.Metric.QC));
+        try(var pool=Executors.newVirtualThreadPerTaskExecutor()){
+            var go=new java.util.concurrent.CountDownLatch(1);
+            var read=pool.submit(()->{if(!go.await(3,TimeUnit.SECONDS))throw new AssertionError("Synthetic read barrier");return f.as(()->statisticsView(f,id,com.pis.statistics.StatisticsContracts.Metric.QC));});
+            var write=pool.submit(()->{if(!go.await(3,TimeUnit.SECONDS))throw new AssertionError("Synthetic write barrier");return f.as(()->quality.decide(d.slide(),qd(d.slide(),0),"stats-race-revoke","REVOKE"));});
+            go.countDown();var during=read.get(8,TimeUnit.SECONDS);write.get(8,TimeUnit.SECONDS);
+            assertThat(during.factsHash()).isEqualTo(before.factsHash());assertThat(during.summaries()).isEqualTo(before.summaries());assertThat(during.facts()).isEqualTo(before.facts());
+        }
+        f.as(()->{var next=statistics.create(f.scope,statisticsQuery(),"race-after").receipt().resourceId();assertThat(statisticsView(f,next,com.pis.statistics.StatisticsContracts.Metric.QC).facts().getFirst().status()).isEqualTo("UNKNOWN");return null;});
+    }
+
+    @Test void statisticsReturnedRequestIsExcludedRatherThanOpenOrZeroTat(){
+        var f=new Fixture();var request=submitted(f);receptionGrant(f);statisticsGrant(f,true,true);
+        f.as(()->{reception.exception(request,new com.pis.specimen.ReceptionContracts.ExceptionInput(1L,com.pis.specimen.ReceptionContracts.Category.INFORMATION,"Synthetic missing information"),"stats-exception");reception.sendBack(request,new com.pis.specimen.ReceptionContracts.Decision(2L,"Synthetic return"),"stats-return");var id=statistics.create(f.scope,statisticsQuery(),"returned-statistics").receipt().resourceId();var view=statisticsView(f,id,com.pis.statistics.StatisticsContracts.Metric.RECEPTION);assertThat(view.facts().getFirst().status()).isEqualTo("EXCLUDED");assertThat(view.facts().getFirst().durationSeconds()).isNull();assertThat(view.facts().getFirst().endEvent()).isNotNull();return null;});
+    }
+
 }

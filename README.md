@@ -154,3 +154,5 @@ T24 已增加特殊染色/IHC合成批次、不可变项目/方案版本、逐�
 T25 已增加院内合成会诊/复阅：病例限时参与、版本化个人意见、明确汇总与分歧、独立确认及非签署草稿追加采纳。实际证据和后端/真实E2E/CI阻塞见[T25本地交付记录](docs/api/t25-development-status.md)。
 
 T26 已实现合成人工档案、排他预约、逐项借还及冻结盘点/差异更正，报告绑定原不可变产物；无物理确认、外发或销毁。完整后端与真实E2E未验证，见[T26本地交付记录](docs/api/t26-development-status.md)。
+
+T27 已实现合成工作量/TAT/QC固定统计快照与同权限来源下钻，默认开发开关关闭，无CSV或对外投递；见[指标开发PRD](docs/prd/development-statistics-v1.md)及[接口/本地验证边界](docs/api/t27-statistics.md)。本次验证分支完整CI待核验，尚未并入main。

@@ -50,3 +50,5 @@
 [T25院内会诊/复阅开发PRD](development-consultation-v1.md)已查看UI-021实际原型，限定病例、目的与期限，汇总需人工处理及明确确认；非签署采纳保留原草稿。见[ADR0015](../adr/0015-case-scoped-consultation.md)及[交付记录](../api/t25-development-status.md)。
 
 [T26人工归档/借阅/盘点开发PRD](development-archive-v1.md)已查看UI-026/027实际图片，区分人工登记和未验证的物理事实，保留确切报告产物与不可变盘点历史，无销毁或外部分享。见[ADR0016](../adr/0016-manual-archive-custody.md)和[本地交付记录](../api/t26-development-status.md)。
+
+[T27工作量/TAT/QC统计PRD](development-statistics-v1.md)已查看UI-028/031实际图片。授权优先、固定快照、自然时长、开放病例单列及来源下钻，不包含CSV或对外投递。见[ADR0017](../adr/0017-authorized-statistics-snapshots.md)及[接口与验证记录](../api/t27-statistics.md)。
