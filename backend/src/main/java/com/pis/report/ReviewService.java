@@ -81,6 +81,20 @@ public class ReviewService {
    }
   });
  }
+ record Frozen(com.pis.diagnosis.DiagnosisService.ReviewContext context,ReportContracts.Revision revision,UUID signatureId,long signatureVersion,UUID reviewId,String dependencyToken,String schemaCode,boolean dependenciesCurrent) { }
+ com.pis.diagnosis.DiagnosisService.ReviewContext outputAccess(UUID id) { return authorize(id,null); }
+ @Transactional(timeout=10) public Frozen outputFrozen(UUID id) {
+  var c=outputAccess(id);jdbc.queryForList("SELECT id FROM pathology_request WHERE id=? FOR SHARE",c.requestId());return outputFrozenLocked(id);
+ }
+ Frozen outputFrozenLocked(UUID id) {
+  var c=outputAccess(id);var h=head(id);if(h==null||h.event().action()!=Action.SIMULATE_SIGN) throw conflict("REPORT_OUTPUT_NOT_FROZEN");
+  var draft=reports.current(id);if(draft==null||!h.event().revisionId().equals(draft.id())) throw conflict("REPORT_OUTPUT_NOT_FROZEN");
+  var original=jdbc.query("SELECT * FROM report_review_event WHERE case_id=? AND id=?",this::map,id,h.event().reviewId()).getFirst();
+  String token=token(c,draft,policy(c.scopeId()));var signer=grant(c.scopeId(),h.event().actorId());
+  boolean current=c.ready()&&h.dependencies().equals(token)&&valid(original,token,c.scopeId())&&signer.sign()&&signer.snapshot().equals(h.actorSnapshot());
+  String schema=jdbc.queryForObject("SELECT schema_code FROM report_template WHERE code=? AND version=?",String.class,draft.templateCode(),draft.templateVersion());
+  return new Frozen(c,draft,h.event().id(),h.event().version(),h.event().reviewId(),h.dependencies(),schema,current);
+ }
  private static ApiException missing() { return new ApiException(HttpStatus.NOT_FOUND,"REPORT_REVIEW_NOT_FOUND","Synthetic review unavailable"); }
  private static ApiException conflict(String code) { return new ApiException(HttpStatus.CONFLICT,code,"Synthetic review requires current authorization and snapshot"); }
 }

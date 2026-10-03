@@ -1486,6 +1486,83 @@ class RequestWorkflowTest {
         var disabled=new Fixture();var other=diagnosisSetup(disabled);reviewGrant(disabled,disabled);
         disabled.as(()->{assertCode(()->reviews.detail(other.caseId()),"REPORT_REVIEW_DISABLED");return null;});
     }
+    @org.springframework.beans.factory.annotation.Autowired com.pis.report.OutputService outputs;
+    private DiagnosisSetup outputSetup(Fixture f) {
+        var d=reviewSetup(f,false,false);jdbc.update("UPDATE workflow_grant SET can_print=true,can_reprint=true WHERE user_id=? AND scope_id=?",f.user,f.scope);
+        f.as(()->{reviews.decide(d.caseId(),rd(d.caseId(),false),"output-review",com.pis.report.ReviewContracts.Action.APPROVE);reviews.decide(d.caseId(),rd(d.caseId(),true),"output-simulate",com.pis.report.ReviewContracts.Action.SIMULATE_SIGN);return null;});return d;
+    }
+    private com.pis.report.OutputContracts.Create oc(UUID id) { var d=outputs.detail(id);return new com.pis.report.OutputContracts.Create(id,d.signatureId(),d.signatureVersion(),d.revisionId(),"Synthetic fixed artifact"); }
+    private com.pis.report.OutputContracts.Operation oo(UUID id,UUID request) { var d=outputs.detail(id);var a=d.artifact();return new com.pis.report.OutputContracts.Operation(id,0L,a.sha256(),d.activityVersion(),request,"Synthetic output event"); }
+    @Test void fixedPdfRepeatedAccessReprintAndSelfReportKeepSameBytesAndImmutableBinding() {
+        var f=new Fixture();var d=outputSetup(f);
+        f.as(()->{
+            var command=oc(d.caseId());var first=outputs.create(d.caseId(),command,"generate");var artifact=first.receipt().resourceId();
+            assertThat(outputs.create(d.caseId(),command,"generate").replayed()).isTrue();assertThat(outputs.create(d.caseId(),command,"ensure-existing").receipt().resourceId()).isEqualTo(artifact);
+            var op=oo(d.caseId(),null);var preview=outputs.bytes(d.caseId(),artifact,op,"preview",com.pis.report.OutputContracts.Kind.PREVIEW);var replay=outputs.bytes(d.caseId(),artifact,op,"preview",com.pis.report.OutputContracts.Kind.PREVIEW);assertThat(replay.replayed()).isTrue();assertThat(preview.bytes()).isEqualTo(replay.bytes());assertThat(com.pis.report.SyntheticPdf.sha256(preview.bytes())).isEqualTo(preview.artifact().sha256());
+            var download=outputs.bytes(d.caseId(),artifact,oo(d.caseId(),null),"download",com.pis.report.OutputContracts.Kind.DOWNLOAD);assertThat(download.bytes()).isEqualTo(preview.bytes());
+            var print=outputs.record(d.caseId(),artifact,oo(d.caseId(),null),"print",com.pis.report.OutputContracts.Kind.PRINT_REQUEST).receipt().resourceId();
+            var self=outputs.record(d.caseId(),artifact,oo(d.caseId(),print),"self",com.pis.report.OutputContracts.Kind.USER_REPORTED_PRINTED);assertThat(self.receipt().version()).isEqualTo(3);
+            assertCode(()->outputs.record(d.caseId(),artifact,oo(d.caseId(),print),"contradiction",com.pis.report.OutputContracts.Kind.USER_REPORTED_FAILED),"REPORT_PRINT_RESULT_EXISTS");
+            outputs.record(d.caseId(),artifact,oo(d.caseId(),print),"reprint",com.pis.report.OutputContracts.Kind.REPRINT_REQUEST);
+            assertThat(outputs.history(d.caseId(),artifact,1).events()).hasSize(5);assertThat(outputs.detail(d.caseId()).artifact().sha256()).isEqualTo(preview.artifact().sha256());return null;
+        });
+        assertThatThrownBy(()->jdbc.update("UPDATE report_artifact SET pdf=convert_to('changed','UTF8') WHERE case_id=?",d.caseId())).isInstanceOf(org.springframework.dao.DataAccessException.class);
+        assertThatThrownBy(()->jdbc.update("DELETE FROM report_artifact WHERE case_id=?",d.caseId())).isInstanceOf(org.springframework.dao.DataAccessException.class);
+        assertThatThrownBy(()->jdbc.update("UPDATE report_output_event SET reason='Changed' WHERE artifact_id IN (SELECT id FROM report_artifact WHERE case_id=?)",d.caseId())).isInstanceOf(org.springframework.dao.DataAccessException.class);
+    }
+    @Test void outputCurrentScopePrintRightsOwnResultAndQcAreEnforcedWithoutRegeneratingHistory() {
+        var f=new Fixture();var d=outputSetup(f);var other=new Fixture();reviewGrant(other,f);var foreign=new Fixture();
+        UUID artifact=f.as(()->outputs.create(d.caseId(),oc(d.caseId()),"create").receipt().resourceId());
+        foreign.as(()->{assertCode(()->outputs.detail(d.caseId()),"DIAGNOSIS_NOT_FOUND");return null;});
+        var original=f.as(()->outputs.record(d.caseId(),artifact,oo(d.caseId(),null),"print",com.pis.report.OutputContracts.Kind.PRINT_REQUEST).receipt().resourceId());
+        other.as(()->{assertCode(()->outputs.record(d.caseId(),artifact,oo(d.caseId(),null),"no-print",com.pis.report.OutputContracts.Kind.PRINT_REQUEST),"REPORT_OUTPUT_NOT_FOUND");return null;});
+        jdbc.update("UPDATE workflow_grant SET can_print=true,can_reprint=true WHERE user_id=? AND scope_id=?",other.user,f.scope);
+        other.as(()->{assertCode(()->outputs.record(d.caseId(),artifact,oo(d.caseId(),original),"not-mine",com.pis.report.OutputContracts.Kind.USER_REPORTED_PRINTED),"REPORT_OUTPUT_NOT_FOUND");return null;});
+        f.as(()->{quality.decide(d.slide(),new com.pis.quality.QualityContracts.Decision(0L,d.slide(),"Synthetic withdrawn"),"revoke-output","REVOKE");assertThat(outputs.detail(d.caseId()).dependenciesCurrent()).isFalse();assertCode(()->outputs.record(d.caseId(),artifact,oo(d.caseId(),null),"stale-print",com.pis.report.OutputContracts.Kind.PRINT_REQUEST),"REPORT_OUTPUT_STALE");assertThat(outputs.bytes(d.caseId(),artifact,oo(d.caseId(),null),"historical",com.pis.report.OutputContracts.Kind.DOWNLOAD).bytes()).isNotEmpty();return null;});
+        jdbc.update("UPDATE report_review_grant SET revoked_at=statement_timestamp() WHERE user_id=?",f.user);
+        f.as(()->{assertCode(()->outputs.history(d.caseId(),artifact,1),"REPORT_REVIEW_NOT_FOUND");return null;});
+    }
+    @Test void outputCreationAndAccessAuditFailuresRollbackArtifactHistoryAndReceipts() {
+        var f=new Fixture();var d=outputSetup(f);var input=f.as(()->oc(d.caseId()));
+        jdbc.execute("CREATE FUNCTION reject_output_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.operation_code LIKE 'REPORT_ARTIFACT_%' OR NEW.operation_code LIKE 'REPORT_OUTPUT_%' THEN RAISE EXCEPTION 'synthetic audit outage'; END IF; RETURN NEW; END $$");jdbc.execute("CREATE TRIGGER reject_output_audit BEFORE INSERT ON audit_event FOR EACH ROW EXECUTE FUNCTION reject_output_audit()");
+        try {f.as(()->{assertThatThrownBy(()->outputs.create(d.caseId(),input,"atomic-create")).isInstanceOf(org.springframework.dao.DataAccessException.class);assertThat(outputs.detail(d.caseId()).artifact()).isNull();return null;});}
+        finally {jdbc.execute("DROP TRIGGER reject_output_audit ON audit_event");}
+        UUID artifact=f.as(()->outputs.create(d.caseId(),input,"atomic-create").receipt().resourceId());var op=f.as(()->oo(d.caseId(),null));
+        jdbc.execute("CREATE TRIGGER reject_output_audit BEFORE INSERT ON audit_event FOR EACH ROW EXECUTE FUNCTION reject_output_audit()");
+        try {f.as(()->{assertThatThrownBy(()->outputs.bytes(d.caseId(),artifact,op,"atomic-read",com.pis.report.OutputContracts.Kind.PREVIEW)).isInstanceOf(org.springframework.dao.DataAccessException.class);assertThat(outputs.detail(d.caseId()).activityVersion()).isEqualTo(-1);assertThat(outputs.history(d.caseId(),artifact,1).events()).isEmpty();return null;});}
+        finally {jdbc.execute("DROP TRIGGER reject_output_audit ON audit_event");jdbc.execute("DROP FUNCTION reject_output_audit()");}
+        f.as(()->{assertThat(outputs.bytes(d.caseId(),artifact,op,"atomic-read",com.pis.report.OutputContracts.Kind.PREVIEW).bytes()).isNotEmpty();return null;});
+    }
+    @Test void concurrentArtifactCreationKeepsOneBlobAndConcurrentPrintRequestsHaveOneCasWinner() throws Exception {
+        var f=new Fixture();var d=outputSetup(f);var input=f.as(()->oc(d.caseId()));
+        try(var executor=Executors.newVirtualThreadPerTaskExecutor()) {
+            var a=executor.submit(()->f.as(()->outputs.create(d.caseId(),input,"create-one").receipt().resourceId()));var b=executor.submit(()->f.as(()->outputs.create(d.caseId(),input,"create-two").receipt().resourceId()));assertThat(a.get(10,TimeUnit.SECONDS)).isEqualTo(b.get(10,TimeUnit.SECONDS));
+        }
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM report_artifact WHERE case_id=?",Long.class,d.caseId())).isEqualTo(1);
+        var op=f.as(()->oo(d.caseId(),null));var artifact=f.as(()->outputs.detail(d.caseId()).artifact().id());
+        try(var blocker=DB.connection();var executor=Executors.newVirtualThreadPerTaskExecutor()) {
+            blocker.setAutoCommit(false);try(var st=blocker.prepareStatement("SELECT id FROM pathology_request WHERE id=? FOR UPDATE")){st.setObject(1,d.request());st.executeQuery().close();}
+            java.util.function.Function<String,String> run=key->f.as(()->{try{outputs.record(d.caseId(),artifact,op,key,com.pis.report.OutputContracts.Kind.PRINT_REQUEST);return "SUCCESS";}catch(ApiException e){return e.code();}});
+            var a=executor.submit(()->run.apply("print-one"));var b=executor.submit(()->run.apply("print-two"));
+            try{long end=System.nanoTime()+TimeUnit.SECONDS.toNanos(2);boolean waiting=false;while(System.nanoTime()<end){if(jdbc.queryForObject("SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%SELECT id FROM pathology_request WHERE id=%'",Long.class)>=2){waiting=true;break;}Thread.sleep(10);}assertThat(waiting).isTrue();}finally{blocker.rollback();}
+            assertThat(List.of(a.get(5,TimeUnit.SECONDS),b.get(5,TimeUnit.SECONDS))).containsExactlyInAnyOrder("SUCCESS","VERSION_CONFLICT");
+        }
+    }
+    @Test void outputHttpProtectsBinaryHeadersCsrfHashScopeAndForbidsUnauditedGetOrHardwareStatus() throws Exception {
+        var f=new Fixture();var d=outputSetup(f);var artifact=f.as(()->outputs.create(d.caseId(),oc(d.caseId()),"http-output").receipt().resourceId());var input=f.as(()->oo(d.caseId(),null));var b=new Browser();String path="/api/requests/reports/cases/"+d.caseId()+"/output/"+artifact;String body=tools.jackson.databind.json.JsonMapper.builder().build().writeValueAsString(input);
+        assertThat(b.send("POST",path+"/bytes/DOWNLOAD",body,null,false).statusCode()).isEqualTo(401);
+        String password="Synthetic-output-http-42!";jdbc.update("UPDATE app_user SET password_hash=? WHERE id=?",encoder.encode(password),f.user);String login="username="+f.principal.getUsername()+"&password="+java.net.URLEncoder.encode(password,java.nio.charset.StandardCharsets.UTF_8);
+        assertThat(b.send("POST","/api/auth/login",login,b.csrf(),true).statusCode()).isEqualTo(204);String csrf=b.csrf();
+        assertThat(b.send("GET",path+"/bytes/DOWNLOAD",null,null,false).statusCode()).isNotEqualTo(200);
+        assertThat(b.send("POST",path+"/bytes/DOWNLOAD",body,null,false).statusCode()).isEqualTo(403);
+        assertThat(b.send("POST",path+"/bytes/DOWNLOAD",body.replace("\"reason\":","\"path\":\"../../file\",\"reason\":"),csrf,false).statusCode()).isEqualTo(400);
+        assertThat(b.send("POST",path+"/bytes/DOWNLOAD",body.replace(input.sha256(),"0".repeat(64)),csrf,false).statusCode()).isEqualTo(409);
+        assertThat(b.send("POST",path+"/events/PHYSICAL_PRINT_SUCCESS",body,csrf,false).statusCode()).isEqualTo(400);
+        var request=java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:"+port+path+"/bytes/DOWNLOAD")).header("Content-Type","application/json").header("X-CSRF-TOKEN",csrf).header("Idempotency-Key","binary-http").POST(java.net.http.HttpRequest.BodyPublishers.ofString(body)).build();
+        var first=b.client.send(request,java.net.http.HttpResponse.BodyHandlers.ofByteArray());assertThat(first.statusCode()).isEqualTo(200);assertThat(first.headers().firstValue("Content-Type")).contains("application/pdf");assertThat(first.headers().firstValue("Cache-Control")).contains("no-store");assertThat(first.headers().firstValue("Content-Disposition")).contains("attachment; filename=\"synthetic-"+artifact+"-v0.pdf\"");assertThat(com.pis.report.SyntheticPdf.sha256(first.body())).isEqualTo(input.sha256());
+        var replay=b.client.send(request,java.net.http.HttpResponse.BodyHandlers.ofByteArray());assertThat(replay.headers().firstValue("Idempotency-Replayed")).contains("true");assertThat(replay.body()).isEqualTo(first.body());
+        jdbc.update("UPDATE workflow_grant SET revoked_at=statement_timestamp() WHERE user_id=?",f.user);assertThat(b.client.send(request,java.net.http.HttpResponse.BodyHandlers.ofByteArray()).statusCode()).isEqualTo(404);
+    }
     private String editResult(Fixture f,UUID id,String key) { return f.as(()->{ try { service.edit(id,new Edit(0L,COMPLETE),key); return "SUCCESS"; } catch(ApiException e) { return e.code(); } }); }
     private static void assertCode(Runnable action,String code) { assertThatThrownBy(action::run).isInstanceOfSatisfying(ApiException.class,e->assertThat(e.code()).isEqualTo(code)); }
     final class Fixture {

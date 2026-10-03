@@ -1,4 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 
 const scope = '11111111-1111-4111-8111-111111111111';
 const encounter = { id: '22222222-2222-4222-8222-222222222222', patientId: '33333333-3333-4333-8333-333333333333', patientLabel: '合成患者', encounterNumber: 'SYN-001' };
@@ -525,4 +527,61 @@ test('review late case responses cannot overwrite selection; dirty switching and
  await page.getByLabel('复核或退回原因').fill('B合成意见'); await page.getByRole('button', { name: '复核合成报告 ' + a }).click(); await page.getByRole('button', { name: '继续编辑', exact: true }).click(); await expect(page.getByLabel('复核或退回原因')).toHaveValue('B合成意见');
  await page.getByRole('button', { name: '复核合成报告 ' + a }).click(); await page.getByRole('button', { name: '放弃并切换' }).click(); await expect(page.getByLabel('复核版本身份')).toContainText(a); await expect(page.getByLabel('复核或退回原因')).toHaveValue('');
  await page.getByLabel('复核或退回原因').fill('A合成意见'); await page.getByRole('button', { name: '申请单查询', exact: true }).click(); await page.getByRole('button', { name: '继续编辑', exact: true }).click(); await expect(page.getByLabel('复核或退回原因')).toHaveValue('A合成意见');
+});
+
+const fixedPdf = readFileSync(new URL('./fixtures/synthetic-fixed-report.pdf', import.meta.url));
+const fixedHash = createHash('sha256').update(fixedPdf).digest('hex');
+const outputArtifactId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+function outputFixture(id: string, exists = true, activityVersion = -1) {
+ const signatureId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', revisionId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+ return { caseId: id, signatureId, signatureVersion: 1, revisionId, dependenciesCurrent: true, activityVersion, artifact: exists ? { id: outputArtifactId, caseId: id, version: 0, signatureId, signatureVersion: 1, revisionId, draftVersion: 1, templateCode: 'SYN-REPORT', templateVersion: 2, schemaCode: 'SYN-STRUCTURED-2', dependencyToken: 'a'.repeat(64), rendererVersion: 'SYN-RASTER-PDF-1', fontHash: '56f62f6e18eabb294a0598bd0fadaed372541189ce03ccbdce3b21cb1d3ebc5b', sha256: fixedHash, byteSize: fixedPdf.length, pages: 4, createdAt: '2026-10-03T00:00:00Z' } : null };
+}
+test('fixed PDF generation and unknown preview retry keep original bytes and key; preview closes and print cancellation preserves input', async ({ page }) => {
+ await start(page); const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'; let exists = false, version = -1;
+ const item = { caseId: id, requestId: 'request', patientId: encounter.patientId, number: 'SYN-OUTPUT', state: 'ACTIVE', version: 0, ownerId: 'synthetic-user', ready: true };
+ await page.route('**/api/requests/diagnosis/scopes/*', r => r.fulfill({ json: { total: 1, page: 1, pageSize: 10, items: [item] } }));
+ await page.route('**/output/' + outputArtifactId + '/history?*', r => r.fulfill({ json: { caseId: id, artifactId: outputArtifactId, page: 1, events: [] } }));
+ await page.route('**/api/requests/reports/cases/' + id + '/output', async r => { if (r.request().method() === 'GET') await r.fulfill({ json: outputFixture(id, exists, version) }); else { exists = true; await r.fulfill({ json: { receipt: { status: 200, resourceType: 'REPORT_ARTIFACT', resourceId: outputArtifactId, version: 0 } } }); } });
+ const sent: { body: unknown; key: string }[] = [];
+ await page.route('**/output/' + outputArtifactId + '/bytes/PREVIEW', async r => { sent.push({ body: r.request().postDataJSON() as unknown, key: r.request().headers()['idempotency-key'] }); if (sent.length === 1) return r.abort('failed'); version = 0; await r.fulfill({ contentType: 'application/pdf', headers: { 'Content-Length': String(fixedPdf.length), 'X-Artifact-Id': outputArtifactId, 'X-Artifact-SHA256': fixedHash, 'X-Artifact-Version': '0' }, body: fixedPdf }); });
+ await page.getByRole('button', { name: '固定PDF与打印记录', exact: true }).click(); await page.getByRole('button', { name: '查看固定产物 ' + id }).click();
+ await page.getByLabel('核对输出病例 UUID').fill(id); await page.getByLabel('产物访问或打印记录原因').fill('合成固定产物'); await page.getByRole('button', { name: '生成固定合成PDF' }).dblclick(); await expect(page.getByText('不可变产物', { exact: true })).toBeVisible();
+ await page.getByLabel('核对输出病例 UUID').fill(id); await page.getByLabel('产物访问或打印记录原因').fill('合成预览'); await page.getByRole('button', { name: '提交产物操作（不物理打印）' }).dblclick(); await expect(page.getByRole('button', { name: '确认原产物请求' })).toBeVisible(); expect(sent).toHaveLength(1);
+ await page.getByRole('button', { name: '申请单查询', exact: true }).click(); await expect(page.getByText('原请求结果尚未确认，请先使用页面上的原请求确认结果。')).toBeVisible();
+ await page.getByRole('button', { name: '确认原产物请求' }).click(); await expect(page.getByTitle('合成固定PDF预览')).toBeVisible(); expect(sent[1]).toEqual(sent[0]); await expect(page.getByLabel('输出固定版本')).toContainText('活动版本 0');
+ await page.getByRole('button', { name: '关闭PDF预览' }).click(); await expect(page.getByTitle('合成固定PDF预览')).toHaveCount(0);
+ await page.getByLabel('产物访问或打印记录原因').fill('合成待登记'); await page.getByLabel('产物操作', { exact: true }).click(); await page.getByRole('option', { name: '登记打印请求（不连接打印机）', exact: true }).click(); await page.getByRole('button', { name: '保留当前输入' }).click(); await expect(page.getByLabel('产物访问或打印记录原因')).toHaveValue('合成待登记');
+ await expect(page.getByRole('dialog')).toBeHidden(); await expect(page.getByRole('option', { name: '登记打印请求（不连接打印机）', exact: true })).toBeHidden(); await page.getByText('不可变产物', { exact: true }).click();
+ await page.screenshot({ path: 'test-results/output-desktop.png', fullPage: true }); await page.setViewportSize({ width: 390, height: 844 }); await page.screenshot({ path: 'test-results/output-mobile.png', fullPage: true }); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+test('output rejects corrupt binary without displaying PDF and cannot mix late responses or dirty case input', async ({ page }) => {
+ await start(page); const a = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', b = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+ const item = (id: string) => ({ caseId: id, requestId: 'request-' + id, patientId: encounter.patientId, number: 'SYN-' + id, state: 'ACTIVE', version: 0, ownerId: 'synthetic-user', ready: true });
+ await page.route('**/api/requests/diagnosis/scopes/*', r => r.fulfill({ json: { total: 2, page: 1, pageSize: 10, items: [item(a), item(b)] } }));
+ await page.route('**/output/' + outputArtifactId + '/history?*', r => r.fulfill({ json: { caseId: new URL(r.request().url()).pathname.split('/')[5], artifactId: outputArtifactId, page: 1, events: [] } }));
+ let release: () => void = () => {}; const hold = new Promise<void>(r => { release = r; }); let finish: () => void = () => {}; const finished = new Promise<void>(r => { finish = r; }); let slow = true;
+ await page.route('**/api/requests/reports/cases/' + a + '/output', async r => { if (slow) { slow = false; await hold; try { await r.fulfill({ json: outputFixture(a) }); } finally { finish(); } } else await r.fulfill({ json: outputFixture(a) }); });
+ await page.route('**/api/requests/reports/cases/' + b + '/output', r => r.fulfill({ json: outputFixture(b) }));
+ await page.getByRole('button', { name: '固定PDF与打印记录', exact: true }).click(); const started = page.waitForRequest(r => r.url().endsWith('/' + a + '/output')); await page.getByRole('button', { name: '查看固定产物 ' + a }).click(); await started; await page.getByRole('button', { name: '查看固定产物 ' + b }).click(); await expect(page.getByLabel('输出固定版本')).toContainText(b); release(); await finished; await expect(page.getByLabel('输出固定版本')).not.toContainText(a);
+ await page.getByLabel('产物访问或打印记录原因').fill('B合成意见'); await page.getByRole('button', { name: '查看固定产物 ' + a }).click(); await page.getByRole('button', { name: '继续编辑', exact: true }).click(); await expect(page.getByLabel('产物访问或打印记录原因')).toHaveValue('B合成意见');
+ await page.getByRole('button', { name: '查看固定产物 ' + a }).click(); await page.getByRole('button', { name: '放弃并切换' }).click(); await expect(page.getByLabel('产物访问或打印记录原因')).toHaveValue('');
+ const corrupted = Buffer.from(fixedPdf); corrupted[100] ^= 1;
+ await page.route('**/output/' + outputArtifactId + '/bytes/PREVIEW', r => r.fulfill({ contentType: 'application/pdf', headers: { 'Content-Length': String(corrupted.length), 'X-Artifact-Id': outputArtifactId, 'X-Artifact-SHA256': fixedHash, 'X-Artifact-Version': '0' }, body: corrupted }));
+ await page.getByLabel('核对输出病例 UUID').fill(a); await page.getByLabel('产物访问或打印记录原因').fill('合成完整性校验'); await page.getByRole('button', { name: '提交产物操作（不物理打印）' }).click(); await expect(page.getByRole('button', { name: '确认原产物请求' })).toBeVisible(); await expect(page.getByTitle('合成固定PDF预览')).toHaveCount(0);
+});
+
+test('output print conflict preserves input; refresh requires review; user self-report and download keep fixed artifact', async ({ page }) => {
+ await start(page); const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', requestId = 'ffffffff-ffff-4fff-8fff-ffffffffffff'; let version = -1, attempts = 0; const events: { id: string; version: number; kind: string; requestId: string | null; actorId: string; reason: string; occurredAt: string }[] = [];
+ await page.route('**/api/requests/diagnosis/scopes/*', r => r.fulfill({ json: { total: 1, page: 1, pageSize: 10, items: [{ caseId: id, requestId: 'request', patientId: encounter.patientId, number: 'SYN-OUTPUT', state: 'ACTIVE', version: 0, ownerId: 'synthetic-user', ready: true }] } }));
+ await page.route('**/api/requests/reports/cases/' + id + '/output', r => r.fulfill({ json: outputFixture(id, true, version) }));
+ await page.route('**/output/' + outputArtifactId + '/history?*', r => r.fulfill({ json: { caseId: id, artifactId: outputArtifactId, page: 1, events: [...events].reverse() } }));
+ await page.route('**/output/' + outputArtifactId + '/events/*', async r => { const body = r.request().postDataJSON() as { expectedVersion: number; requestId: string | null; reason: string }; const kind = new URL(r.request().url()).pathname.split('/').at(-1) ?? ''; if (++attempts === 1) { version = 0; return r.fulfill({ status: 409, json: { code: 'VERSION_CONFLICT' } }); } expect(body.expectedVersion).toBe(version); if (kind === 'USER_REPORTED_CANCELLED') expect(body.requestId).toBe(requestId); version++; events.push({ id: kind === 'PRINT_REQUEST' ? requestId : 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', version, kind, requestId: body.requestId, actorId: 'synthetic-user', reason: body.reason, occurredAt: '2026-10-03T00:00:00Z' }); await r.fulfill({ json: { receipt: { status: 200, resourceType: 'REPORT_OUTPUT_EVENT', resourceId: events.at(-1)?.id, version } } }); });
+ await page.route('**/output/' + outputArtifactId + '/bytes/DOWNLOAD', r => r.fulfill({ contentType: 'application/pdf', headers: { 'Content-Length': String(fixedPdf.length), 'X-Artifact-Id': outputArtifactId, 'X-Artifact-SHA256': fixedHash, 'X-Artifact-Version': '0' }, body: fixedPdf }));
+ await page.getByRole('button', { name: '固定PDF与打印记录', exact: true }).click(); await page.getByRole('button', { name: '查看固定产物 ' + id }).click();
+ async function action(label: string) { await page.getByLabel('产物操作', { exact: true }).click(); await page.getByRole('option', { name: label, exact: true }).click(); await page.getByRole('button', { name: '清除并切换操作' }).click(); await page.getByLabel('核对输出病例 UUID').fill(id); await page.getByLabel('产物访问或打印记录原因').fill('合成请求与自报，非硬件成功'); }
+ await action('登记打印请求（不连接打印机）'); await page.getByRole('button', { name: '提交产物操作（不物理打印）' }).click(); await expect(page.getByText('版本已变化，请刷新并复核', { exact: true })).toBeVisible(); await expect(page.getByLabel('产物访问或打印记录原因')).toHaveValue('合成请求与自报，非硬件成功');
+ await page.getByRole('button', { name: '刷新诊断队列与资格' }).click(); await page.getByRole('button', { name: '放弃并切换' }).click(); await expect(page.getByLabel('输出固定版本')).toContainText('活动版本 0');
+ await action('登记打印请求（不连接打印机）'); await page.getByRole('button', { name: '提交产物操作（不物理打印）' }).click(); await expect(page.getByLabel('输出固定版本')).toContainText('活动版本 1');
+ await action('用户自报取消'); await page.getByLabel('原打印请求 UUID（见历史）').fill(requestId); await page.getByRole('button', { name: '提交产物操作（不物理打印）' }).click(); await expect(page.getByRole('cell', { name: '用户自报取消', exact: true })).toBeVisible();
+ await action('下载固定PDF'); const saved = page.waitForEvent('download'); await page.getByRole('button', { name: '提交产物操作（不物理打印）' }).click(); const download = await saved; expect(download.suggestedFilename()).toBe('synthetic-' + outputArtifactId + '-v0.pdf'); const file = await download.path(); if (!file) throw new Error('Synthetic download missing'); expect(createHash('sha256').update(readFileSync(file)).digest('hex')).toBe(fixedHash);
 });
