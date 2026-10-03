@@ -22,6 +22,6 @@ public class MaterialQualitySubjects implements QualitySubjects {
   var scope=requests.detail(rid).scopeId(); var tasks=technical.qualityTasks(rid);var blocked=blocked(rid);
   return jdbc.query("SELECT * FROM material_entity WHERE request_id=? ORDER BY created_at,id LIMIT 100",MaterialQueries.MAPPER,rid).stream().map(m->convert(m,scope,tasks,blocked)).toList();
  }
- private java.util.Set<UUID> blocked(UUID rid){return new java.util.HashSet<>(jdbc.queryForList("SELECT m.id FROM material_entity m WHERE m.request_id=? AND (EXISTS(SELECT 1 FROM cytology_material_gate g WHERE g.id=m.id AND g.state<>'PASS') OR EXISTS(SELECT 1 FROM cytology_specimen s WHERE s.request_id=m.request_id AND s.qc_state='IDENTITY_MISMATCH'))",UUID.class,rid));}
+ private java.util.Set<UUID> blocked(UUID rid){return new java.util.HashSet<>(jdbc.queryForList("SELECT m.id FROM material_entity m WHERE m.request_id=? AND (EXISTS(SELECT 1 FROM cytology_material_gate g WHERE g.id=m.id AND g.state<>'PASS') OR EXISTS(SELECT 1 FROM stain_material_gate sg WHERE sg.id=m.id AND sg.state<>'PASS') OR EXISTS(SELECT 1 FROM cytology_specimen s WHERE s.request_id=m.request_id AND s.qc_state='IDENTITY_MISMATCH'))",UUID.class,rid));}
  public UUID rework(Subject source,String reason) { return technical.qualityRework(source.id(),source.taskId(),new TechnicalContracts.Decision(source.taskVersion(),source.cassetteId(),reason)); }
 }

@@ -1,0 +1,18 @@
+import { describe, expect, it } from 'vitest';
+import { parseDetail } from './stainApi';
+import { parseMaterial, modes } from './api';
+const empty = { requestId: 'r', patientId: 'p', caseId: 'k', caseNumber: 'SYN', batches: [], selected: null, sources: [], orders: [], events: [], page: 1 };
+const batch = { id: 'b', state: 'FROZEN', version: 1, frozenVersion: 1, controlId: 'control', controlEventId: null, controlReference: 'Synthetic control', reagentLot: 'SYN-LOT', expiresOn: '2099-12-31', rerunOf: null, kind: 'IHC', projectCode: 'SYN-P', projectVersion: 1, schemeCode: 'SYN-S', schemeVersion: 1, metadata: 'Synthetic metadata, no clinical protocol' };
+const source = { id: 'source', number: 'DEV-S-SYN', version: 1, blockId: null, route: 'DIRECT_CYTOLOGY', state: 'VOID', qcState: 'INVALIDATED' };
+const order = { id: 'order', sourceId: 'source', sourceVersion: 0, outputId: 'output', resultId: null, effectiveState: 'SOURCE_QUARANTINED', invalidReason: 'Control not recorded' };
+const full = { ...empty, batches: [batch], selected: batch, sources: [source], orders: [order] };
+const event = { id: 'e', version: 1, action: 'FREEZE', orderId: null, frozenVersion: 1, controlEventId: null, technicalQc: null, content: '', reason: 'Synthetic freeze', actorId: 'user', recordedAt: '2026-01-01T00:00:00Z' };
+describe('staining immutable identity and readiness boundary', () => {
+ it('keeps a new request empty without inventing results', () => expect(parseDetail(empty, 'r', null, 1).selected).toBeNull());
+ it('retains frozen members as quarantined until explicit control and result', () => expect(parseDetail(full, 'r', 'b', 1).orders[0].effectiveState).toBe('SOURCE_QUARANTINED'));
+ it('rejects cross-request, batch and page responses', () => { expect(() => parseDetail(full, 'other', 'b', 1)).toThrow(); expect(() => parseDetail(full, 'r', 'other', 1)).toThrow(); expect(() => parseDetail(full, 'r', 'b', 2)).toThrow(); });
+ it('rejects invented or mutable freeze stages and duplicate batches', () => { for (const b of [{ ...batch, state: 'SIGNED' }, { ...batch, frozenVersion: 2 }, { ...batch, state: 'DRAFT' }]) expect(() => parseDetail({ ...full, selected: b, batches: [b] }, 'r', 'b', 1)).toThrow(); expect(() => parseDetail({ ...full, batches: [batch, batch] }, 'r', 'b', 1)).toThrow(); });
+ it('does not infer accepted or negative results from empty data', () => { expect(() => parseDetail({ ...full, orders: [{ ...order, effectiveState: 'PASS' }] }, 'r', 'b', 1)).toThrow(); expect(() => parseDetail({ ...full, events: [{ ...event, technicalQc: 'NEGATIVE' }] }, 'r', 'b', 1)).toThrow(); });
+ it('rejects foreign sources, repeated identities and unordered or excessive history', () => { expect(() => parseDetail({ ...full, orders: [{ ...order, sourceId: 'foreign' }] }, 'r', 'b', 1)).toThrow(); for (const events of [[event, event], [{ ...event, version: 2 }], Array.from({ length: 21 }, () => event)]) expect(() => parseDetail({ ...full, events }, 'r', 'b', 1)).toThrow(); });
+ it('requires independent new slide identity with an explicit source and never offers old recut route', () => { const m = { id: 'output', requestId: 'r', patientId: 'p', caseId: 'k', kind: 'SLIDE', route: 'STAINED_SLIDE', operation: 'ORIGINAL', number: 'DEV-S-SYN', barcode: 'Synthetic', recordId: null, cassetteId: null, containerId: 'container', blockId: null, sourceSlideId: 'source', technicalTaskId: null, state: 'ACTIVE', version: 0, stainOrderId: 'order' }; expect(modes(parseMaterial(m))).toEqual(['void', 'labels']); for (const patch of [{ stainOrderId: null }, { sourceSlideId: null }, { cytologyPreparationId: 'wrong-direct-prep' }]) expect(() => parseMaterial({ ...m, ...patch })).toThrow(); });
+});

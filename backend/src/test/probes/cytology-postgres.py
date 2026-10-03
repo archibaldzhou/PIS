@@ -107,10 +107,11 @@ try:
   invalid=fmt("'00000000-0000-4000-8000-000000000023','{h}','{p}','{r}','{k}','SLIDE','CYTOLOGY_SLIDE','DEV-S-Bad','S000000000000000000000000000000009','{container2}',")+("'"+ids['nextslide']+"'" if path=='LIQUID_BASED' else 'NULL')+fmt(",'{nextprep}','{u}'")
   sql(statement(query,invalid),False)
  assert sql(fmt("SELECT remaining FROM cytology_specimen WHERE id='{spec}'"))=='0'
+ sql('BEGIN;'+(root/'backend/src/main/resources/db/migration/V22__stain_batches_and_controls.sql').read_text()+'COMMIT;')
  # A source isolated before producing any slides must still block the whole case.
  quality=(root/'backend/src/main/java/com/pis/quality/QualityGate.java').read_text()
- snapshot=json.loads(re.search(r'("SELECT jsonb_build_object[^\n]*?"),String.class,request,request,request,request',quality).group(1))
- bound=','.join("'"+ids['r']+"'" for _ in range(4))
+ snapshot=json.loads(re.search(r'("SELECT jsonb_build_object[^\n]*?"),String.class,request,request,request,request,request',quality).group(1))
+ bound=','.join("'"+ids['r']+"'" for _ in range(5))
  old_snapshot=sql(statement(snapshot,bound))
  sql(fmt("BEGIN;UPDATE cytology_specimen SET qc_state='IDENTITY_MISMATCH',qc_version=3,version=12 WHERE id='{spec}';INSERT INTO cytology_event(specimen_id,version,action,reason,actor_id) VALUES('{spec}',12,'IDENTITY_MISMATCH','Synthetic isolation','{u}');COMMIT;"))
  assert old_snapshot!=sql(statement(snapshot,bound))

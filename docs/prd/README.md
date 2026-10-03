@@ -44,3 +44,5 @@
 [T22术中冰冻开发PRD](development-frozen-v1.md)已对照 UI-016/UI-025 实际图片。独立冰冻材料与工作流、人工时间、版本化草稿、合成复核、独立回读/确认及确切常规版本差异关联；没有真实通信或临床动作。见[ADR 0012](../adr/0012-independent-frozen-workflow.md)与[本地交付记录](../api/t22-development-status.md)。
 
 [T23细胞学制备开发PRD](development-cytology-v1.md)已查看 UI-015 实际原型；独立标本/制备台账、直接涂片/液基/可选细胞蜡块、守恒的合成份数及来源QC失效传播。不含临床分类或自动诊断，见[ADR 0013](../adr/0013-cytology-preparation-lineage.md)与[交付记录](../api/t23-development-status.md)。
+
+[T24特殊染色/IHC开发PRD](development-staining-v1.md)已查看UI-013/017/018实际原型。单病例冻结成员、明确人工对照、版本化技术结果、新身份来源链及失效门禁；无厂商方案或临床推荐。见[ADR0014](../adr/0014-synthetic-stain-batches.md)和[本地交付记录](../api/t24-development-status.md)。

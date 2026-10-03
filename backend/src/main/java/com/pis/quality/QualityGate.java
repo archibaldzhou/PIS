@@ -29,6 +29,7 @@ public class QualityGate {
   return h.materialVersion()==version && java.util.Objects.equals(h.taskVersion(),taskVersion)?"PASS":"INVALIDATED";
  }
  public void material(UUID id,long version,Long taskVersion) {
+  if(jdbc.queryForObject("SELECT count(*) FROM stain_material_gate WHERE id=? AND state<>'PASS'",Long.class,id)>0)throw blocked();
   if(jdbc.queryForObject("SELECT count(*) FROM cytology_material_gate WHERE id=? AND state<>'PASS'",Long.class,id)>0)throw blocked();
   if(jdbc.queryForObject("SELECT count(*) FROM material_entity m JOIN cytology_specimen s ON s.request_id=m.request_id WHERE m.id=? AND s.qc_state='IDENTITY_MISMATCH'",Long.class,id)>0)throw blocked();
   String state=effective(id,version,taskVersion);
@@ -81,7 +82,7 @@ public class QualityGate {
  }
  /** Dependency snapshot for an authorized report caller holding the request root lock. */
  public String reportSnapshot(UUID request) {
-  return jdbc.queryForObject("SELECT jsonb_build_object('materials',(SELECT jsonb_agg(to_jsonb(m) ORDER BY m.id) FROM material_entity m WHERE m.request_id=?),'quality',(SELECT jsonb_agg(to_jsonb(h) ORDER BY h.material_id) FROM quality_head h WHERE h.request_id=?),'tasks',(SELECT jsonb_agg(to_jsonb(t) ORDER BY t.id) FROM technical_task t WHERE t.request_id=?),'cytology',(SELECT jsonb_agg(jsonb_build_object('source',to_jsonb(s),'preparations',(SELECT jsonb_agg(to_jsonb(p) ORDER BY p.id) FROM cytology_preparation p WHERE p.specimen_id=s.id)) ORDER BY s.id) FROM cytology_specimen s WHERE s.request_id=?))::text",String.class,request,request,request,request);
+  return jdbc.queryForObject("SELECT jsonb_build_object('materials',(SELECT jsonb_agg(to_jsonb(m) ORDER BY m.id) FROM material_entity m WHERE m.request_id=?),'quality',(SELECT jsonb_agg(to_jsonb(h) ORDER BY h.material_id) FROM quality_head h WHERE h.request_id=?),'tasks',(SELECT jsonb_agg(to_jsonb(t) ORDER BY t.id) FROM technical_task t WHERE t.request_id=?),'cytology',(SELECT jsonb_agg(jsonb_build_object('source',to_jsonb(s),'preparations',(SELECT jsonb_agg(to_jsonb(p) ORDER BY p.id) FROM cytology_preparation p WHERE p.specimen_id=s.id)) ORDER BY s.id) FROM cytology_specimen s WHERE s.request_id=?),'staining',(SELECT jsonb_agg(jsonb_build_object('batch',to_jsonb(b),'events',(SELECT jsonb_agg(to_jsonb(e) ORDER BY e.version) FROM stain_event e WHERE e.batch_id=b.id)) ORDER BY b.id) FROM stain_batch b WHERE b.request_id=?))::text",String.class,request,request,request,request,request);
  }
  public static ApiException blocked() { return new ApiException(HttpStatus.CONFLICT,"QC_QUARANTINED","Quality quarantine requires review"); }
 }

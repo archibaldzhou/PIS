@@ -25,8 +25,9 @@ public class LabelService {
         this.jdbc=jdbc; this.access=access; this.providers=List.copyOf(providers); this.commands=commands; this.validator=validator;
     }
     private final RowMapper<Job> mapper=(r,i)->new Job(r.getObject("id",UUID.class),r.getObject("container_id",UUID.class),r.getString("barcode"),r.getObject("parent_job_id",UUID.class),r.getString("template_version"),r.getString("state"),r.getLong("version"),r.getInt("attempts"),r.getLong("request_version"),r.getLong("container_version"),r.getObject("patient_id",UUID.class),r.getString("patient_label"),r.getString("encounter_number"),r.getString("request_number"),r.getString("case_number"),r.getString("site"),r.getString("laterality"),r.getString("reason"),r.getObject("created_by",UUID.class),r.getObject("created_at",OffsetDateTime.class).toInstant(),r.getObject("material_id",UUID.class),r.getObject("target_id",UUID.class));
-    private LabelSubjectProvider.Subject subject(UUID id,Permission permission) {
-        access.actor(); var found=providers.stream().map(p->p.find(id)).flatMap(java.util.Optional::stream).toList();
+    private LabelSubjectProvider.Subject subject(UUID id,Permission permission) { return subject(id,permission,false); }
+    private LabelSubjectProvider.Subject subject(UUID id,Permission permission,boolean registration) {
+        access.actor(); var found=providers.stream().map(p->registration?p.findForRegistration(id):p.find(id)).flatMap(java.util.Optional::stream).toList();
         if(found.isEmpty()) throw missing(); if(found.size()!=1) throw conflict("LABEL_IDENTITY_MISMATCH"); var s=found.getFirst();
         try { access.require(s.scopeId(),permission); } catch(org.springframework.security.access.AccessDeniedException error) { throw missing(); }
         return s;
@@ -60,7 +61,7 @@ public class LabelService {
     /** Identity allocation is part of the caller's material creation transaction, independent of PRINT. */
     @Transactional(propagation=Propagation.MANDATORY)
     public void registerMaterialIdentity(UUID id,String barcode) {
-        var s=subject(id,Permission.MATERIAL); if(s.materialId()==null||!s.active()||!LabelBarcode.valid(barcode)) throw conflict("LABEL_IDENTITY_MISMATCH");
+        var s=subject(id,Permission.MATERIAL,true); if(s.materialId()==null||!s.active()||!LabelBarcode.valid(barcode)) throw conflict("LABEL_IDENTITY_MISMATCH");
         jdbc.update("INSERT INTO label_identity(material_id,hospital_id,request_id,barcode) VALUES(?,?,?,?)",id,s.hospitalId(),s.requestId(),barcode);
     }
     private void validate(Object input) { var errors=validator.validate(input); if(!errors.isEmpty()) throw new jakarta.validation.ConstraintViolationException(errors); }
