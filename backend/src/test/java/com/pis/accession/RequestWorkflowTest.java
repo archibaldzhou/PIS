@@ -2247,7 +2247,50 @@ class RequestWorkflowTest {
     @Test void digitalQcConcurrentPublishAndRevokeHaveOneCasWinner()throws Exception{var f=new Fixture();var d=scanSetup(f,false);var id=digitalQcSetup(f,d);f.as(()->digitalQc.evaluate(d.request(),id,digitalEvaluation(d,id,-1,"PASS"),"eval"));try(var pool=Executors.newVirtualThreadPerTaskExecutor()){java.util.function.Function<String,String> work=action->f.as(()->{try{digitalQc.command(d.request(),id,action,digitalCommand(0,0),action);return "OK";}catch(ApiException e){return e.code();}});var a=pool.submit(()->work.apply("PUBLISH"));var b=pool.submit(()->work.apply("REVOKE"));assertThat(List.of(a.get(8,TimeUnit.SECONDS),b.get(8,TimeUnit.SECONDS))).containsExactlyInAnyOrder("OK","VERSION_CONFLICT");}f.as(()->{var v=digitalQc.view(d.request(),id);assertThat(v.version()).isEqualTo(1);assertThat(v.events()).hasSize(2);if(v.state().equals("PUBLISHED"))digitalQc.command(d.request(),id,"REVOKE",digitalCommand(1,0),"final-revoke");assertCode(()->digitalQc.consume(d.request(),id,1,null),"DIGITAL_QC_NOT_READY");return null;});}
     @Test void digitalQcAuditRollbackKeepsEvaluationAndOriginalKeyRetry(){var f=new Fixture();var d=scanSetup(f,false);var id=digitalQcSetup(f,d);f.as(()->digitalQc.evaluate(d.request(),id,digitalEvaluation(d,id,-1,"PASS"),"eval"));jdbc.execute("CREATE FUNCTION reject_digital_qc() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.operation_code='DIGITAL_QC_PUBLISH_V1' THEN RAISE EXCEPTION 'Synthetic audit failure';END IF;RETURN NEW;END $$");jdbc.execute("CREATE TRIGGER reject_digital_qc BEFORE INSERT ON audit_event FOR EACH ROW EXECUTE FUNCTION reject_digital_qc()");try{f.as(()->{assertThatThrownBy(()->digitalQc.command(d.request(),id,"PUBLISH",digitalCommand(0,0),"audit")).isInstanceOf(org.springframework.dao.DataAccessException.class);assertThat(digitalQc.view(d.request(),id).state()).isEqualTo("EVALUATED");assertThat(digitalQc.view(d.request(),id).events()).hasSize(1);return null;});}finally{jdbc.execute("DROP TRIGGER reject_digital_qc ON audit_event");jdbc.execute("DROP FUNCTION reject_digital_qc()");}f.as(()->{assertThat(digitalQc.command(d.request(),id,"PUBLISH",digitalCommand(0,0),"audit").replayed()).isFalse();return null;});}
     @Test void digitalQcQualificationAndCaseScopeAreRequiredEvenWithOtherAccess(){var f=new Fixture();var d=scanSetup(f,false);var id=digitalQcSetup(f,d);var other=new Fixture();scanSetup(other,false);other.as(()->{assertThatThrownBy(()->digitalQc.view(d.request(),id)).isInstanceOf(ApiException.class);assertThatThrownBy(()->digitalQc.consume(d.request(),id,0,null)).isInstanceOf(ApiException.class);return null;});jdbc.update("UPDATE digital_qc_grant SET revoked_at=statement_timestamp() WHERE user_id=?",f.user);f.as(()->{assertCode(()->digitalQc.view(d.request(),id),"DIGITAL_QC_NOT_FOUND");assertCode(()->digitalQc.history(d.request(),id),"DIGITAL_QC_NOT_FOUND");assertCode(()->digitalQc.consume(d.request(),id,0,null),"DIGITAL_QC_NOT_FOUND");return null;});}
-    @Test void digitalQcHttpKeepsCsrfStrictChecklistAndConsumerVersion()throws Exception{var f=new Fixture();var d=scanSetup(f,false);var id=digitalQcSetup(f,d);var b=new Browser();String password="Synthetic-digital-qc-42!";jdbc.update("UPDATE app_user SET password_hash=? WHERE id=?",encoder.encode(password),f.user);assertThat(b.send("POST","/api/auth/login","username="+f.principal.getUsername()+"&password="+java.net.URLEncoder.encode(password,java.nio.charset.StandardCharsets.UTF_8),b.csrf(),true).statusCode()).isEqualTo(204);String path="/api/requests/"+d.request()+"/scans/"+id+"/digital-qc";String body=f.as(()->tools.jackson.databind.json.JsonMapper.builder().build().writeValueAsString(digitalEvaluation(d,id,-1,"PASS")));assertHttpError(b.send("POST",path,body,null,false),403,"CSRF_INVALID");assertThat(b.send("POST",path,body.replace("SYN-DIGITAL-QC-1","UNAPPROVED"),b.csrf(),false).statusCode()).isEqualTo(400);assertThat(b.send("POST",path,body.replace("\"coverage\":\"PASS\"","\"coverage\":null"),b.csrf(),false).statusCode()).isEqualTo(400);assertThat(b.send("POST",path,body,b.csrf(),false).statusCode()).isEqualTo(200);assertThat(b.send("GET",path+"/bytes?publicationVersion=0",null,null,false).statusCode()).isEqualTo(409);var anonymous=new Browser();assertThat(anonymous.send("POST",path,body,anonymous.csrf(),false).statusCode()).isEqualTo(401);}
+    @Test void digitalQcHttpKeepsCsrfStrictChecklistAndConsumerVersion() throws Exception {
+        var f=new Fixture();var d=scanSetup(f,false);var id=digitalQcSetup(f,d);
+        String path="/api/requests/"+d.request()+"/scans/"+id+"/digital-qc";
+        // Build the exact input while the fixture principal still has its current auth_version.
+        String body=f.as(()->tools.jackson.databind.json.JsonMapper.builder().build()
+            .writeValueAsString(digitalEvaluation(d,id,-1,"PASS")));
+        var b=new Browser();String password="Synthetic-digital-qc-42!";
+        jdbc.update("UPDATE app_user SET password_hash=? WHERE id=?",encoder.encode(password),f.user);
+        assertThat(jdbc.queryForObject("SELECT auth_version FROM app_user WHERE id=?",Long.class,f.user))
+            .isEqualTo(f.principal.authVersion()+1);
+        f.as(()->{assertThatThrownBy(()->digitalQc.view(d.request(),id))
+            .isInstanceOf(org.springframework.security.authentication.AuthenticationCredentialsNotFoundException.class)
+            .hasMessage("Authenticated application identity is no longer current");return null;});
+        assertThat(b.send("POST","/api/auth/login","username="+f.principal.getUsername()+"&password="+
+            java.net.URLEncoder.encode(password,java.nio.charset.StandardCharsets.UTF_8),b.csrf(),true).statusCode()).isEqualTo(204);
+        assertHttpError(b.send("POST",path,body,null,false),403,"CSRF_INVALID");
+        assertThat(b.send("POST",path,body.replace("SYN-DIGITAL-QC-1","UNAPPROVED"),b.csrf(),false).statusCode()).isEqualTo(400);
+        assertThat(b.send("POST",path,body.replace("\"coverage\":\"PASS\"","\"coverage\":null"),b.csrf(),false).statusCode()).isEqualTo(400);
+        assertThat(b.send("POST",path,body,b.csrf(),false).statusCode()).isEqualTo(200);
+        assertHttpError(b.send("GET",path+"/bytes?publicationVersion=0",null,null,false),409,"DIGITAL_QC_NOT_READY");
+        var anonymous=new Browser();
+        assertHttpError(anonymous.send("POST",path,body,anonymous.csrf(),false),401,"UNAUTHENTICATED");
+
+        // An established HTTP session must also be invalidated, not only the service fixture.
+        String rotated="Synthetic-digital-qc-rotated-42!";
+        jdbc.update("UPDATE app_user SET password_hash=? WHERE id=?",encoder.encode(rotated),f.user);
+        assertThat(jdbc.queryForObject("SELECT auth_version FROM app_user WHERE id=?",Long.class,f.user))
+            .isEqualTo(f.principal.authVersion()+2);
+        assertHttpError(b.send("GET",path,null,null,false),401,"SESSION_EXPIRED");
+        var current=new Browser();
+        assertThat(current.send("POST","/api/auth/login","username="+f.principal.getUsername()+"&password="+
+            java.net.URLEncoder.encode(rotated,java.nio.charset.StandardCharsets.UTF_8),current.csrf(),true).statusCode()).isEqualTo(204);
+        assertThat(current.send("GET",path,null,null,false).statusCode()).isEqualTo(200);
+        assertHttpError(current.send("GET",path+"/bytes?publicationVersion=0",null,null,false),409,"DIGITAL_QC_NOT_READY");
+        String publish=tools.jackson.databind.json.JsonMapper.builder().build().writeValueAsString(digitalCommand(0,0));
+        assertThat(current.send("POST",path+"/PUBLISH",publish,current.csrf(),false).statusCode()).isEqualTo(200);
+        assertHttpError(current.send("GET",path+"/bytes?publicationVersion=0",null,null,false),409,"DIGITAL_QC_NOT_READY");
+        var request=java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:"+port+path+"/bytes?publicationVersion=1")).GET().build();
+        var bytes=current.client.send(request,java.net.http.HttpResponse.BodyHandlers.ofByteArray());
+        assertThat(bytes.statusCode()).isEqualTo(200);
+        assertThat(bytes.body()).isEqualTo(com.pis.scan.ScanFormat.fixture(d.patient(),d.caseId(),d.slide(),d.barcode(),32,32));
+        jdbc.update("UPDATE digital_qc_grant SET revoked_at=statement_timestamp() WHERE user_id=?",f.user);
+        assertHttpError(current.send("GET",path+"/bytes?publicationVersion=1",null,null,false),404,"DIGITAL_QC_NOT_FOUND");
+    }
 
     @Test void digitalQcRevocationAfterFileReadWithholdsConsumerBytes(){var f=new Fixture();var d=scanSetup(f,false);var id=digitalQcSetup(f,d);f.as(()->{digitalQc.evaluate(d.request(),id,digitalEvaluation(d,id,-1,"PASS"),"eval");digitalQc.command(d.request(),id,"PUBLISH",digitalCommand(0,0),"publish");return null;});
         var intercept=new com.pis.storage.StorageService(jdbc,workflowAccess,scanTestContext.getBean(com.pis.idempotency.IdempotentCommands.class),scanTestContext.getBean(com.pis.audit.AuditRecorder.class),scanTestContext.getBean(com.pis.storage.StorageProvider.class),validator,transactionManager){@Override public com.pis.storage.StorageProvider.Slice bytes(UUID request,UUID object,String range,String purpose){var bytes=super.bytes(request,object,range,purpose);digitalQc.command(request,id,"REVOKE",digitalCommand(1,0),"during-read");return bytes;}};
