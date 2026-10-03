@@ -158,3 +158,5 @@ T26 已实现合成人工档案、排他预约、逐项借还及冻结盘点/差
 T27 已实现合成工作量/TAT/QC固定统计快照与同权限来源下钻，默认开发开关关闭，无CSV或对外投递；见[指标开发PRD](docs/prd/development-statistics-v1.md)及[接口/本地验证边界](docs/api/t27-statistics.md)。T27修复510856a484e616e76abba5334d49ab31f946dbe3的完整CI由父会话确认通过，已正常快进main；该结论仅为合成开发基线验证。
 
 T28 新增私有本地合成原件、不可变版本/哈希、流式暂存与完成对账、范围读取及真实容量；S3未配置，非WSI验证。见[开发PRD](docs/prd/development-storage-v1.md)及[接口/验证边界](docs/api/t28-storage.md)，T28验证分支完整CI尚待核验。
+
+T28已按父会话确认的完整CI正常快进main，确切SHA为7eb4975e9062e6d2ecc0a5fe4f2277e5a2845aed。T29新增合成扫描导入、双向身份核对、租约重试/取消及独立重扫历史；厂商适配未配置，导入不等于阅片可用，见[T29接口及验证边界](docs/api/t29-scan-import.md)。T29完整验证分支CI待父会话核验。

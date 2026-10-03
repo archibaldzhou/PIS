@@ -13,13 +13,13 @@ class PostgresMigrationTest {
     void initializesAnEmptySchemaAndIsRepeatableWithoutReapplyingMigrations() throws Exception {
         try (var database = new PostgresTestDatabase()) {
             var flyway = database.configuration("classpath:db/migration").load();
-            assertThat(flyway.migrate().migrationsExecuted).isEqualTo(26);
-            assertThat(flyway.info().current().getVersion().toString()).isEqualTo("26");
+            assertThat(flyway.migrate().migrationsExecuted).isEqualTo(27);
+            assertThat(flyway.info().current().getVersion().toString()).isEqualTo("27");
             // Explicit production baseline: a new migration requires deliberate contract review.
             assertThat(java.util.Arrays.stream(flyway.info().applied())
                 .filter(migration -> migration.getVersion() != null)
                 .map(migration -> migration.getVersion().toString()).toList())
-                .containsExactlyElementsOf(java.util.stream.IntStream.rangeClosed(1, 26)
+                .containsExactlyElementsOf(java.util.stream.IntStream.rangeClosed(1, 27)
                     .mapToObj(Integer::toString).toList());
             assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
             assertThat(flyway.migrate().migrationsExecuted).isZero();
@@ -41,7 +41,7 @@ class PostgresMigrationTest {
             try(var connection=database.connection();var statement=connection.createStatement()) {
                 statement.executeUpdate("INSERT INTO hospital(id,code,name) VALUES('11111111-1111-4111-8111-111111111128','SYN-T28','Synthetic upgrade preservation')");
             }
-            var latest=database.configuration("classpath:db/migration").load();
+            var latest=database.configuration("classpath:db/migration").target("26").load();
             assertThat(latest.migrate().migrationsExecuted).isEqualTo(1);
             assertThat(latest.info().current().getVersion().toString()).isEqualTo("26");
             assertThat(latest.validateWithResult().validationSuccessful).isTrue();assertThat(latest.migrate().migrationsExecuted).isZero();

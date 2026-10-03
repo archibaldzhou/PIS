@@ -47,6 +47,8 @@ export async function request(path: string, options: RequestInit = {}): Promise<
     throw new ApiError(403, 'FORBIDDEN', '请求被拒绝，请重试或联系管理员');
   }
   const workflowErrors: Record<string, string> = {
+    SCAN_NOT_FOUND: '导入病例、对象或扫描资格不可用。', SCAN_DUPLICATE: '该原件已有导入任务，请查询原任务。', SCAN_STATE: '任务状态已变化，请刷新。', SCAN_LEASE_STALE: '尝试已取消、过期或代次不符，结果未激活。', SCAN_SOURCE_CHANGED: '材料或QC依据已变化，不能继续此尝试。', SCAN_RETRY_BLOCKED: '尚未到重试时间、次数已尽或输入已失效。', SCAN_RESCAN_BINDING: '重扫必须引用确切旧任务及新的原件版本。', SCAN_OBJECT_NOT_READY: '原件尚未完成校验。', SCAN_LIMIT: '开发导入任务达到上限。',
+
     STORAGE_NOT_FOUND: '原件或当前病例资格不可用。', STORAGE_NOT_CONFIGURED: '私有存储尚未配置。', STORAGE_ISOLATED: '当前病例状态或身份隔离阻断存储。', STORAGE_QUOTA: '合成存储配额不足。', STORAGE_INTEGRITY: '字节长度、合成标记或摘要不匹配，未发布原件。', STORAGE_STATE: '存储状态已变化，请核对确切版本。', STORAGE_RATE: '读取达到开发速率或字节上限。', STORAGE_RANGE: '仅支持不超过1MiB的明确单段Range。', STORAGE_BUSY: '存储处理繁忙，请核对状态后重试。', STORAGE_IO: '原件不可读取，未绕过校验。',
 
     CONSULT_NOT_FOUND: '当前会诊、病例或限时参与资格不可用。', CONSULT_INPUT_CHANGED: '报告、材料QC、分配或资格已改变，请重新发起会诊。', CONSULT_NOT_READY: '尚未取得全体对确切汇总的明确确认。', CONSULT_SUMMARY_CHANGED: '汇总或个人意见已改变，请重新核对。', CONSULT_OPINIONS_CHANGED: '参与状态或意见版本尚不完整或已变化。', CONSULT_STATE: '会诊已终止或状态不适用。', CONSULT_MEMBER_STATE: '参与状态已改变，请重新读取。', CONSULT_EXPIRY: '有效期必须在未来30天内。', CONSULT_PARTICIPANTS: '请核对1至10名当前合格人员，不含本人。', CONSULT_TEXT_REQUIRED: '必须明确输入人工合成文本。', CONSULT_DISPOSITION: '请选择明确的意见或分歧状态。', CONSULT_KIND: '请选择院内会诊或复阅。', CONSULT_LIMIT: '已达开发会诊数量上限。', CONSULT_PAGE: '会诊历史页号不正确。',

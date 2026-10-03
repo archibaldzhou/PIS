@@ -54,3 +54,5 @@
 [T27工作量/TAT/QC统计PRD](development-statistics-v1.md)已查看UI-028/031实际图片。授权优先、固定快照、自然时长、开放病例单列及来源下钻，不包含CSV或对外投递。见[ADR0017](../adr/0017-authorized-statistics-snapshots.md)及[接口与验证记录](../api/t27-statistics.md)。
 
 [T28私有原件存储PRD](development-storage-v1.md)已查看UI-042实际图片。本地私有root、不可变版本/摘要、流式暂存、完成对账、权限与容量；S3未配置，仅合成字节，非WSI验证。见[ADR0018](../adr/0018-private-immutable-original-storage.md)及[接口与验证记录](../api/t28-storage.md)。
+
+[T29扫描导入PRD](development-scan-import-v1.md)已查看UI-038实际图片。确切玻片/原件绑定、双向身份、合成头能力白名单及有界尝试/重扫；真实厂商适配未配置，T30前不发布。见[ADR0019](../adr/0019-synthetic-scan-import-leases.md)与[接口/验证边界](../api/t29-scan-import.md)。
