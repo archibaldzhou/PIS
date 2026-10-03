@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { signInWorkflow } from './workflow-login';
+import { signInWorkflow, handoffUsername } from './workflow-login';
 import type { View, Body, Action } from '../src/features/archive/api';
 
 // Real local Spring/PG and separate synthetic actors; no HTTP mocks or invitations sent.
@@ -34,7 +34,7 @@ test('archive local roles reserve, approve, scan, return and preserve inventory 
   const loan = (await read(page)).loans[0].id; await act(page, 'APPROVE', { loanId: loan }, 409);
   const other = await browser.newContext({ baseURL: 'http://127.0.0.1:5173' });
   try {
-    const reviewer = await other.newPage(); await reviewer.goto('/'); await reviewer.getByLabel('用户名', { exact: true }).fill(process.env.PIS_E2E_HANDOFF_USERNAME ?? 'synthetic.technician'); await reviewer.getByLabel('密码', { exact: true }).fill(process.env.PIS_E2E_HANDOFF_PASSWORD ?? 'Synthetic-handoff-only-42!'); const login = reviewer.waitForResponse(r => new URL(r.url()).pathname === '/api/auth/login'); await reviewer.getByRole('button', { name: '登录', exact: true }).click(); expect((await login).status()).toBe(204);
+    const reviewer = await other.newPage(); await reviewer.goto('/'); await reviewer.getByLabel('用户名', { exact: true }).fill(handoffUsername()); await reviewer.getByLabel('密码', { exact: true }).fill(process.env.PIS_E2E_HANDOFF_PASSWORD ?? 'Synthetic-handoff-only-42!'); const login = reviewer.waitForResponse(r => new URL(r.url()).pathname === '/api/auth/login'); await reviewer.getByRole('button', { name: '登录', exact: true }).click(); expect((await login).status()).toBe(204);
     await act(reviewer, 'APPROVE', { loanId: loan }); const reserved = (await read(page)).items[0];
     await act(page, 'CHECKOUT', { itemId, itemVersion: reserved.version, barcode: 'WRONG', loanId: loan }, 409);
     await act(page, 'CHECKOUT', { itemId, itemVersion: reserved.version, barcode: reserved.barcode, loanId: loan }); const out = (await read(page)).items[0];

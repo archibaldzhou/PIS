@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { signInWorkflow } from './workflow-login';
+import { signInWorkflow, handoffUsername } from './workflow-login';
 import type { Detail, Command, Action } from '../src/features/frozen/api';
 // Real local Spring/PG requests: no route mocking, no phone/message/CA or external recipient.
 test('independent frozen manual workflow requires separate qualified review and receiver evidence', async ({ page, browser }) => {
@@ -20,7 +20,7 @@ test('independent frozen manual workflow requires separate qualified review and 
  await act(page, 'RECEIVE'); await act(page, 'PREPARE'); await act(page, 'DRAFT', {}, 409); await act(page, 'QC_PASS'); await act(page, 'DRAFT'); await act(page, 'REVIEW', {}, 409);
  const other = await browser.newContext({ baseURL: 'http://127.0.0.1:5173' });
  try {
-  const receiver = await other.newPage(); await receiver.goto('/'); await receiver.getByLabel('用户名', { exact: true }).fill(process.env.PIS_E2E_HANDOFF_USERNAME ?? 'synthetic.technician'); await receiver.getByLabel('密码', { exact: true }).fill(process.env.PIS_E2E_HANDOFF_PASSWORD ?? 'Synthetic-handoff-only-42!'); const login = receiver.waitForResponse(r => new URL(r.url()).pathname === '/api/auth/login'); await receiver.getByRole('button', { name: '登录', exact: true }).click(); expect((await login).status()).toBe(204);
+  const receiver = await other.newPage(); await receiver.goto('/'); await receiver.getByLabel('用户名', { exact: true }).fill(handoffUsername()); await receiver.getByLabel('密码', { exact: true }).fill(process.env.PIS_E2E_HANDOFF_PASSWORD ?? 'Synthetic-handoff-only-42!'); const login = receiver.waitForResponse(r => new URL(r.url()).pathname === '/api/auth/login'); await receiver.getByRole('button', { name: '登录', exact: true }).click(); expect((await login).status()).toBe(204);
   const receiverId = (await read(receiver)).actorId; await act(receiver, 'REVIEW'); expect((await read(page)).reviewValid).toBe(true);
   await act(page, 'COMMUNICATE', { targetUserId: receiverId }); const relatedId = (await read(page)).events[0].id;
   await act(receiver, 'CONFIRM', { relatedId }, 409); await act(page, 'READBACK', { relatedId }, 409); await act(receiver, 'READBACK', { relatedId }); expect((await read(receiver)).events.some(e => e.action === 'CONFIRM')).toBe(false);

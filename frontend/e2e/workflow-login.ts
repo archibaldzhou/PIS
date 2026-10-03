@@ -1,8 +1,14 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
-/** Separate synthetic account: auth-error tests must not consume the workflow login budget. */
+import { workflowAccountName } from './workflow-account-name';
+
+export function handoffUsername() {
+  return workflowAccountName(test.info().file, process.env.PIS_E2E_HANDOFF_USERNAME ?? 'synthetic.technician');
+}
+
+/** Real login in each isolated browser context, using a file-specific synthetic identity. */
 export async function signInWorkflow(page: Page) {
-  const username = process.env.PIS_E2E_WORKFLOW_USERNAME ?? 'synthetic.workflow';
+  const username = workflowAccountName(test.info().file, process.env.PIS_E2E_WORKFLOW_USERNAME ?? 'synthetic.workflow');
   await page.goto('/');
   await expect(page.getByRole('heading', { name: '登录 PIS', exact: true })).toBeVisible();
   await page.getByLabel('用户名', { exact: true }).fill(username);

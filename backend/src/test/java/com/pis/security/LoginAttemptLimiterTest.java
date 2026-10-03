@@ -31,6 +31,18 @@ class LoginAttemptLimiterTest {
         for (int i=0;i<58;i++) assertThat(limiter.allow("other-"+i, "shared-runner")).isTrue();
         assertThat(limiter.allow("one-more", "shared-runner")).isFalse();
     }
+    @Test void fileScopedWorkflowAccountsScalePastTwentyWithoutBypassingSourceLimit() {
+        var limiter = new LoginAttemptLimiter(new MutableClock());
+        // More than twenty files can each authenticate their distinct owner and reviewer.
+        for (int file=0;file<30;file++) {
+            assertThat(limiter.allow("synthetic.workflow.file"+file,"shared-runner")).isTrue();
+            assertThat(limiter.allow("synthetic.technician.file"+file,"shared-runner")).isTrue();
+        }
+        for (int attempt=0;attempt<19;attempt++) assertThat(limiter.allow("synthetic.workflow.file0","shared-runner")).isTrue();
+        assertThat(limiter.allow("synthetic.workflow.file0","shared-runner")).isFalse();
+        for (int attempt=0;attempt<20;attempt++) assertThat(limiter.allow("other-file"+attempt,"shared-runner")).isTrue();
+        assertThat(limiter.allow("new-file","shared-runner")).isFalse();
+    }
     private static final class MutableClock extends Clock {
         Instant now = Instant.parse("2026-01-01T00:00:00Z");
         @Override public ZoneId getZone() { return ZoneOffset.UTC; }

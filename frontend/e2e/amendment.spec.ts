@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { signInWorkflow } from './workflow-login';
+import { signInWorkflow, handoffUsername } from './workflow-login';
 
 test('supplement and correction create new independently reviewed branches while original PDF stays byte identical', async ({ page, browser }) => {
   await signInWorkflow(page);
@@ -37,7 +37,7 @@ test('supplement and correction create new independently reviewed branches while
   await open(page); await act(page, 'APPROVE', 409); // Author separation is enforced server-side.
   const other = await browser.newContext({ baseURL: 'http://127.0.0.1:5173' });
   try {
-    const reviewer = await other.newPage(); await reviewer.goto('/'); await reviewer.getByLabel('用户名', { exact: true }).fill(process.env.PIS_E2E_HANDOFF_USERNAME ?? 'synthetic.technician'); await reviewer.getByLabel('密码', { exact: true }).fill(process.env.PIS_E2E_HANDOFF_PASSWORD ?? 'Synthetic-handoff-only-42!');
+    const reviewer = await other.newPage(); await reviewer.goto('/'); await reviewer.getByLabel('用户名', { exact: true }).fill(handoffUsername()); await reviewer.getByLabel('密码', { exact: true }).fill(process.env.PIS_E2E_HANDOFF_PASSWORD ?? 'Synthetic-handoff-only-42!');
     const login = reviewer.waitForResponse(r => new URL(r.url()).pathname === '/api/auth/login'); await reviewer.getByRole('button', { name: '登录', exact: true }).click(); expect((await login).status()).toBe(204);
     await open(reviewer); await act(reviewer, 'APPROVE'); await expect(reviewer.getByLabel('复核版本身份')).toContainText('状态 APPROVED');
     await page.getByRole('button', { name: '刷新诊断队列与资格' }).click(); await page.getByRole('button', { name: '放弃并切换' }).click(); await expect(page.getByLabel('复核版本身份')).toContainText('状态 APPROVED');
@@ -72,7 +72,7 @@ test('supplement and correction create new independently reviewed branches while
   let review = await (await page.request.get(report + '/review')).json() as Review; expect(review.state).toBe('DRAFT'); expect((await page.request.post(report + '/review/SIMULATE_SIGN', { headers: headers(), data: decision(review, true) })).status()).toBe(409);
   const freshContext = await browser.newContext({ baseURL: 'http://127.0.0.1:5173' });
   try {
-    const reviewer = await freshContext.newPage(); await reviewer.goto('/'); await reviewer.getByLabel('用户名', { exact: true }).fill(process.env.PIS_E2E_HANDOFF_USERNAME ?? 'synthetic.technician'); await reviewer.getByLabel('密码', { exact: true }).fill(process.env.PIS_E2E_HANDOFF_PASSWORD ?? 'Synthetic-handoff-only-42!');
+    const reviewer = await freshContext.newPage(); await reviewer.goto('/'); await reviewer.getByLabel('用户名', { exact: true }).fill(handoffUsername()); await reviewer.getByLabel('密码', { exact: true }).fill(process.env.PIS_E2E_HANDOFF_PASSWORD ?? 'Synthetic-handoff-only-42!');
     const login = reviewer.waitForResponse(r => new URL(r.url()).pathname === '/api/auth/login'); await reviewer.getByRole('button', { name: '登录', exact: true }).click(); expect((await login).status()).toBe(204);
     const reviewerCsrf = await (await reviewer.request.get('/api/auth/csrf')).json() as { token: string }; const d = await (await reviewer.request.get(report + '/review')).json() as Review;
     expect((await reviewer.request.post(report + '/review/APPROVE', { headers: { 'X-CSRF-TOKEN': reviewerCsrf.token, 'Idempotency-Key': crypto.randomUUID() }, data: decision(d, false) })).status()).toBe(200);

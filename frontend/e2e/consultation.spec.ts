@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { signInWorkflow } from './workflow-login';
+import { signInWorkflow, handoffUsername } from './workflow-login';
 import type { View, Command, Action } from '../src/features/report/consultationApi';
 
 // Real local Spring/PG and separate synthetic actors; no HTTP mocks or invitations sent.
@@ -28,7 +28,7 @@ test('case-scoped consultation records disagreement, explicit confirmation and a
   expect((await page.request.post(report + '/draft', { headers: headers(), data: draftBody })).status()).toBe(200);
   const other = await browser.newContext({ baseURL: 'http://127.0.0.1:5173' });
   try {
-    const reviewer = await other.newPage(); await reviewer.goto('/'); await reviewer.getByLabel('用户名', { exact: true }).fill(process.env.PIS_E2E_HANDOFF_USERNAME ?? 'synthetic.technician'); await reviewer.getByLabel('密码', { exact: true }).fill(process.env.PIS_E2E_HANDOFF_PASSWORD ?? 'Synthetic-handoff-only-42!'); const login = reviewer.waitForResponse(r => new URL(r.url()).pathname === '/api/auth/login'); await reviewer.getByRole('button', { name: '登录', exact: true }).click(); expect((await login).status()).toBe(204);
+    const reviewer = await other.newPage(); await reviewer.goto('/'); await reviewer.getByLabel('用户名', { exact: true }).fill(handoffUsername()); await reviewer.getByLabel('密码', { exact: true }).fill(process.env.PIS_E2E_HANDOFF_PASSWORD ?? 'Synthetic-handoff-only-42!'); const login = reviewer.waitForResponse(r => new URL(r.url()).pathname === '/api/auth/login'); await reviewer.getByRole('button', { name: '登录', exact: true }).click(); expect((await login).status()).toBe(204);
     const user = await (await reviewer.request.get('/api/auth/me')).json() as { id: string };
     const url = '/api/requests/consultations/cases/' + caseId;
     expect((await reviewer.request.get(url)).status()).toBe(404);

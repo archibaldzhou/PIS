@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { signInWorkflow } from './workflow-login';
+import { signInWorkflow, handoffUsername } from './workflow-login';
 
 test('qualified assignment, explicit claim, transfer and receiving user claim preserve versions and QC gate', async ({ page, browser }) => {
   await signInWorkflow(page);
@@ -47,7 +47,7 @@ test('qualified assignment, explicit claim, transfer and receiving user claim pr
   const other = await browser.newContext({ baseURL: 'http://127.0.0.1:5173' });
   try {
     const receiver = await other.newPage(); await receiver.goto('/');
-    await receiver.getByLabel('用户名', { exact: true }).fill(process.env.PIS_E2E_HANDOFF_USERNAME ?? 'synthetic.technician');
+    await receiver.getByLabel('用户名', { exact: true }).fill(handoffUsername());
     await receiver.getByLabel('密码', { exact: true }).fill(process.env.PIS_E2E_HANDOFF_PASSWORD ?? 'Synthetic-handoff-only-42!');
     const login = receiver.waitForResponse(r => new URL(r.url()).pathname === '/api/auth/login'); await receiver.getByRole('button', { name: '登录', exact: true }).click(); expect((await login).status()).toBe(204);
     await open(receiver); await act(receiver, '本人领取', 'claim', 3);

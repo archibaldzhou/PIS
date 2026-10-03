@@ -1,4 +1,4 @@
-import { signInWorkflow } from './workflow-login';
+import { signInWorkflow, handoffUsername } from './workflow-login';
 import { test, expect, type Page } from '@playwright/test';
 
 test('two synthetic users confirm handoff and keep aborted/rework task history', async ({ page, browser }) => {
@@ -54,7 +54,7 @@ test('two synthetic users confirm handoff and keep aborted/rework task history',
   const secondContext = await browser.newContext({ baseURL: 'http://127.0.0.1:5173' });
   try {
     const receiver = await secondContext.newPage(); await receiver.goto('/');
-    await receiver.getByLabel('用户名').fill(process.env.PIS_E2E_HANDOFF_USERNAME ?? 'synthetic.technician');
+    await receiver.getByLabel('用户名').fill(handoffUsername());
     await receiver.getByLabel('密码', { exact: true }).fill(process.env.PIS_E2E_HANDOFF_PASSWORD ?? 'Synthetic-handoff-only-42!');
     await receiver.getByRole('button', { name: '登录', exact: true }).click(); await receiver.getByRole('button', { name: '申请登记工作区' }).click();
     await enter(receiver); await receiver.getByRole('button', { name: '查看技术任务 ' + taskId, exact: true }).click();
