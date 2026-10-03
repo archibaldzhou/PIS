@@ -164,3 +164,5 @@ T28已按父会话确认的完整CI正常快进main，确切SHA为7eb4975e9062e6
 T29已通过完整验证并快进main（e482d3e1e5587fae959dc2c641463ab5fa116326）。T30新增精确版本人工合成数字QC与受控发布，独立验证分支待CI；[范围与验证边界](docs/api/t30-digital-qc.md)。发布只表示合成契约访问资格，不证明真实切片可阅片。
 
 T30及修复已由父会话确认完整CI成功并快进main（fb1388276f9953c27bd63e6ca03586035a1599b7）。T31新增OpenSeadragon合成RGB阅片、实际PNG多层瓦片、导航与受控私有缓存；[接口/实际截图/验证边界](docs/api/t31-viewer.md)。仅明确合成格式，不支持真实WSI或物理测量，独立validation/t31待完整CI。
+
+T31已完整验证并快进main（cf87b0773ba4aa796e9cd175b1792913a725578b）。T32新增真实OSD矩形/多边形/点ROI、像素测量、版本化合成X/Y校准和双视图；[接口及验证边界](docs/api/t32-roi.md)。默认未校准，不提供临床精度保证；独立validation/t32待完整CI。

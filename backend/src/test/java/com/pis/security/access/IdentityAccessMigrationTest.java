@@ -13,7 +13,7 @@ class IdentityAccessMigrationTest {
     void emptySchemaGetsNineAccessTablesAndOnlyThreeRoleTemplatesWithoutAccountsOrClinicalSeeds() throws Exception {
         try (var f = new AccessPolicyTestFixture()) {
             var flyway = f.database.configuration("classpath:db/migration").load();
-            assertThat(flyway.info().current().getVersion().toString()).isEqualTo("29");
+            assertThat(flyway.info().current().getVersion().toString()).isEqualTo("30");
             assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
             assertThat(flyway.migrate().migrationsExecuted).isZero();
             var tables = f.jdbc.queryForList("SELECT tablename FROM pg_tables WHERE schemaname = current_schema()", String.class);
@@ -23,7 +23,7 @@ class IdentityAccessMigrationTest {
             for (var table : List.of("app_user", "hospital", "campus", "department_campus", "patient", "pathology_case",
                     "user_role_scope", "case_access_scope", "case_assignment", "user_operation_qualification",
                     "workflow_scope", "workflow_grant", "request_workflow", "request_container_detail",
-                    "statistics_grant", "statistics_resource_grant", "statistics_snapshot", "statistics_fact", "storage_grant", "storage_case_grant", "storage_quota", "storage_asset", "storage_version", "storage_finalize", "storage_event", "storage_read_budget", "viewer_manifest", "viewer_read_budget", "digital_qc_grant", "digital_qc_head", "digital_qc_assessment", "digital_qc_event", "scan_grant", "scan_series", "scan_import", "scan_event")) {
+                    "statistics_grant", "statistics_resource_grant", "statistics_snapshot", "statistics_fact", "storage_grant", "storage_case_grant", "storage_quota", "storage_asset", "storage_version", "storage_finalize", "storage_event", "storage_read_budget", "roi_head", "roi_calibration", "roi_revision", "viewer_manifest", "viewer_read_budget", "digital_qc_grant", "digital_qc_head", "digital_qc_assessment", "digital_qc_event", "scan_grant", "scan_series", "scan_import", "scan_event")) {
                 assertThat(f.jdbc.queryForObject("SELECT count(*) FROM " + table, Integer.class)).isZero();
             }
             assertThat(f.jdbc.queryForList("SELECT code FROM security_role WHERE is_template AND enabled ORDER BY code", String.class))

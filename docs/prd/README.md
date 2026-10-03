@@ -60,3 +60,5 @@
 - T30：[数字扫描QC开发PRD v1](development-digital-qc-v1.md)，用户授权合成开发；医院专业规则和真实WSI验收未批准，开发负责人为当前任务实现者。实际UI-039已查看；版本绑定与消费门禁见ADR0020。
 
 - T31：[合成瓦片阅片PRD v1](development-tile-viewer-v1.md)，已查看UI-040合法实际原型，仅合成几何图；[ADR0021](../adr/0021-bounded-synthetic-tile-viewer.md)及[接口/验证边界](../api/t31-viewer.md)。
+
+- T32：[ROI、测量及双视图PRD](development-roi-v1.md)，已查看UI-041实际原型，用户授权合成开发，未获医院校准或临床验证；[ADR0022](../adr/0022-versioned-roi-pixel-coordinates.md)与[接口/交付记录](../api/t32-roi.md)。

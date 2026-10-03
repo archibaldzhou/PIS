@@ -188,6 +188,12 @@ public class DigitalQcService {
             audit.append(c.hospital(),action+"_V1","SCAN_IMPORT",scan,null,publicationVersion);var j=c.job();
             return new ConsumerBinding(c.hospital(),request,scan,j.slideId(),j.objectId(),j.objectHash(),j.version(),publicationVersion,actor.id(),actor.authVersion());});
     }
+    /** Explicit metadata history only: current identity/scope/qualification required, no QC consumption. */
+    public ConsumerBinding authorizeAnnotationHistory(UUID request,UUID scan) {
+        return tx.execute(s->{var c=context(request,scan);var actor=access.actor();var j=c.job();
+            audit.append(c.hospital(),"ROI_HISTORY_V1","SCAN_IMPORT",scan,null,j.version());
+            return new ConsumerBinding(c.hospital(),request,scan,j.slideId(),j.objectId(),j.objectHash(),j.version(),head(scan).version(),actor.id(),actor.authVersion());});
+    }
     public StorageProvider.Slice consume(UUID request,UUID scan,long publicationVersion,String range) {
         var before=tx.execute(s->{var c=consumable(request,scan,publicationVersion);audit.append(c.hospital(),"DIGITAL_QC_CONSUME_ATTEMPT_V1","SCAN_IMPORT",scan,null,publicationVersion);return c.job();});
         var bytes=storage.bytes(request,before.objectId(),range,"DOWNLOAD");
