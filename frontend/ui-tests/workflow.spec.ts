@@ -1,3 +1,4 @@
+import { reviewAction, refreshDirtyReview } from '../e2e/review-actions';
 import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -514,6 +515,74 @@ test('review retries original key, cancels action and simulation, preserves conf
  await page.getByRole('button', { name: '提交合成复核操作' }).click(); await page.getByRole('button', { name: '确认合成模拟' }).click(); await expect(page.getByText('复核依赖已变化或职责分离不满足，请重新核对。', { exact: true })).toBeVisible(); await expect(page.getByLabel('复核或退回原因')).toHaveValue('合成模拟意见');
  await page.getByRole('button', { name: '提交合成复核操作' }).click(); await page.getByRole('button', { name: '确认合成模拟' }).click(); await expect(page.getByLabel('复核版本身份')).toContainText('状态 SIMULATED_SIGNED'); await expect(page.getByRole('button', { name: '提交合成复核操作' })).toBeDisabled();
  await page.screenshot({ path: 'test-results/review-desktop.png', fullPage: true }); await page.setViewportSize({ width: 390, height: 844 }); await page.screenshot({ path: 'test-results/review-mobile.png', fullPage: true }); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+test('review action switching waits for delayed command and exact fresh revision without losing either confirmation', async ({ page }) => {
+ await start(page); const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+ const item = { caseId: id, requestId: 'synthetic-request', patientId: encounter.patientId, number: 'SYN-REVIEW', state: 'ACTIVE', version: 0, ownerId: 'synthetic-user', ready: true };
+ await page.route('**/api/requests/diagnosis/scopes/*', r => r.fulfill({ json: { total: 1, page: 1, pageSize: 10, items: [item] } }));
+ let releasePost: () => void = () => {}, releaseRead: () => void = () => {}, postStarted: () => void = () => {}, readStarted: () => void = () => {};
+ const postGate = new Promise<void>(r => { releasePost = r; }), readGate = new Promise<void>(r => { releaseRead = r; });
+ const postSeen = new Promise<void>(r => { postStarted = r; }), readSeen = new Promise<void>(r => { readStarted = r; });
+ let state = 'DRAFT', version = -1, reload = false; const sent: { action: string; body: { expectedVersion: number; revisionId: string; reason: string; simulationAcknowledged: boolean } }[] = [];
+ await page.route('**/api/requests/reports/cases/' + id + '/review', async r => {
+  if (reload) { readStarted(); await readGate; reload = false; }
+  await r.fulfill({ json: reviewFixture(id, state, version) });
+ });
+ await page.route('**/review/history?*', r => r.fulfill({ json: { caseId: id, page: 1, events: [] } }));
+ await page.route(/\/review\/(APPROVE|SIMULATE_SIGN)$/, async r => {
+  const action = r.request().url().split('/').pop() ?? ''; sent.push({ action, body: r.request().postDataJSON() });
+  if (action === 'APPROVE') { postStarted(); await postGate; state = 'APPROVED'; reload = true; } else state = 'SIMULATED_SIGNED';
+  version++; await r.fulfill({ json: { receipt: { status: 200, resourceType: 'REPORT_REVIEW', resourceId: id, version }, replayed: false } });
+ });
+ await page.getByRole('button', { name: '复核与模拟签署', exact: true }).click();
+ await page.getByRole('button', { name: '复核合成报告 ' + id }).click();
+ await expect(page.getByLabel('复核版本身份')).toContainText('流程版本 -1');
+ let completed = false; const approving = reviewAction(page, id, 'APPROVE').then(() => { completed = true; }); await postSeen;
+ await expect(page.getByLabel('合成复核动作')).toBeDisabled();
+ await page.getByText('复核通过（合成）', { exact: true }).click();
+ await expect(page.getByRole('option', { name: '模拟签署（无临床效力）', exact: true })).toHaveCount(0);
+ await expect(page.getByRole('dialog')).toHaveCount(0); expect(sent).toHaveLength(1);
+ await expect(page.getByLabel('复核或退回原因')).toHaveValue('Synthetic explicit human action');
+ releasePost(); await readSeen;
+ expect(completed).toBe(false); // A command receipt alone cannot release the helper to switch actions.
+ await expect(page.getByLabel('复核版本身份')).toHaveCount(0);
+ await expect(page.getByLabel('合成复核动作')).toHaveCount(0);
+ await expect(page.getByRole('dialog')).toHaveCount(0);
+ releaseRead(); await approving;
+ await expect(page.getByLabel('复核版本身份')).toContainText('流程版本 0');
+ // Clean action changes also require confirmation under the current explicit-action contract.
+ await page.getByLabel('合成复核动作').click(); await page.getByRole('option', { name: '退回修改', exact: true }).click();
+ const switchDialog = page.getByRole('dialog', { name: '切换动作并清除原因？', exact: true });
+ await expect(switchDialog).toBeVisible(); await switchDialog.getByRole('button', { name: '保留当前输入' }).click(); await expect(switchDialog).toHaveCount(0);
+ await reviewAction(page, id, 'SIMULATE_SIGN');
+ expect(sent.map(s => s.action)).toEqual(['APPROVE', 'SIMULATE_SIGN']);
+ expect(sent[1].body).toMatchObject({ expectedVersion: 0, revisionId: 'revision-' + id, reason: 'Synthetic explicit human action', simulationAcknowledged: true });
+ await expect(page.getByLabel('复核版本身份')).toContainText('流程版本 1');
+ await expect(page.getByLabel('复核或退回原因')).toHaveValue('');
+ await expect(page.getByRole('button', { name: '提交合成复核操作' })).toBeDisabled();
+});
+test('review dirty refresh after separation refusal waits for approved revision and closed parent dialog before switching', async ({ page }) => {
+ await start(page); const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'; let state = 'DRAFT', version = -1;
+ await page.route('**/api/requests/diagnosis/scopes/*', r => r.fulfill({ json: { total: 1, page: 1, pageSize: 10, items: [{ caseId: id, requestId: 'synthetic-request', patientId: encounter.patientId, number: 'SYN-REVIEW', state: 'ACTIVE', version: 0, ownerId: 'synthetic-user', ready: true }] } }));
+ let release: () => void = () => {}, started: () => void = () => {};
+ const gate = new Promise<void>(r => { release = r; }), seen = new Promise<void>(r => { started = r; });
+ await page.route('**/api/requests/reports/cases/' + id + '/review', async r => {
+  if (state === 'APPROVED') { started(); await gate; }
+  await r.fulfill({ json: reviewFixture(id, state, version) });
+ });
+ await page.route('**/review/history?*', r => r.fulfill({ json: { caseId: id, page: 1, events: [] } }));
+ await page.route('**/review/APPROVE', r => r.fulfill({ status: 409, json: { code: 'REPORT_SEPARATION_REQUIRED' } }));
+ const signatures: unknown[] = [];
+ await page.route('**/review/SIMULATE_SIGN', async r => { signatures.push(r.request().postDataJSON()); state = 'SIMULATED_SIGNED'; version = 1; await r.fulfill({ json: { receipt: { status: 200, resourceType: 'REPORT_REVIEW', resourceId: id, version }, replayed: false } }); });
+ await page.getByRole('button', { name: '复核与模拟签署', exact: true }).click(); await page.getByRole('button', { name: '复核合成报告 ' + id }).click();
+ await expect(page.getByLabel('复核版本身份')).toContainText('状态 DRAFT'); await reviewAction(page, id, 'APPROVE', 409);
+ state = 'APPROVED'; version = 0; // Synthetic independent reviewer has committed; browser must reread.
+ let completed = false; const refresh = refreshDirtyReview(page, id).then(() => { completed = true; }); await seen;
+ expect(completed).toBe(false); await expect(page.getByLabel('合成复核动作')).toHaveCount(0); expect(signatures).toHaveLength(0);
+ release(); await refresh;
+ await expect(page.getByLabel('复核版本身份')).toContainText('流程版本 0'); await expect(page.getByRole('dialog')).toHaveCount(0);
+ await reviewAction(page, id, 'SIMULATE_SIGN');
+ expect(signatures).toEqual([expect.objectContaining({ expectedVersion: 0, revisionId: 'revision-' + id, reason: 'Synthetic explicit human action', simulationAcknowledged: true })]);
 });
 test('review late case responses cannot overwrite selection; dirty switching and leaving are cancellable', async ({ page }) => {
  await start(page); await page.route('**/review/history?*', r => r.fulfill({ json: { caseId: new URL(r.request().url()).pathname.split('/')[5], page: 1, events: [] } })); const a = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', b = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';

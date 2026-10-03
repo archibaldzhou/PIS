@@ -1,0 +1,29 @@
+
+> pis-frontend@0.0.1 test:ui
+> playwright test --config playwright.ui.config.ts workflow.spec.ts -g review
+
+[2m[WebServer] [22m(node:276226) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[2m[WebServer] [22m(Use `node --trace-warnings ...` to show where the warning was created)
+[2m[WebServer] [22m(node:276239) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[2m[WebServer] [22m(Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 7 tests using 1 worker
+
+(node:276259) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:276259) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 ui-tests/workflow.spec.ts:110:1 › label preview closes without printing and unknown reprint retains identity and key (3.9s)
+  ✓  2 ui-tests/workflow.spec.ts:304:1 › material label preview rechecks server invalidation before displaying cached identity (2.7s)
+  ✓  3 ui-tests/workflow.spec.ts:500:1 › review retries original key, cancels action and simulation, preserves conflict input and freezes confirmed simulation (6.3s)
+  ✓  4 ui-tests/workflow.spec.ts:519:1 › review action switching waits for delayed command and exact fresh revision without losing either confirmation (5.0s)
+  ✓  5 ui-tests/workflow.spec.ts:563:1 › review late case responses cannot overwrite selection; dirty switching and leaving are cancellable (4.3s)
+  ✓  6 ui-tests/workflow.spec.ts:584:1 › fixed PDF generation and unknown preview retry keep original bytes and key; preview closes and print cancellation preserves input (5.7s)
+  ✓  7 ui-tests/workflow.spec.ts:618:1 › output print conflict preserves input; refresh requires review; user self-report and download keep fixed artifact (9.2s)
+
+  7 passed (39.6s)
+npm notice
+npm notice New major version of npm available! 11.21.0 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice

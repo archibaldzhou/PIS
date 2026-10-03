@@ -1,0 +1,38 @@
+
+> pis-frontend@0.0.1 test:ui
+> playwright test --config playwright.ui.config.ts workflow.spec.ts -g review|amendment|fixed PDF|output|delivery
+
+[2m[WebServer] [22m(node:277937) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[2m[WebServer] [22m(Use `node --trace-warnings ...` to show where the warning was created)
+[2m[WebServer] [22m(node:277950) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[2m[WebServer] [22m(Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 16 tests using 1 worker
+
+(node:277970) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:277970) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   1 ui-tests/workflow.spec.ts:110:1 › label preview closes without printing and unknown reprint retains identity and key (3.7s)
+  ✓   2 ui-tests/workflow.spec.ts:304:1 › material label preview rechecks server invalidation before displaying cached identity (3.6s)
+  ✓   3 ui-tests/workflow.spec.ts:500:1 › review retries original key, cancels action and simulation, preserves conflict input and freezes confirmed simulation (6.5s)
+  ✓   4 ui-tests/workflow.spec.ts:519:1 › review action switching waits for delayed command and exact fresh revision without losing either confirmation (5.6s)
+  ✓   5 ui-tests/workflow.spec.ts:564:1 › review dirty refresh after separation refusal waits for approved revision and closed parent dialog before switching (4.9s)
+  ✓   6 ui-tests/workflow.spec.ts:587:1 › review late case responses cannot overwrite selection; dirty switching and leaving are cancellable (3.8s)
+  ✓   7 ui-tests/workflow.spec.ts:608:1 › fixed PDF generation and unknown preview retry keep original bytes and key; preview closes and print cancellation preserves input (3.9s)
+  ✓   8 ui-tests/workflow.spec.ts:626:1 › output rejects corrupt binary without displaying PDF and cannot mix late responses or dirty case input (3.7s)
+  ✓   9 ui-tests/workflow.spec.ts:642:1 › output print conflict preserves input; refresh requires review; user self-report and download keep fixed artifact (6.9s)
+  ✓  10 ui-tests/workflow.spec.ts:666:1 › amendment double click and unknown retry preserve base version and key; type cancel and dirty history navigation are explicit (4.1s)
+  ✓  11 ui-tests/workflow.spec.ts:677:1 › amendment late case response is discarded; conflicts preserve reason and case cancellation preserves draft (2.9s)
+  ✓  12 ui-tests/workflow.spec.ts:685:1 › historical amendment snapshot stays read only and audited PDF uses the selected old artifact (2.7s)
+  ✓  13 ui-tests/workflow.spec.ts:698:1 › delivery unknown claim preserves original key and prevents navigation; HTTP receipt only advances to attempting (3.4s)
+  ✓  14 ui-tests/workflow.spec.ts:706:1 › delivery wrong ACK conflict keeps input; dirty cancel and late case response cannot switch objects silently (3.7s)
+  ✓  15 ui-tests/workflow.spec.ts:755:1 › frozen history exposes exact revisions and local readback without inferring confirmation or delivery (2.2s)
+  ✓  16 ui-tests/workflow.spec.ts:788:1 › cytology completion submits exact reserved preparation and counts; historical outputs remain independently identified (3.5s)
+
+  16 passed (1.1m)
+npm notice
+npm notice New major version of npm available! 11.21.0 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice

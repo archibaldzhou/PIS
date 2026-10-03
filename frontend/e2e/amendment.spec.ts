@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { signInWorkflow, handoffUsername } from './workflow-login';
+import { nextReview, settledReview, refreshDirtyReview, reviewAction } from './review-actions';
 
 test('supplement and correction create new independently reviewed branches while original PDF stays byte identical', async ({ page, browser }) => {
   await signInWorkflow(page);
@@ -27,20 +28,16 @@ test('supplement and correction create new independently reviewed branches while
   async function open(p: Page) {
     await p.getByRole('button', { name: '申请登记工作区' }).click(); await p.getByLabel('授权工作范围').click(); await p.getByText('合成申请工作范围', { exact: true }).last().click();
     const queue = await (await p.request.get('/api/requests/diagnosis/scopes/' + scopes[0].id + '?pageSize=50')).json() as { items: { caseId: string }[] }; const index = queue.items.findIndex(i => i.caseId === caseId); expect(index).toBeGreaterThanOrEqual(0);
-    await p.getByRole('button', { name: '复核与模拟签署', exact: true }).click(); if (index >= 10) await p.getByTitle(String(Math.floor(index / 10) + 1), { exact: true }).click(); await p.getByRole('button', { name: '复核合成报告 ' + caseId }).click();
+    await p.getByRole('button', { name: '复核与模拟签署', exact: true }).click(); if (index >= 10) await p.getByTitle(String(Math.floor(index / 10) + 1), { exact: true }).click(); const fresh = nextReview(p, caseId); await p.getByRole('button', { name: '复核合成报告 ' + caseId }).click(); await settledReview(p, caseId, await fresh);
   }
-  async function act(p: Page, action: string, expectedStatus = 200) {
-    if (action === 'SIMULATE_SIGN') { await p.getByLabel('合成复核动作').click(); await p.getByRole('option', { name: '模拟签署（无临床效力）', exact: true }).click(); await p.getByRole('button', { name: '清除并切换动作' }).click(); }
-    await p.getByLabel('核对复核病例 UUID').fill(caseId); await p.getByLabel('复核或退回原因').fill('Synthetic explicit human action');
-    const response = p.waitForResponse(r => new URL(r.url()).pathname === report + '/review/' + action && r.request().method() === 'POST'); await p.getByRole('button', { name: '提交合成复核操作' }).click(); if (action === 'SIMULATE_SIGN') await p.getByRole('button', { name: '确认合成模拟' }).click(); expect((await response).status()).toBe(expectedStatus);
-  }
+  const act = (p: Page, action: 'APPROVE' | 'SIMULATE_SIGN', expectedStatus = 200) => reviewAction(p, caseId, action, expectedStatus);
   await open(page); await act(page, 'APPROVE', 409); // Author separation is enforced server-side.
   const other = await browser.newContext({ baseURL: 'http://127.0.0.1:5173' });
   try {
     const reviewer = await other.newPage(); await reviewer.goto('/'); await reviewer.getByLabel('用户名', { exact: true }).fill(handoffUsername()); await reviewer.getByLabel('密码', { exact: true }).fill(process.env.PIS_E2E_HANDOFF_PASSWORD ?? 'Synthetic-handoff-only-42!');
     const login = reviewer.waitForResponse(r => new URL(r.url()).pathname === '/api/auth/login'); await reviewer.getByRole('button', { name: '登录', exact: true }).click(); expect((await login).status()).toBe(204);
     await open(reviewer); await act(reviewer, 'APPROVE'); await expect(reviewer.getByLabel('复核版本身份')).toContainText('状态 APPROVED');
-    await page.getByRole('button', { name: '刷新诊断队列与资格' }).click(); await page.getByRole('button', { name: '放弃并切换' }).click(); await expect(page.getByLabel('复核版本身份')).toContainText('状态 APPROVED');
+    await refreshDirtyReview(page, caseId); await expect(page.getByLabel('复核版本身份')).toContainText('状态 APPROVED');
     await act(page, 'SIMULATE_SIGN'); await expect(page.getByLabel('复核版本身份')).toContainText('状态 SIMULATED_SIGNED');
     expect((await page.request.post(report + '/draft', { headers: headers(), data: { ...draftBody, expectedVersion: 0 } })).status()).toBe(409);
     const history = await (await page.request.get(report + '/review')).json() as { events: { action: string; reviewId: string | null; id: string }[] }; expect(history.events.map(e => e.action)).toEqual(['SIMULATE_SIGN', 'APPROVE']); expect(history.events[0].reviewId).toBe(history.events[1].id);
