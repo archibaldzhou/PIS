@@ -102,3 +102,7 @@ T30：V28数字QC、版本化合成检查单与精确发布/撤销/消费门禁�
 T31：父会话确认T30验证CI成功，已保留历史整合main。新增实际合成PNG金字塔、OpenSeadragon及逐资源QC/权限门禁；[本地证据和截图](api/t31-viewer.md)。本地缺失BOM仍阻断完整后端和真实服务E2E，独立分支等待CI；合成栅格不能证明真实WSI链路。
 
 T32：父会话确认T31完整CI成功并保留历史整合main。新增像素ROI/CAS修订、独立X/Y合成校准及双视图恒等同步；真实UI/数值/PG本地证据见[T32交付](api/t32-roi.md)。完整后端及真实服务E2E本地缺BOM，validation/t32待CI，不证明临床测量准确性。
+
+## T33 阅片可测量验证
+
+新增`bash backend/src/test/probes/viewer-validation.sh`进入CI：128MiB堆、2线程、32固定任务，逐像素RGB/层级、取消和独立提供者JVM重启摘要一致性。前端保留所有既有门禁并新增流式瓦片上限、非等向三角形、两窗口真实OSD像素/切换/资源清理与损坏PNG回归。后端增加9身份缓存淘汰/冷实例重新鉴权；真实E2E强化固定RGB解码与并发私有响应，未替代逐资源授权和QC门禁。实际结果及未运行项见[交付记录](api/t33-viewer-validation.md)，原始证据在`docs/evidence/t33`。提供者探针不是Spring启动或真实WSI/GPU/临床验证。

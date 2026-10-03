@@ -1,0 +1,103 @@
+
+> pis-frontend@0.0.1 test:ui
+> playwright test --config playwright.ui.config.ts
+
+[2m[WebServer] [22m(node:272394) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[2m[WebServer] [22m(Use `node --trace-warnings ...` to show where the warning was created)
+[2m[WebServer] [22m(node:272407) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[2m[WebServer] [22m(Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 77 tests using 2 workers
+
+(node:272427) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:272428) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:272427) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:272428) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   1 ui-tests/digitalqc.spec.ts:27:1 › digital QC unknown fields never default to pass and empty quantities never become zero (3.0s)
+  ✓   2 ui-tests/roi.spec.ts:12:1 › ROI rectangle polygon and point persist canonical pixels with real rotated overlay and screenshot (6.4s)
+  ✓   3 ui-tests/digitalqc.spec.ts:28:1 › digital QC uncertain duplicate preserves original exact binding and key (4.2s)
+  ✓   4 ui-tests/roi.spec.ts:13:1 › ROI failed save freezes original key, cancellation preserves uncertain request and explicit retry succeeds (4.5s)
+  ✓   5 ui-tests/digitalqc.spec.ts:29:1 › digital QC conflict retains dirty input, local cancellation is explicit and navigation clears it (5.3s)
+  ✓   7 ui-tests/digitalqc.spec.ts:30:1 › digital QC cancelled late response cannot restore old object after leaving (3.3s)
+  ✓   6 ui-tests/roi.spec.ts:14:1 › ROI dirty switching is cancellable and dual images only synchronize identical manifests (6.9s)
+  ✓   8 ui-tests/digitalqc.spec.ts:32:1 › digital QC history rejects a foreign object and dirty evaluation cannot silently publish (2.9s)
+  ✓  10 ui-tests/scan.spec.ts:25:1 › scan duplicate click and uncertain response preserve the complete original batch key (3.9s)
+  ✓   9 ui-tests/roi.spec.ts:15:1 › ROI calibration edits and soft deletion preserve exact revision history while QC clears overlays (7.6s)
+  ✓  11 ui-tests/scan.spec.ts:26:1 › scan changing mapping confirms dirty fields and clears obsolete object identity (5.4s)
+  ✓  12 ui-tests/roi.spec.ts:17:1 › ROI cancelled late save cannot restore A after explicit abandonment and switching to B (4.9s)
+  ✓  13 ui-tests/scan.spec.ts:27:1 › scan cancelled late query cannot restore an old case or fake successful import (3.0s)
+  ✓  14 ui-tests/statistics.spec.ts:20:1 › statistics zero, no data and fixed source drill retain metric definitions (2.5s)
+  ✓  15 ui-tests/scan.spec.ts:29:1 › scan uncertain cancellation preserves lease and key; confirmed cancel never leaves a parse action enabled (2.9s)
+  ✓  16 ui-tests/statistics.spec.ts:34:1 › statistics double-click, network failure and retry preserve exact query key (2.4s)
+  ✓  17 ui-tests/storage.spec.ts:24:1 › storage uncertain reserve and double click reuse exact key before staged completion (3.1s)
+  ✓  18 ui-tests/statistics.spec.ts:49:1 › statistics cancelled late response never restores obsolete totals and forbidden is not empty (2.4s)
+  ✓  19 ui-tests/storage.spec.ts:35:1 › storage dirty selection requires explicit discard and cancellation rejects late capacity (3.6s)
+  ✓  21 ui-tests/storage.spec.ts:42:1 › storage unavailable does not invent capacity or accept cross-case versions (2.4s)
+  ✓  20 ui-tests/viewer-validation.spec.ts:5:2 › T33 real OSD pixels and bounded A B lifecycle 1280 (8.1s)
+  ✓  22 ui-tests/storage.spec.ts:48:1 › storage stopping uncertain tracking is explicit and never claims server rollback (5.0s)
+  ✓  24 ui-tests/viewer.spec.ts:3:1 › viewer renders actual generated PNG pixels, navigates and saves real screenshot (3.2s)
+  ✓  23 ui-tests/viewer-validation.spec.ts:5:2 › T33 real OSD pixels and bounded A B lifecycle 1024 (7.6s)
+  ✓  25 ui-tests/viewer.spec.ts:4:1 › viewer cache cannot preserve display after QC revocation (3.0s)
+  ✓  26 ui-tests/viewer-validation.spec.ts:43:1 › T33 corrupt binary never becomes a blank success and retry requires current authorization (3.5s)
+  ✓  27 ui-tests/viewer.spec.ts:5:1 › viewer missing tiles fail visibly and explicit retry recovers actual pixels (3.1s)
+  ✓  28 ui-tests/workflow.spec.ts:19:1 › empty, forbidden and retry errors remain distinct (2.2s)
+  ✓  29 ui-tests/viewer.spec.ts:6:1 › viewer late A response never replaces B and stopping destroys all canvases (3.3s)
+  ✓  31 ui-tests/viewer.spec.ts:8:1 › viewer cancelled uncertain preparation retries the original key and renders only after confirmation (2.7s)
+  ✓  30 ui-tests/workflow.spec.ts:30:1 › dirty close is cancellable; discard clears values on reopen; refresh prompts (6.0s)
+  ✓  32 ui-tests/workflow.spec.ts:48:1 › unknown write result freezes input and reuses exact intent; does not claim success (2.5s)
+  ✓  33 ui-tests/workflow.spec.ts:67:1 › registration remains readable on a narrow viewport (1.5s)
+  ✓  34 ui-tests/workflow.spec.ts:75:1 › reception uncertain result preserves original intent and blocks navigation (2.9s)
+  ✓  35 ui-tests/workflow.spec.ts:109:1 › label preview closes without printing and unknown reprint retains identity and key (3.5s)
+  ✓  36 ui-tests/workflow.spec.ts:147:1 › grossing resets modes, revokes photo URLs and freezes an uncertain command (4.3s)
+  ✓  37 ui-tests/workflow.spec.ts:191:1 › exact request selection and saved revision wait for the correction receipt (2.5s)
+  ✓  38 ui-tests/workflow.spec.ts:233:1 › technical task changes clear local identity and unknown claim retains original intent (4.7s)
+  ✓  39 ui-tests/workflow.spec.ts:273:1 › material path switch discards hidden inputs and uncertain registration never creates an identity locally (3.9s)
+  ✓  40 ui-tests/workflow.spec.ts:303:1 › material label preview rechecks server invalidation before displaying cached identity (3.3s)
+  ✓  41 ui-tests/workflow.spec.ts:329:1 › quality preserves pending identity, confirms dirty operation changes and reuses uncertain intent (4.4s)
+  ✓  42 ui-tests/workflow.spec.ts:358:1 › worklist clears cross-page selections and uncertain batch retries exact original items (3.7s)
+  ✓  43 ui-tests/workflow.spec.ts:380:1 › worklist partial results preserve successes while denied query is not empty data (2.5s)
+  ✓  44 ui-tests/workflow.spec.ts:395:1 › diagnosis uncertain claim keeps case version and key and prevents navigation (2.8s)
+  ✓  45 ui-tests/workflow.spec.ts:419:1 › diagnosis dirty case switch clears hidden target and distinguishes forbidden from empty (4.6s)
+  ✓  46 ui-tests/workflow.spec.ts:438:1 › late diagnosis detail cannot replace the newly selected case (1.6s)
+  ✓  47 ui-tests/workflow.spec.ts:454:1 › report template cancel preserves draft; switch clears fields; uncertain save retries exact revision (5.8s)
+  ✓  48 ui-tests/workflow.spec.ts:480:1 › report case switch discards late responses and confirms dirty leave or cancellation (4.0s)
+  ✓  49 ui-tests/workflow.spec.ts:499:1 › review retries original key, cancels action and simulation, preserves conflict input and freezes confirmed simulation (5.3s)
+  ✓  50 ui-tests/workflow.spec.ts:518:1 › review late case responses cannot overwrite selection; dirty switching and leaving are cancellable (4.0s)
+  ✓  51 ui-tests/workflow.spec.ts:539:1 › fixed PDF generation and unknown preview retry keep original bytes and key; preview closes and print cancellation preserves input (4.1s)
+  ✓  52 ui-tests/workflow.spec.ts:557:1 › output rejects corrupt binary without displaying PDF and cannot mix late responses or dirty case input (3.6s)
+  ✓  53 ui-tests/workflow.spec.ts:573:1 › output print conflict preserves input; refresh requires review; user self-report and download keep fixed artifact (6.8s)
+  ✓  54 ui-tests/workflow.spec.ts:597:1 › amendment double click and unknown retry preserve base version and key; type cancel and dirty history navigation are explicit (3.9s)
+  ✓  55 ui-tests/workflow.spec.ts:608:1 › amendment late case response is discarded; conflicts preserve reason and case cancellation preserves draft (2.8s)
+  ✓  56 ui-tests/workflow.spec.ts:616:1 › historical amendment snapshot stays read only and audited PDF uses the selected old artifact (2.3s)
+  ✓  57 ui-tests/workflow.spec.ts:629:1 › delivery unknown claim preserves original key and prevents navigation; HTTP receipt only advances to attempting (3.5s)
+  ✓  58 ui-tests/workflow.spec.ts:637:1 › delivery wrong ACK conflict keeps input; dirty cancel and late case response cannot switch objects silently (3.5s)
+  ✓  59 ui-tests/workflow.spec.ts:655:1 › frozen dirty stage and case navigation can cancel; switching clears inputs and mobile stays bounded (3.7s)
+  ✓  60 ui-tests/workflow.spec.ts:667:1 › frozen unknown double click keeps original identity time and idempotency key; conflict permits explicit refresh (3.4s)
+  ✓  61 ui-tests/workflow.spec.ts:679:1 › frozen late case response is discarded and read failure remains distinct (2.3s)
+  ✓  62 ui-tests/workflow.spec.ts:686:1 › frozen history exposes exact revisions and local readback without inferring confirmation or delivery (2.3s)
+  ✓  63 ui-tests/workflow.spec.ts:701:1 › cytology dirty path and container changes require confirmation and clear obsolete fields (5.0s)
+  ✓  64 ui-tests/workflow.spec.ts:709:1 › cytology double click and unknown result preserve exact command key; conflict retains input (2.6s)
+  ✓  65 ui-tests/workflow.spec.ts:715:1 › cytology late old-container read cannot replace current forbidden state; retry recovers (2.4s)
+  ✓  66 ui-tests/workflow.spec.ts:719:1 › cytology completion submits exact reserved preparation and counts; historical outputs remain independently identified (3.8s)
+  ✓  67 ui-tests/workflow.spec.ts:735:1 › staining dirty batch/action switches cancel or clear old control fields and mobile remains bounded (3.9s)
+  ✓  68 ui-tests/workflow.spec.ts:739:1 › staining unknown double click retains exact frozen control request and retry conflict keeps evidence (2.6s)
+  ✓  69 ui-tests/workflow.spec.ts:742:1 › staining late batch response cannot overwrite a new forbidden batch and refresh recovers (2.1s)
+  ✓  70 ui-tests/workflow.spec.ts:745:1 › staining manual result binds exact member and control then retains its history after revocation (3.5s)
+  ✓  71 ui-tests/workflow.spec.ts:759:1 › consultation dirty actions and case switches cancel or discard without carrying personal text (5.6s)
+  ✓  72 ui-tests/workflow.spec.ts:764:1 › consultation double click and uncertain opinion preserve original key; stale input is never overwritten (3.1s)
+  ✓  73 ui-tests/workflow.spec.ts:767:1 › consultation late response cannot reveal old case after revoked new case; refresh can recover (2.3s)
+  ✓  74 ui-tests/workflow.spec.ts:776:1 › archive dirty inventory and case navigation can cancel or explicitly discard (4.6s)
+  ✓  75 ui-tests/workflow.spec.ts:783:1 › archive double click keeps original identity and key on uncertain retry then preserves conflict input (3.0s)
+  ✓  76 ui-tests/workflow.spec.ts:789:1 › archive late snapshot cannot replace a newer selected snapshot and errors are not empty success (2.3s)
+  ✓  77 ui-tests/workflow.spec.ts:794:1 › archive wrong barcode blocks operation and cancelled form switch retains scan (2.9s)
+
+  77 passed (3.8m)
+npm notice
+npm notice New major version of npm available! 11.21.0 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice

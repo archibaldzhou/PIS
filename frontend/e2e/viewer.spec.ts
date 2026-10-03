@@ -82,6 +82,17 @@ test('viewer renders actual authorized RGB pyramid and revocation rejects warmed
   await page.getByRole('button', { name: '旋转90度' }).click(); await page.getByRole('button', { name: '水平翻转' }).click(); await expect(page.locator('[data-roi-shape]')).toHaveCount(1);
   await page.screenshot({ path: info.outputPath('real-service-synthetic-roi.png'), fullPage: true });
   const tilePath = `${viewerPath}/tiles/9/0/0?publicationVersion=2`; const tile = await page.request.get(tilePath); expect(tile.status()).toBe(200); expect((await tile.body()).subarray(0, 8)).toEqual(Buffer.from([137,80,78,71,13,10,26,10])); expect(createHash('sha256').update(await tile.body()).digest('hex')).toBe(tile.headers()['x-content-sha256']);
+  // T33: actual authorized binary decode, fixed RGB channels and bounded concurrent reads.
+  const rgb = await page.evaluate(async (bytes: number[]) => {
+    const image = await createImageBitmap(new Blob([new Uint8Array(bytes)], { type: 'image/png' }));
+    try { const canvas = document.createElement('canvas'); canvas.width = image.width; canvas.height = image.height;
+      const ctx = canvas.getContext('2d'); if (!ctx) throw Error('No decoder canvas'); ctx.drawImage(image, 0, 0);
+      return { width: image.width, height: image.height, cell: Array.from(ctx.getImageData(32, 32, 1, 1).data), background: Array.from(ctx.getImageData(4, 4, 1, 1).data) };
+    } finally { image.close(); }
+  }, Array.from(await tile.body()));
+  expect(rgb).toEqual({ width: 128, height: 128, cell: [160, 72, 157, 255], background: [238, 210, 232, 255] });
+  const concurrent = await Promise.all(Array.from({ length: 4 }, () => page.request.get(tilePath)));
+  for (const response of concurrent) { expect(response.status()).toBe(200); expect(await response.body()).toEqual(await tile.body()); expect(response.headers()['cache-control']).toBe('private, no-store'); }
   expect((await page.request.post(`${qcPath}/REVOKE`, { headers: headers(), data: { expectedVersion: 2, assessmentVersion: 1, reason: 'Synthetic viewer revoke' } })).status()).toBe(200);
   for (const resource of [tilePath, `${viewerPath}?publicationVersion=2`, `${viewerPath}/thumbnail?publicationVersion=2`]) expect((await page.request.get(resource)).status()).toBe(409);
   await expect(page.getByLabel('合成瓦片画布', { exact: true }).locator('canvas')).toHaveCount(0, { timeout: 6000 });

@@ -1,0 +1,3 @@
+Java syntax parse only: PASS (not type checking, build or tests)
+Source lexical-scope scan: 217 files, 0 possible conflicts; not full type compilation
+HTTP helper declaration review: 23 caller methods, 0 requiring review. Source check, not full test compilation.

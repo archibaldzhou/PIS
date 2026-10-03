@@ -1,0 +1,1 @@
+PASS actual JDK ROI geometry: finite/bounds/self-intersection and versioned anisotropic measurement

@@ -1,0 +1,16 @@
+Synthetic development validation, not hospital capacity or SLA
+OS: Linux-6.18.44-x86_64-with-glibc2.41 machine: x86_64 logical CPUs: 5
+/sys/fs/cgroup/memory.max: 17179869184
+/sys/fs/cgroup/cpu.max: 400000 100000
+COMMAND ['java', '-version'] EXIT 0
+openjdk version "21.0.12.1" 2026-08-18
+OpenJDK Runtime Environment (build 21.0.12.1+1-1-deb13u1-Debian)
+OpenJDK 64-Bit Server VM (build 21.0.12.1+1-1-deb13u1-Debian, mixed mode, sharing)
+
+COMMAND ['/usr/bin/chromium', '--version'] EXIT 0
+Chromium 151.0.7922.173 built on Debian GNU/Linux 13 (trixie)
+
+COMMAND ['/tmp/pis-frontend-tools/node-v22.23.3-linux-x64/bin/node', '--version'] EXIT 0
+v22.23.3
+
+openslide-show-properties: NOT_CONFIGURED

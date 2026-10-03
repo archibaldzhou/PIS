@@ -1,0 +1,2 @@
+46:pis.security.development-account.enabled=${PIS_DEV_AUTH_ENABLED:false}
+47:pis.workflow.development-enabled=${PIS_WORKFLOW_DEV_ENABLED:false}

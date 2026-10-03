@@ -1,7 +1,7 @@
 name: PIS CI
 on:
   push:
-    branches: [main, validation/t15-20261002, validation/t28, validation/t29, validation/t30, validation/t31, validation/t32]
+    branches: [main, validation/t15-20261002, validation/t28, validation/t29, validation/t30, validation/t31, validation/t32, validation/t33]
   pull_request:
 permissions:
   contents: read
@@ -44,6 +44,8 @@ jobs:
       - name: Backend test and package
         working-directory: backend
         run: ./mvnw -B -ntp verify
+      - name: Bounded synthetic viewer provider validation
+        run: bash backend/src/test/probes/viewer-validation.sh
       - name: Install pinned npm
         run: npm install --global npm@11.21.0 --no-audit --no-fund
       - name: Frontend install

@@ -1,0 +1,48 @@
+{
+  "viewport": {
+    "width": 1280,
+    "height": 900
+  },
+  "browser": "151.0.7922.173",
+  "colors": {
+    "counts": [
+      5011,
+      121380,
+      166198
+    ],
+    "width": 1004,
+    "height": 520
+  },
+  "cycles": [
+    {
+      "scan": "B",
+      "canvases": 2
+    },
+    {
+      "scan": "A",
+      "canvases": 2
+    },
+    {
+      "scan": "B",
+      "canvases": 2
+    },
+    {
+      "scan": "A",
+      "canvases": 2
+    },
+    {
+      "scan": "B",
+      "canvases": 2
+    },
+    {
+      "scan": "A",
+      "canvases": 2
+    }
+  ],
+  "peakTileRequests": 8,
+  "totalTileRequests": 171,
+  "pendingAtStop": 0,
+  "finalCanvases": 0,
+  "heap": "UNMEASURED: DOM and request counts do not establish heap leak freedom",
+  "transport": "synthetic HTTP fixture; real OpenSeadragon canvas"
+}
