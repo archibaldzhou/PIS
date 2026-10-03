@@ -1,0 +1,89 @@
+import { test, expect, type Page } from '@playwright/test';
+import { signInWorkflow } from './workflow-login';
+
+test('supplement and correction create new independently reviewed branches while original PDF stays byte identical', async ({ page, browser }) => {
+  await signInWorkflow(page);
+  const scopes = await (await page.request.get('/api/requests/scopes')).json() as { id: string }[];
+  const encounters = await (await page.request.get('/api/requests/encounters', { params: { scopeId: scopes[0].id, number: 'SYN-AMEND-001' } })).json() as { id: string; patientId: string }[];
+  const csrf = await (await page.request.get('/api/auth/csrf')).json() as { token: string };
+  const headers = () => ({ 'X-CSRF-TOKEN': csrf.token, 'Idempotency-Key': crypto.randomUUID() });
+  const create = await page.request.post('/api/requests', { headers: headers(), data: { scopeId: scopes[0].id, encounterId: encounters[0].id, draft: { clinicalHistory: 'Synthetic diagnosis routing', sampledAt: '2026-01-01T08:00:00Z', containers: [{ site: 'Synthetic site', laterality: 'UNKNOWN', materialQuantity: 1, fixative: 'Synthetic', fixedAt: '2026-01-01T08:10:00Z' }] } } });
+  expect(create.status()).toBe(201); const rid = (await create.json() as { receipt: { resourceId: string } }).receipt.resourceId;
+  expect((await page.request.post('/api/requests/' + rid + '/submit', { headers: headers(), data: { expectedVersion: 0 } })).status()).toBe(200);
+  const detail = await (await page.request.get('/api/requests/' + rid)).json() as { containers: { id: string }[] };
+  const cid = detail.containers[0].id;
+  expect((await page.request.post('/api/receptions/' + rid + '/receive', { headers: headers(), data: { expectedVersion: 1, patientId: encounters[0].patientId, encounterNumber: 'SYN-AMEND-001', containerIds: [cid] } })).status()).toBe(200);
+  const slide = await page.request.post('/api/materials/requests/' + rid + '/direct-slides', { headers: headers(), data: { requestVersion: 2, confirmedContainerId: cid, reason: 'Synthetic direct diagnosis slide' } });
+  expect(slide.status()).toBe(201); const mid = (await slide.json() as { receipt: { resourceId: string } }).receipt.resourceId;
+  const caseId = (await (await page.request.get('/api/materials/' + mid)).json() as { entity: { caseId: string } }).entity.caseId;
+  const path = '/api/requests/diagnosis/cases/' + caseId;
+  expect((await page.request.post(path + '/claim', { headers: headers(), data: { expectedVersion: -1, confirmedCaseId: caseId, targetUserId: null, reason: 'Synthetic not ready' } })).status()).toBe(409);
+  expect((await page.request.post('/api/quality/materials/' + mid + '/assess', { headers: headers(), data: { expectedVersion: -1, materialVersion: 0, taskVersion: null, confirmedMaterialId: mid, standardVersion: 'SYN-MATERIAL-QC-1', outcome: 'PASS', reason: 'Synthetic prerequisite only' } })).status()).toBe(200);
+  expect((await page.request.post(path + '/claim', { headers: headers(), data: { expectedVersion: -1, confirmedCaseId: caseId, targetUserId: null, reason: 'Synthetic report owner' } })).status()).toBe(200);
+
+  const report = '/api/requests/reports/cases/' + caseId;
+  const draftBody = { expectedVersion: -1, assignmentVersion: 0, confirmedCaseId: caseId, templateCode: 'SYN-REPORT', templateVersion: 1, fields: { gross: '', microscopy: '', diagnosis: 'Synthetic manual review text', notes: '' }, reason: 'Synthetic author input' };
+  expect((await page.request.post(report + '/draft', { headers: headers(), data: draftBody })).status()).toBe(200);
+  async function open(p: Page) {
+    await p.getByRole('button', { name: '申请登记工作区' }).click(); await p.getByLabel('授权工作范围').click(); await p.getByText('合成申请工作范围', { exact: true }).last().click();
+    const queue = await (await p.request.get('/api/requests/diagnosis/scopes/' + scopes[0].id + '?pageSize=50')).json() as { items: { caseId: string }[] }; const index = queue.items.findIndex(i => i.caseId === caseId); expect(index).toBeGreaterThanOrEqual(0);
+    await p.getByRole('button', { name: '复核与模拟签署', exact: true }).click(); if (index >= 10) await p.getByTitle(String(Math.floor(index / 10) + 1), { exact: true }).click(); await p.getByRole('button', { name: '复核合成报告 ' + caseId }).click();
+  }
+  async function act(p: Page, action: string, expectedStatus = 200) {
+    if (action === 'SIMULATE_SIGN') { await p.getByLabel('合成复核动作').click(); await p.getByRole('option', { name: '模拟签署（无临床效力）', exact: true }).click(); await p.getByRole('button', { name: '清除并切换动作' }).click(); }
+    await p.getByLabel('核对复核病例 UUID').fill(caseId); await p.getByLabel('复核或退回原因').fill('Synthetic explicit human action');
+    const response = p.waitForResponse(r => new URL(r.url()).pathname === report + '/review/' + action && r.request().method() === 'POST'); await p.getByRole('button', { name: '提交合成复核操作' }).click(); if (action === 'SIMULATE_SIGN') await p.getByRole('button', { name: '确认合成模拟' }).click(); expect((await response).status()).toBe(expectedStatus);
+  }
+  await open(page); await act(page, 'APPROVE', 409); // Author separation is enforced server-side.
+  const other = await browser.newContext({ baseURL: 'http://127.0.0.1:5173' });
+  try {
+    const reviewer = await other.newPage(); await reviewer.goto('/'); await reviewer.getByLabel('用户名', { exact: true }).fill(process.env.PIS_E2E_HANDOFF_USERNAME ?? 'synthetic.technician'); await reviewer.getByLabel('密码', { exact: true }).fill(process.env.PIS_E2E_HANDOFF_PASSWORD ?? 'Synthetic-handoff-only-42!');
+    const login = reviewer.waitForResponse(r => new URL(r.url()).pathname === '/api/auth/login'); await reviewer.getByRole('button', { name: '登录', exact: true }).click(); expect((await login).status()).toBe(204);
+    await open(reviewer); await act(reviewer, 'APPROVE'); await expect(reviewer.getByLabel('复核版本身份')).toContainText('状态 APPROVED');
+    await page.getByRole('button', { name: '刷新诊断队列与资格' }).click(); await page.getByRole('button', { name: '放弃并切换' }).click(); await expect(page.getByLabel('复核版本身份')).toContainText('状态 APPROVED');
+    await act(page, 'SIMULATE_SIGN'); await expect(page.getByLabel('复核版本身份')).toContainText('状态 SIMULATED_SIGNED');
+    expect((await page.request.post(report + '/draft', { headers: headers(), data: { ...draftBody, expectedVersion: 0 } })).status()).toBe(409);
+    const history = await (await page.request.get(report + '/review')).json() as { events: { action: string; reviewId: string | null; id: string }[] }; expect(history.events.map(e => e.action)).toEqual(['SIMULATE_SIGN', 'APPROVE']); expect(history.events[0].reviewId).toBe(history.events[1].id);
+  } finally { await other.close(); }
+  await page.getByRole('button', { name: '固定PDF与打印记录', exact: true }).click();
+  const outputQueue = await (await page.request.get('/api/requests/diagnosis/scopes/' + scopes[0].id + '?pageSize=50')).json() as { items: { caseId: string }[] }; const outputPosition = outputQueue.items.findIndex(i => i.caseId === caseId); if (outputPosition >= 10) await page.getByTitle(String(Math.floor(outputPosition / 10) + 1), { exact: true }).click();
+  await page.getByRole('button', { name: '查看固定产物 ' + caseId }).click();
+  await page.getByLabel('核对输出病例 UUID').fill(caseId); await page.getByLabel('产物访问或打印记录原因').fill('Synthetic fixed PDF');
+  const generated = page.waitForResponse(r => new URL(r.url()).pathname === report + '/output' && r.request().method() === 'POST'); await page.getByRole('button', { name: '生成固定合成PDF' }).click(); expect((await generated).status()).toBe(200);
+  await expect(page.getByText('不可变产物', { exact: true })).toBeVisible();
+  const metadata = await (await page.request.get(report + '/output')).json() as { artifact: { id: string; sha256: string; byteSize: number }; activityVersion: number }; const artifact = metadata.artifact;
+  const operation = { confirmedCaseId: caseId, artifactVersion: 0, sha256: artifact.sha256, expectedVersion: metadata.activityVersion, requestId: null, reason: 'Synthetic audited download' };
+  const binaryHeaders = headers(); const binaryPath = report + '/output/' + artifact.id + '/bytes/DOWNLOAD';
+  const download = await page.request.post(binaryPath, { headers: binaryHeaders, data: operation }); expect(download.status()).toBe(200); const pdf = await download.body(); expect(pdf.subarray(0, 8).toString()).toBe('%PDF-1.4'); expect(pdf.length).toBe(artifact.byteSize); expect(download.headers()['cache-control']).toBe('no-store'); expect(download.headers()['x-artifact-sha256']).toBe(artifact.sha256);
+  const replay = await page.request.post(binaryPath, { headers: binaryHeaders, data: operation }); expect(replay.status()).toBe(200); expect(replay.headers()['idempotency-replayed']).toBe('true'); expect(await replay.body()).toEqual(pdf);
+  expect((await page.request.get(binaryPath)).status()).not.toBe(200);
+  const current = await (await page.request.get(report + '/output')).json() as { activityVersion: number };
+  const print = await page.request.post(report + '/output/' + artifact.id + '/events/PRINT_REQUEST', { headers: headers(), data: { ...operation, expectedVersion: current.activityVersion, reason: 'Synthetic print request only' } }); expect(print.status()).toBe(200); const receipt = (await print.json() as { receipt: { resourceId: string; version: number } }).receipt;
+  expect((await page.request.post(report + '/output/' + artifact.id + '/events/USER_REPORTED_CANCELLED', { headers: headers(), data: { ...operation, expectedVersion: receipt.version, requestId: receipt.resourceId, reason: 'Synthetic user cancelled; no hardware feedback' } })).status()).toBe(200);
+  const events = await (await page.request.get(report + '/output/' + artifact.id + '/history')).json() as { events: { kind: string }[] }; expect(events.events.map(e => e.kind)).toEqual(['USER_REPORTED_CANCELLED', 'PRINT_REQUEST', 'DOWNLOAD']);
+  expect((await page.request.post(binaryPath, { headers: headers(), data: { ...operation, sha256: '0'.repeat(64) } })).status()).toBe(409);
+
+  await page.getByRole('button', { name: '报告补充与更正', exact: true }).click(); if (outputPosition >= 10) await page.getByTitle(String(Math.floor(outputPosition / 10) + 1), { exact: true }).click(); await page.getByRole('button', { name: '查看报告版本链 ' + caseId }).click();
+  await page.getByLabel('核对版本链病例 UUID').fill(caseId); await page.getByLabel('补充／更正强制原因').fill('Synthetic manual supplement reason');
+  const amended = page.waitForResponse(r => new URL(r.url()).pathname === report + '/amendments' && r.request().method() === 'POST'); await page.getByRole('button', { name: '创建新版本草稿' }).dblclick(); expect((await amended).status()).toBe(200); await expect(page.getByLabel('版本链身份')).toContainText('链版本 1');
+  expect((await page.request.post(report + '/draft', { headers: headers(), data: { ...draftBody, expectedVersion: 1, fields: { ...draftBody.fields, diagnosis: 'Synthetic supplementary manual text' } } })).status()).toBe(200);
+  type Review = { version: number; assignmentVersion: number; dependencyToken: string; state: string; draft: { id: string; version: number; templateCode: string; templateVersion: number } };
+  function decision(d: Review, sign: boolean) { return { expectedVersion: d.version, confirmedCaseId: caseId, revisionId: d.draft.id, draftVersion: d.draft.version, assignmentVersion: d.assignmentVersion, templateCode: d.draft.templateCode, templateVersion: d.draft.templateVersion, dependencyToken: d.dependencyToken, reason: 'Synthetic independent amendment review', simulationAcknowledged: sign }; }
+  let review = await (await page.request.get(report + '/review')).json() as Review; expect(review.state).toBe('DRAFT'); expect((await page.request.post(report + '/review/SIMULATE_SIGN', { headers: headers(), data: decision(review, true) })).status()).toBe(409);
+  const freshContext = await browser.newContext({ baseURL: 'http://127.0.0.1:5173' });
+  try {
+    const reviewer = await freshContext.newPage(); await reviewer.goto('/'); await reviewer.getByLabel('用户名', { exact: true }).fill(process.env.PIS_E2E_HANDOFF_USERNAME ?? 'synthetic.technician'); await reviewer.getByLabel('密码', { exact: true }).fill(process.env.PIS_E2E_HANDOFF_PASSWORD ?? 'Synthetic-handoff-only-42!');
+    const login = reviewer.waitForResponse(r => new URL(r.url()).pathname === '/api/auth/login'); await reviewer.getByRole('button', { name: '登录', exact: true }).click(); expect((await login).status()).toBe(204);
+    const reviewerCsrf = await (await reviewer.request.get('/api/auth/csrf')).json() as { token: string }; const d = await (await reviewer.request.get(report + '/review')).json() as Review;
+    expect((await reviewer.request.post(report + '/review/APPROVE', { headers: { 'X-CSRF-TOKEN': reviewerCsrf.token, 'Idempotency-Key': crypto.randomUUID() }, data: decision(d, false) })).status()).toBe(200);
+  } finally { await freshContext.close(); }
+  review = await (await page.request.get(report + '/review')).json() as Review; expect((await page.request.post(report + '/review/SIMULATE_SIGN', { headers: headers(), data: decision(review, true) })).status()).toBe(200);
+  const newFrozen = await (await page.request.get(report + '/output')).json() as { signatureId: string; signatureVersion: number; revisionId: string };
+  expect((await page.request.post(report + '/output', { headers: headers(), data: { confirmedCaseId: caseId, signatureId: newFrozen.signatureId, signatureVersion: newFrozen.signatureVersion, revisionId: newFrozen.revisionId, reason: 'Synthetic new fixed PDF' } })).status()).toBe(200);
+  const newOutput = await (await page.request.get(report + '/output')).json() as typeof metadata; expect(newOutput.artifact.id).not.toBe(artifact.id); expect(newOutput.artifact.sha256).not.toBe(artifact.sha256);
+  const oldAgain = await page.request.post(binaryPath, { headers: headers(), data: operation }); expect(oldAgain.status()).toBe(200); expect(await oldAgain.body()).toEqual(pdf);
+  const chain = await (await page.request.get(report + '/amendments')).json() as { version: number; assignmentVersion: number; draftVersion: number; frozenSignatureId: string; frozenRevisionId: string; nodes: { downstreamState: string; newSignatureId: string }[] }; expect(chain.nodes[0].downstreamState).toBe('PENDING_NOT_SENT'); expect(chain.nodes[0].newSignatureId).toBe(newFrozen.signatureId);
+  const correction = { confirmedCaseId: caseId, expectedVersion: chain.version, assignmentVersion: chain.assignmentVersion, baseSignatureId: chain.frozenSignatureId, baseRevisionId: chain.frozenRevisionId, baseDraftVersion: chain.draftVersion, kind: 'CORRECTION', reason: 'Synthetic new correction branch' };
+  expect((await page.request.post(report + '/amendments', { headers: headers(), data: correction })).status()).toBe(200); expect((await page.request.post(report + '/amendments', { headers: headers(), data: correction })).status()).toBe(409);
+
+});

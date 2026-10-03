@@ -19,6 +19,7 @@ public class ReportService {
  public ReportService(JdbcTemplate jdbc,DiagnosisService diagnosis,IdempotentCommands commands,Validator validator,JsonMapper json) { this.jdbc=jdbc;this.diagnosis=diagnosis;this.commands=commands;this.validator=validator;this.json=json; }
  private Revision map(java.sql.ResultSet r,int n) throws java.sql.SQLException { return new Revision(r.getObject("id",UUID.class),r.getObject("case_id",UUID.class),r.getLong("version"),r.getString("template_code"),r.getInt("template_version"),json.readTree(r.getString("fields")),r.getLong("assignment_version"),r.getObject("author_id",UUID.class),r.getString("reason"),r.getObject("created_at",OffsetDateTime.class).toInstant()); }
  Revision current(UUID id) { var rows=jdbc.query("SELECT r.* FROM report_draft d JOIN report_revision r ON r.id=d.revision_id WHERE d.case_id=?",this::map,id);return rows.isEmpty()?null:rows.getFirst(); }
+ Revision revision(UUID id,UUID revision) { var rows=jdbc.query("SELECT * FROM report_revision WHERE case_id=? AND id=?",this::map,id,revision);if(rows.isEmpty())throw new ApiException(HttpStatus.NOT_FOUND,"REPORT_OUTPUT_NOT_FOUND","Report version unavailable");return rows.getFirst(); }
  private DiagnosisService.ReportContext locked(UUID id) { var c=diagnosis.reportContext(id);jdbc.queryForList("SELECT id FROM pathology_request WHERE id=? FOR SHARE",c.requestId());return diagnosis.reportContext(id); }
  @Transactional(timeout=10) public Detail detail(UUID id) {
   var c=locked(id);var templates=jdbc.query("SELECT * FROM report_template ORDER BY code,version LIMIT 100",(r,i)->new Template(r.getString("code"),r.getInt("version"),r.getString("title"),r.getString("schema_code")));
@@ -36,7 +37,7 @@ public class ReportService {
     if(!id.equals(input.confirmedCaseId())) throw conflict("REPORT_IDENTITY_MISMATCH");
     if(c.assignmentVersion()!=input.assignmentVersion()) throw conflict("VERSION_CONFLICT");
     if(!c.ready()) throw conflict("DIAGNOSIS_NOT_READY");
-    if(jdbc.queryForObject("SELECT count(*) FROM report_review_head h JOIN report_review_event e ON e.id=h.event_id WHERE h.case_id=? AND e.action='SIMULATE_SIGN'",Long.class,id)>0) throw conflict("REPORT_SIMULATED_FROZEN");
+    if(jdbc.queryForObject("SELECT count(*) FROM report_review_head h JOIN report_review_event e ON e.id=h.event_id JOIN report_draft d ON d.case_id=h.case_id AND d.revision_id=e.revision_id WHERE h.case_id=? AND e.action='SIMULATE_SIGN'",Long.class,id)>0) throw conflict("REPORT_SIMULATED_FROZEN");
     var old=current(id);long version=old==null?-1:old.version();if(version!=input.expectedVersion()) throw conflict("VERSION_CONFLICT");
     var schemas=jdbc.queryForList("SELECT schema_code FROM report_template WHERE code=? AND version=?",String.class,input.templateCode(),input.templateVersion());
     if(schemas.isEmpty()) throw conflict("REPORT_TEMPLATE_UNAVAILABLE");ReportSchema.validate(schemas.getFirst(),input.fields());

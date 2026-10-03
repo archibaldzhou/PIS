@@ -36,3 +36,5 @@
 [T18合成复核与模拟签署开发PRD](development-report-review-v1.md)已对照授权UI-022，明确依赖快照与职责分离；不包含T19/T20、CA、发送或临床签署。
 
 [T19固定合成PDF与打印记录开发PRD](development-report-output-v1.md)已对照授权UI-024实际图片。仅固定合成产物及打印请求/用户自报，不含实体打印、报告发送、T20更正或临床签署；架构见[ADR 0009](../adr/0009-fixed-synthetic-report-artifacts.md)。
+
+[T20补充、更正与版本链开发PRD](development-report-amendments-v1.md)已对照授权UI-023实际图片。新草稿重新复核/模拟签署，原冻结报告/PDF保留，下游仅待替换；不含T21送达、ACK或真实临床签署。架构见[ADR 0010](../adr/0010-append-only-report-amendment-chain.md)。

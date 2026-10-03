@@ -11,6 +11,7 @@ public class OutputController {
  private final OutputService service;
  public OutputController(OutputService service) { this.service=service; }
  @GetMapping public Detail detail(@PathVariable UUID id) { return service.detail(id); }
+ @GetMapping("/{artifact}") public Detail historical(@PathVariable UUID id,@PathVariable UUID artifact) { return service.historical(id,artifact); }
  @PostMapping public ResponseEntity<IdempotentCommands.Result> create(@PathVariable UUID id,@Valid @RequestBody Create input,@RequestHeader("Idempotency-Key") String key) { return receipt(service.create(id,input,key)); }
  @GetMapping("/{artifact}/history") public History history(@PathVariable UUID id,@PathVariable UUID artifact,@RequestParam(defaultValue="1") int page) { return service.history(id,artifact,page); }
  @PostMapping("/{artifact}/events/{kind}") public ResponseEntity<IdempotentCommands.Result> record(@PathVariable UUID id,@PathVariable UUID artifact,@PathVariable Kind kind,@Valid @RequestBody Operation input,@RequestHeader("Idempotency-Key") String key) { return receipt(service.record(id,artifact,input,key,kind)); }

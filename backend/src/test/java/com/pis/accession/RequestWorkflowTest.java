@@ -1592,4 +1592,80 @@ class RequestWorkflowTest {
             finally { SecurityContextHolder.clearContext(); }
         }
     }
+    @org.springframework.beans.factory.annotation.Autowired com.pis.report.AmendmentService amendments;
+    private com.pis.report.AmendmentContracts.Create ac(UUID id,com.pis.report.AmendmentContracts.Kind kind) {
+        var d=amendments.detail(id,1);return new com.pis.report.AmendmentContracts.Create(id,d.version(),d.assignmentVersion(),d.frozenSignatureId(),d.frozenRevisionId(),d.draftVersion(),kind,"Synthetic explicit amendment reason");
+    }
+    @Test void amendmentRequiresNewReviewAndKeepsOriginalPdfAndFrozenSnapshots() {
+        var f=new Fixture();var d=outputSetup(f);
+        f.as(()->{
+            UUID id=d.caseId();var original=outputs.create(id,oc(id),"original-pdf").receipt().resourceId();var oldOperation=oo(id,null);var oldBytes=outputs.bytes(id,original,oldOperation,"old-read",com.pis.report.OutputContracts.Kind.DOWNLOAD).bytes();
+            var before=jdbc.queryForList("SELECT * FROM report_revision WHERE case_id=?",id);var oldEvents=jdbc.queryForList("SELECT * FROM report_review_event WHERE case_id=? ORDER BY version",id);
+            var command=ac(id,com.pis.report.AmendmentContracts.Kind.ADDENDUM);var first=amendments.create(id,command,"supplement");assertThat(amendments.create(id,command,"supplement").replayed()).isTrue();
+            var chain=amendments.detail(id,1);assertThat(chain.pending()).isTrue();assertThat(chain.canCreate()).isFalse();assertThat(chain.draftId()).isEqualTo(first.receipt().resourceId());assertThat(chain.revisionId()).isNotEqualTo(command.baseRevisionId());assertThat(chain.draftVersion()).isEqualTo(1);
+            assertCode(()->amendments.create(id,command,"other-branch"),"VERSION_CONFLICT");assertThat(reviews.detail(id).state()).isEqualTo("DRAFT");assertCode(()->reviews.decide(id,rd(id,true),"inherit-sign",com.pis.report.ReviewContracts.Action.SIMULATE_SIGN),"REPORT_REVIEW_STALE");
+            assertThat(amendments.snapshot(id,command.baseSignatureId()).currentFrozen()).isTrue();
+            reports.save(id,rs(id,1,1,"Synthetic amended manual text"),"edit-new");assertCode(()->reports.save(id,rs(id,1,1,"Stale"),"stale-new"),"VERSION_CONFLICT");
+            reviews.decide(id,rd(id,false),"new-review",com.pis.report.ReviewContracts.Action.APPROVE);reviews.decide(id,rd(id,true),"new-sign",com.pis.report.ReviewContracts.Action.SIMULATE_SIGN);
+            var newArtifact=outputs.create(id,oc(id),"new-pdf").receipt().resourceId();assertThat(newArtifact).isNotEqualTo(original);assertThat(outputs.bytes(id,newArtifact,oo(id,null),"new-download",com.pis.report.OutputContracts.Kind.DOWNLOAD).bytes()).isNotEqualTo(oldBytes);
+            assertThat(outputs.bytes(id,original,oldOperation,"old-again",com.pis.report.OutputContracts.Kind.DOWNLOAD).bytes()).isEqualTo(oldBytes);
+            var historic=outputs.historical(id,original);var historicalPrint=new com.pis.report.OutputContracts.Operation(id,0L,historic.artifact().sha256(),historic.activityVersion(),null,"Synthetic old print rejected");assertCode(()->outputs.record(id,original,historicalPrint,"old-print",com.pis.report.OutputContracts.Kind.PRINT_REQUEST),"REPORT_OUTPUT_STALE");
+            assertThat(amendments.snapshot(id,command.baseSignatureId()).currentFrozen()).isFalse();assertThat(amendments.detail(id,1).nodes().getFirst().downstreamState()).isEqualTo("PENDING_NOT_SENT");
+            assertThat(jdbc.queryForList("SELECT * FROM report_revision WHERE case_id=? AND version=0",id)).isEqualTo(before);assertThat(jdbc.queryForList("SELECT * FROM report_review_event WHERE case_id=? AND version<2 ORDER BY version",id)).isEqualTo(oldEvents);
+            amendments.create(id,ac(id,com.pis.report.AmendmentContracts.Kind.CORRECTION),"correction");assertThat(amendments.detail(id,1).nodes()).extracting(com.pis.report.AmendmentContracts.Node::kind).containsExactly(com.pis.report.AmendmentContracts.Kind.CORRECTION,com.pis.report.AmendmentContracts.Kind.ADDENDUM);
+            assertThatThrownBy(()->jdbc.update("UPDATE report_amendment SET reason='overwrite' WHERE case_id=?",id)).isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);assertThatThrownBy(()->jdbc.update("DELETE FROM report_replacement WHERE case_id=?",id)).isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);return null;
+        });
+    }
+    @Test void amendmentAuthorizationQcAndAuditFailureDoNotAdvanceChain() {
+        var f=new Fixture();var d=outputSetup(f);var input=f.as(()->ac(d.caseId(),com.pis.report.AmendmentContracts.Kind.CORRECTION));var foreign=new Fixture();
+        foreign.as(()->{assertThatThrownBy(()->amendments.detail(d.caseId(),1)).isInstanceOfAny(ApiException.class,org.springframework.security.access.AccessDeniedException.class);assertThatThrownBy(()->amendments.create(d.caseId(),input,"foreign")).isInstanceOfAny(ApiException.class,org.springframework.security.access.AccessDeniedException.class);return null;});
+        jdbc.execute("CREATE FUNCTION reject_amendment_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.operation_code='REPORT_AMENDMENT_CREATE_V1' THEN RAISE EXCEPTION 'synthetic outage'; END IF; RETURN NEW; END $$");jdbc.execute("CREATE TRIGGER reject_amendment_audit BEFORE INSERT ON audit_event FOR EACH ROW EXECUTE FUNCTION reject_amendment_audit()");
+        try {f.as(()->{assertThatThrownBy(()->amendments.create(d.caseId(),input,"atomic-amend")).isInstanceOf(org.springframework.dao.DataAccessException.class);assertThat(amendments.detail(d.caseId(),1).version()).isZero();assertThat(reports.detail(d.caseId()).current().version()).isZero();return null;});}finally{jdbc.execute("DROP TRIGGER reject_amendment_audit ON audit_event");jdbc.execute("DROP FUNCTION reject_amendment_audit()");}
+        f.as(()->{amendments.create(d.caseId(),input,"atomic-amend");reviews.decide(d.caseId(),rd(d.caseId(),false),"review-amend",com.pis.report.ReviewContracts.Action.APPROVE);return null;});
+        jdbc.update("UPDATE report_review_grant SET can_review=false WHERE user_id=? AND scope_id=?",f.user,f.scope);
+        f.as(()->{assertCode(()->reviews.decide(d.caseId(),rd(d.caseId(),true),"revoked-review",com.pis.report.ReviewContracts.Action.SIMULATE_SIGN),"REPORT_REVIEW_STALE");return null;});
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM report_replacement WHERE case_id=?",Long.class,d.caseId())).isZero();
+    }
+    @Test void concurrentAmendmentCreationHasOneWinnerAndOneExplicitConflict() throws Exception {
+        var f=new Fixture();var d=outputSetup(f);var input=f.as(()->ac(d.caseId(),com.pis.report.AmendmentContracts.Kind.ADDENDUM));
+        try(var blocker=DB.connection();var executor=Executors.newVirtualThreadPerTaskExecutor()) {
+            blocker.setAutoCommit(false);try(var st=blocker.prepareStatement("SELECT id FROM pathology_request WHERE id=? FOR UPDATE")){st.setObject(1,d.request());st.executeQuery().close();}
+            java.util.function.Function<String,String> run=key->f.as(()->{try{amendments.create(d.caseId(),input,key);return "SUCCESS";}catch(ApiException e){return e.code();}});
+            var a=executor.submit(()->run.apply("amend-one"));var b=executor.submit(()->run.apply("amend-two"));
+            try{long end=System.nanoTime()+TimeUnit.SECONDS.toNanos(2);boolean waiting=false;while(System.nanoTime()<end){if(jdbc.queryForObject("SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%SELECT id FROM pathology_request WHERE id=%'",Long.class)>=2){waiting=true;break;}Thread.sleep(10);}assertThat(waiting).isTrue();}finally{blocker.rollback();}
+            assertThat(List.of(a.get(5,TimeUnit.SECONDS),b.get(5,TimeUnit.SECONDS))).containsExactlyInAnyOrder("SUCCESS","VERSION_CONFLICT");
+        }
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM report_amendment WHERE case_id=?",Long.class,d.caseId())).isEqualTo(1);
+    }
+
+    @Test void amendedReviewBecomesStaleOnQcDraftAndAssignmentChanges() {
+        for(String change:List.of("QC","DRAFT","ASSIGNMENT")) {
+            var f=new Fixture();var d=outputSetup(f);var other=new Fixture();reviewGrant(other,f);
+            f.as(()->{amendments.create(d.caseId(),ac(d.caseId(),com.pis.report.AmendmentContracts.Kind.CORRECTION),"new-branch");reviews.decide(d.caseId(),rd(d.caseId(),false),"amend-review",com.pis.report.ReviewContracts.Action.APPROVE);return null;});
+            var sign=f.as(()->rd(d.caseId(),true));
+            f.as(()->{
+                if(change.equals("QC"))quality.decide(d.slide(),new com.pis.quality.QualityContracts.Decision(0L,d.slide(),"Synthetic changed QC"),"amend-qc","REVOKE");
+                else if(change.equals("DRAFT"))reports.save(d.caseId(),rs(d.caseId(),1,2,"Synthetic changed template and fields"),"amend-revision");
+                else diagnosis.decide(d.caseId(),dd(d.caseId(),0,other.user),"amend-transfer",com.pis.diagnosis.DiagnosisContracts.Action.TRANSFER);
+                assertThat(reviews.detail(d.caseId()).ready()).isFalse();assertCode(()->reviews.decide(d.caseId(),sign,"stale-new-sign",com.pis.report.ReviewContracts.Action.SIMULATE_SIGN),"VERSION_CONFLICT");return null;
+            });
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM report_replacement WHERE case_id=?",Long.class,d.caseId())).isZero();
+        }
+    }
+    @Test void amendmentHttpRequiresCsrfStrictTypeReasonAndCurrentObjectScope() throws Exception {
+        var f=new Fixture();var d=outputSetup(f);var input=f.as(()->ac(d.caseId(),com.pis.report.AmendmentContracts.Kind.CORRECTION));var b=new Browser();String path="/api/requests/reports/cases/"+d.caseId()+"/amendments";
+        String body=tools.jackson.databind.json.JsonMapper.builder().build().writeValueAsString(input);assertThat(b.send("POST",path,body,null,false).statusCode()).isEqualTo(401);String password="Synthetic-amendment-http-42!";jdbc.update("UPDATE app_user SET password_hash=? WHERE id=?",encoder.encode(password),f.user);String login="username="+f.principal.getUsername()+"&password="+java.net.URLEncoder.encode(password,java.nio.charset.StandardCharsets.UTF_8);assertThat(b.send("POST","/api/auth/login",login,b.csrf(),true).statusCode()).isEqualTo(204);String csrf=b.csrf();assertThat(b.send("POST",path,body,null,false).statusCode()).isEqualTo(403);
+        assertThat(b.send("POST",path,body.replace("CORRECTION","OVERWRITE"),csrf,false).statusCode()).isEqualTo(400);assertThat(b.send("POST",path,body.replace("Synthetic explicit amendment reason",""),csrf,false).statusCode()).isEqualTo(400);
+        assertThat(b.send("POST",path,body,csrf,false).statusCode()).isEqualTo(200);assertThat(b.send("GET",path,null,null,false).statusCode()).isEqualTo(200);
+        jdbc.update("UPDATE workflow_grant SET revoked_at=statement_timestamp() WHERE user_id=? AND scope_id=?",f.user,f.scope);assertThat(b.send("GET",path,null,null,false).statusCode()).isEqualTo(404);assertThat(b.send("GET",path+"/snapshots/"+input.baseSignatureId(),null,null,false).statusCode()).isEqualTo(404);
+    }
+
+    @Test void amendmentNewFreezeAndReplacementRollbackTogetherWhenAuditFails() {
+        var f=new Fixture();var d=outputSetup(f);
+        f.as(()->{amendments.create(d.caseId(),ac(d.caseId(),com.pis.report.AmendmentContracts.Kind.CORRECTION),"atomic-branch");reviews.decide(d.caseId(),rd(d.caseId(),false),"atomic-review",com.pis.report.ReviewContracts.Action.APPROVE);return null;});var sign=f.as(()->rd(d.caseId(),true));
+        jdbc.execute("CREATE FUNCTION reject_replacement_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.operation_code='REPORT_REVIEW_SIMULATE_SIGN_V1' THEN RAISE EXCEPTION 'synthetic outage'; END IF; RETURN NEW; END $$");jdbc.execute("CREATE TRIGGER reject_replacement_audit BEFORE INSERT ON audit_event FOR EACH ROW EXECUTE FUNCTION reject_replacement_audit()");
+        try{f.as(()->{assertThatThrownBy(()->reviews.decide(d.caseId(),sign,"atomic-new-sign",com.pis.report.ReviewContracts.Action.SIMULATE_SIGN)).isInstanceOf(org.springframework.dao.DataAccessException.class);assertThat(reviews.detail(d.caseId()).state()).isEqualTo("APPROVED");assertThat(amendments.detail(d.caseId(),1).nodes().getFirst().newSignatureId()).isNull();return null;});}finally{jdbc.execute("DROP TRIGGER reject_replacement_audit ON audit_event");jdbc.execute("DROP FUNCTION reject_replacement_audit()");}
+        f.as(()->{reviews.decide(d.caseId(),sign,"atomic-new-sign",com.pis.report.ReviewContracts.Action.SIMULATE_SIGN);assertThat(amendments.detail(d.caseId(),1).nodes().getFirst().downstreamState()).isEqualTo("PENDING_NOT_SENT");return null;});
+    }
+
 }

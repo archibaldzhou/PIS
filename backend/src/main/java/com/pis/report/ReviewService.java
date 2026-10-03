@@ -46,7 +46,7 @@ public class ReviewService {
  @Transactional(timeout=10) public Detail detail(UUID id) {
   var c=authorize(id,null);jdbc.queryForList("SELECT id FROM pathology_request WHERE id=? FOR SHARE",c.requestId());c=authorize(id,null);
   var draft=reports.current(id);var p=policy(c.scopeId());String token=token(c,draft,p);var h=head(id);var g=grant(c.scopeId(),actors.require().id());
-  boolean reviewed=valid(h,token,c.scopeId());String state=h==null?"DRAFT":h.event().action()==Action.APPROVE?(reviewed?"APPROVED":"STALE"):h.event().action()==Action.RETURN?"RETURNED":"SIMULATED_SIGNED";
+  boolean reviewed=valid(h,token,c.scopeId());String state=h==null||h.event().action()==Action.SIMULATE_SIGN&&draft!=null&&!h.event().revisionId().equals(draft.id())?"DRAFT":h.event().action()==Action.APPROVE?(reviewed?"APPROVED":"STALE"):h.event().action()==Action.RETURN?"RETURNED":"SIMULATED_SIGNED";
   boolean ready=c.ready()&&reviewed;
   var events=jdbc.query("SELECT * FROM report_review_event WHERE case_id=? ORDER BY version DESC LIMIT 100",this::map,id).stream().map(Stored::event).toList();
   return new Detail(id,c.patientId(),c.number(),c.assignmentVersion(),h==null?-1:h.event().version(),state,ready,g.review(),g.sign(),p,token,draft,events);
@@ -68,7 +68,7 @@ public class ReviewService {
     var draft=reports.current(id);var p=policy(c.scopeId());var h=head(id);long version=h==null?-1:h.event().version();String snapshot=token(c,draft,p);
     if(!id.equals(input.confirmedCaseId())) throw conflict("REPORT_IDENTITY_MISMATCH");
     if(version!=input.expectedVersion()||c.assignmentVersion()!=input.assignmentVersion()||draft==null||!draft.id().equals(input.revisionId())||draft.version()!=input.draftVersion()||!draft.templateCode().equals(input.templateCode())||draft.templateVersion()!=input.templateVersion()||!snapshot.equals(input.dependencyToken())) throw conflict("VERSION_CONFLICT");
-    if(h!=null&&h.event().action()==Action.SIMULATE_SIGN) throw conflict("REPORT_SIMULATED_FROZEN");
+    if(h!=null&&h.event().action()==Action.SIMULATE_SIGN&&h.event().revisionId().equals(draft.id())) throw conflict("REPORT_SIMULATED_FROZEN");
     if(!c.ready()||action!=Action.RETURN&&draft.fields().get("diagnosis").stringValue().isBlank()) throw conflict("REPORT_REVIEW_NOT_READY");
     if(action==Action.APPROVE&&h!=null&&h.event().action()==Action.RETURN&&h.event().revisionId().equals(draft.id())) throw conflict("REPORT_REVISION_REQUIRED");
     if(action==Action.APPROVE&&p.separateAuthorReview()&&draft.authorId().equals(actor.id())) throw conflict("REPORT_SEPARATION_REQUIRED");
@@ -77,6 +77,7 @@ public class ReviewService {
     jdbc.update("INSERT INTO report_review_event(id,case_id,version,revision_id,draft_version,action,actor_id,actor_snapshot,dependency_snapshot,dependency_evidence,review_id,reason) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",event,id,next,draft.id(),draft.version(),action.name(),actor.id(),g.snapshot(),snapshot,c.dependencies()+":"+p+":"+draft.id(),action==Action.SIMULATE_SIGN?h.event().id():null,input.reason());
     if(h==null) jdbc.update("INSERT INTO report_review_head(case_id,version,event_id) VALUES(?,0,?)",id,event);
     else if(jdbc.update("UPDATE report_review_head SET version=version+1,event_id=? WHERE case_id=? AND version=?",event,id,version)!=1) throw conflict("VERSION_CONFLICT");
+    if(action==Action.SIMULATE_SIGN) jdbc.update("INSERT INTO report_replacement(amendment_id,case_id,old_signature_id,new_signature_id) SELECT a.id,a.case_id,a.base_signature_id,? FROM report_chain_head h JOIN report_amendment a ON a.id=h.amendment_id WHERE h.case_id=? AND a.start_version<=?",event,id,draft.version());
     return new IdempotentCommands.Mutation(new CommandReceipt(200,"REPORT_REVIEW",id,next),version<0?null:version);
    }
   });

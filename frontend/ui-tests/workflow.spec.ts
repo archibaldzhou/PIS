@@ -585,3 +585,41 @@ test('output print conflict preserves input; refresh requires review; user self-
  await action('用户自报取消'); await page.getByLabel('原打印请求 UUID（见历史）').fill(requestId); await page.getByRole('button', { name: '提交产物操作（不物理打印）' }).click(); await expect(page.getByRole('cell', { name: '用户自报取消', exact: true })).toBeVisible();
  await action('下载固定PDF'); const saved = page.waitForEvent('download'); await page.getByRole('button', { name: '提交产物操作（不物理打印）' }).click(); const download = await saved; expect(download.suggestedFilename()).toBe('synthetic-' + outputArtifactId + '-v0.pdf'); const file = await download.path(); if (!file) throw new Error('Synthetic download missing'); expect(createHash('sha256').update(readFileSync(file)).digest('hex')).toBe(fixedHash);
 });
+
+function chainFixture(id: string, pending = false) {
+ const node = { id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', version: 1, kind: 'ADDENDUM', parentId: null, baseSignatureId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', baseRevisionId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', baseDraftVersion: 0, startRevisionId: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', startVersion: 1, actorId: 'synthetic-user', reason: '合成人工补充', createdAt: '2026-10-03T00:00:00Z', newSignatureId: null, downstreamState: null };
+ return { caseId: id, version: pending ? 1 : 0, assignmentVersion: 0, ready: true, draftId: pending ? node.id : null, revisionId: pending ? node.startRevisionId : node.baseRevisionId, draftVersion: pending ? 1 : 0, frozenSignatureId: node.baseSignatureId, frozenRevisionId: node.baseRevisionId, pending, canCreate: !pending, page: 1, nodes: pending ? [node] : [] };
+}
+async function startChain(page: Page, ids: string[]) {
+ await start(page); const items = ids.map(caseId => ({ caseId, requestId: 'synthetic-request', patientId: encounter.patientId, number: 'SYN-AMEND', state: 'ACTIVE', version: 0, ownerId: 'synthetic-user', ready: true }));
+ await page.route('**/api/requests/diagnosis/scopes/**', r => r.fulfill({ json: { items, page: 1, pageSize: 10, total: items.length } })); await page.getByRole('button', { name: '报告补充与更正', exact: true }).click();
+}
+test('amendment double click and unknown retry preserve base version and key; type cancel and dirty history navigation are explicit', async ({ page }) => {
+ const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'; let pending = false; const sent: { body: unknown; key: string }[] = [];
+ await startChain(page, [id]); await page.route('**/cases/' + id + '/amendments?*', r => r.fulfill({ json: chainFixture(id, pending) }));
+ await page.route('**/cases/' + id + '/amendments', async r => { sent.push({ body: r.request().postDataJSON() as unknown, key: r.request().headers()['idempotency-key'] }); if (sent.length === 1) return r.abort('failed'); pending = true; await r.fulfill({ json: { receipt: { status: 200, resourceType: 'REPORT_AMENDMENT', resourceId: 'branch', version: 1 }, replayed: true } }); });
+ await page.getByRole('button', { name: '查看报告版本链 ' + id }).click(); await page.getByLabel('核对版本链病例 UUID').fill(id); await page.getByLabel('补充／更正强制原因').fill('合成补充理由');
+ await page.getByLabel('新版本类型').click(); await page.getByRole('option', { name: '更正报告', exact: true }).click(); await page.getByRole('button', { name: '保留当前类型和输入' }).click(); await expect(page.getByLabel('补充／更正强制原因')).toHaveValue('合成补充理由');
+ await page.getByRole('button', { name: '查看当前冻结版' }).click(); await page.getByRole('button', { name: '继续当前操作' }).click(); await expect(page.getByLabel('补充／更正强制原因')).toHaveValue('合成补充理由');
+ await page.getByRole('button', { name: '创建新版本草稿' }).dblclick(); await expect(page.getByRole('button', { name: '确认原新版本请求' })).toBeVisible(); expect(sent).toHaveLength(1);
+ await page.getByRole('button', { name: '确认原新版本请求' }).click(); await expect(page.getByLabel('版本链身份')).toContainText('链版本 1'); expect(sent[1]).toEqual(sent[0]); await expect(page.getByRole('button', { name: '创建新版本草稿' })).toBeDisabled(); await expect(page.getByText('存在尚未完成的新草稿；旧冻结版尚未被替代')).toBeVisible();
+ await page.screenshot({ path: 'test-results/amendment-desktop.png', fullPage: true }); await page.setViewportSize({ width: 390, height: 844 }); await page.screenshot({ path: 'test-results/amendment-mobile.png', fullPage: true }); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+test('amendment late case response is discarded; conflicts preserve reason and case cancellation preserves draft', async ({ page }) => {
+ const a = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', b = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'; let release: (() => void) | undefined;
+ await startChain(page, [a, b]); await page.route('**/cases/' + a + '/amendments?*', async r => { await new Promise<void>(resolve => { release = resolve; }); await r.fulfill({ json: chainFixture(a) }); }); await page.route('**/cases/' + b + '/amendments?*', r => r.fulfill({ json: chainFixture(b) }));
+ await page.getByRole('button', { name: '查看报告版本链 ' + a }).click(); await expect.poll(() => !!release).toBe(true); await page.getByRole('button', { name: '查看报告版本链 ' + b }).click(); release?.(); await expect(page.getByLabel('版本链身份')).toContainText(b);
+ await page.getByLabel('核对版本链病例 UUID').fill(b); await page.getByLabel('补充／更正强制原因').fill('合成更正保留'); await page.route('**/cases/' + b + '/amendments', r => r.fulfill({ status: 409, json: { code: 'VERSION_CONFLICT', detail: 'Conflict' } }));
+ await page.getByRole('button', { name: '创建新版本草稿' }).click(); await expect(page.getByLabel('补充／更正强制原因')).toHaveValue('合成更正保留'); await page.getByRole('button', { name: '查看报告版本链 ' + a }).click(); await page.getByRole('button', { name: '继续编辑', exact: true }).click(); await expect(page.getByLabel('核对版本链病例 UUID')).toHaveValue(b);
+ await page.getByRole('button', { name: '申请单查询', exact: true }).click(); await expect(page.getByRole('dialog')).toBeVisible();
+});
+test('historical amendment snapshot stays read only and audited PDF uses the selected old artifact', async ({ page }) => {
+ const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', signature = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'; await startChain(page, [id]);
+ await page.route('**/cases/' + id + '/amendments?*', r => r.fulfill({ json: chainFixture(id, true) }));
+ await page.route('**/amendments/snapshots/' + signature, r => r.fulfill({ json: { caseId: id, signatureId: signature, currentFrozen: false, artifactId: outputArtifactId, revision: { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', caseId: id, version: 0, templateCode: 'SYN-REPORT', templateVersion: 1, fields: { gross: '', microscopy: '', diagnosis: '合成旧版不可改写正文', notes: '' }, assignmentVersion: 0, authorId: 'synthetic-user', reason: '合成原版', createdAt: '2026-10-03T00:00:00Z' } } }));
+ await page.route('**/output/' + outputArtifactId, r => r.fulfill({ json: { ...outputFixture(id), artifact: { ...outputFixture(id).artifact, draftVersion: 0, templateVersion: 1 }, dependenciesCurrent: false } })); await page.route('**/output/' + outputArtifactId + '/history?*', r => r.fulfill({ json: { caseId: id, artifactId: outputArtifactId, page: 1, events: [] } }));
+ await page.route('**/output/' + outputArtifactId + '/bytes/PREVIEW', r => r.fulfill({ contentType: 'application/pdf', headers: { 'Content-Length': String(fixedPdf.length), 'X-Artifact-Id': outputArtifactId, 'X-Artifact-SHA256': fixedHash, 'X-Artifact-Version': '0' }, body: fixedPdf }));
+ await page.getByRole('button', { name: '查看报告版本链 ' + id }).click(); await page.getByRole('button', { name: '查看原冻结版 0' }).click(); await expect(page.getByText('正在查看历史旧版；已被新版替代，原文与PDF未改写')).toBeVisible(); await expect(page.locator('pre')).toContainText('合成旧版不可改写正文');
+ await page.getByLabel('产物操作', { exact: true }).click(); await expect(page.getByRole('option', { name: '登记打印请求（不连接打印机）', exact: true })).toHaveCount(0); await page.keyboard.press('Escape');
+ await page.getByLabel('核对输出病例 UUID').fill(id); await page.getByLabel('产物访问或打印记录原因').fill('合成旧版预览'); await page.getByRole('button', { name: '提交产物操作（不物理打印）' }).click(); await expect(page.getByTitle('合成固定PDF预览')).toBeVisible(); await page.getByRole('button', { name: '返回新版本草稿操作' }).click(); await expect(page.getByTitle('合成固定PDF预览')).toHaveCount(0);
+});

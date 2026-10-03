@@ -17,7 +17,7 @@ export function parseDetail(value: unknown, id: string): Detail {
   artifact = { id: str(a.id), caseId: id, version: 0, signatureId: str(a.signatureId), signatureVersion: num(a.signatureVersion), revisionId: str(a.revisionId), draftVersion: num(a.draftVersion), templateCode: str(a.templateCode), templateVersion: num(a.templateVersion, 1), schemaCode: str(a.schemaCode), dependencyToken: hash(a.dependencyToken), rendererVersion: str(a.rendererVersion), fontHash: hash(a.fontHash), sha256: hash(a.sha256), byteSize: num(a.byteSize), pages: num(a.pages), createdAt: str(a.createdAt) }; }
  return { caseId: id, signatureId: str(d.signatureId), signatureVersion: num(d.signatureVersion), revisionId: str(d.revisionId), dependenciesCurrent: d.dependenciesCurrent, artifact, activityVersion: num(d.activityVersion, -1) };
 }
-export async function loadOutput(id: string, signal: AbortSignal) { return parseDetail(await readJson(await request(base + id + '/output', { signal })), id); }
+export async function loadOutput(id: string, signal: AbortSignal, artifactId?: string) { const d = parseDetail(await readJson(await request(base + id + '/output' + (artifactId ? '/' + artifactId : ''), { signal })), id); if (artifactId && d.artifact?.id !== artifactId) throw new Error('Mismatched selected artifact'); return d; }
 export async function loadHistory(id: string, artifact: string, page: number, signal: AbortSignal): Promise<Event[]> {
  const d = obj(await readJson(await request(base + id + '/output/' + artifact + '/history?page=' + page, { signal })));
  if (d.caseId !== id || d.artifactId !== artifact || d.page !== page || !Array.isArray(d.events)) throw new Error('Mismatched output history');

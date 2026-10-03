@@ -1,0 +1,25 @@
+import { fetchCsrf, readJson, request } from '../../api';
+import { parseRevision, type Revision } from './api';
+const base = '/api/requests/reports/cases/';
+function obj(v: unknown): Record<string, unknown> { if (!v || typeof v !== 'object' || Array.isArray(v)) throw new Error('Invalid chain response'); return v as Record<string, unknown>; }
+function text(v: unknown): string { if (typeof v !== 'string' || !v) throw new Error('Invalid chain text'); return v; }
+function nullable(v: unknown): string | null { return v === null ? null : text(v); }
+function number(v: unknown, min = 0): number { if (typeof v !== 'number' || !Number.isSafeInteger(v) || v < min) throw new Error('Invalid chain version'); return v; }
+export type Kind = 'ADDENDUM' | 'CORRECTION';
+export interface Node { id: string; version: number; kind: Kind; parentId: string | null; baseSignatureId: string; baseRevisionId: string; baseDraftVersion: number; startRevisionId: string; startVersion: number; reason: string; actorId: string; createdAt: string; newSignatureId: string | null; downstreamState: string | null }
+export interface Detail { caseId: string; version: number; assignmentVersion: number; ready: boolean; draftId: string | null; revisionId: string | null; draftVersion: number; frozenSignatureId: string | null; frozenRevisionId: string | null; pending: boolean; canCreate: boolean; page: number; nodes: Node[] }
+export interface Command { caseId: string; body: { confirmedCaseId: string; expectedVersion: number; assignmentVersion: number; baseSignatureId: string; baseRevisionId: string; baseDraftVersion: number; kind: Kind; reason: string } }
+export function parseDetail(v: unknown, id: string, page: number): Detail {
+ const d = obj(v); if (d.caseId !== id || d.page !== page || !Array.isArray(d.nodes) || d.nodes.length > 20 || [d.ready, d.pending, d.canCreate].some(b => typeof b !== 'boolean')) throw new Error('Mismatched chain');
+ const nodes = d.nodes.map(v => { const n = obj(v); if (!['ADDENDUM', 'CORRECTION'].includes(text(n.kind)) || ![null, 'PENDING_NOT_SENT'].includes(n.downstreamState as null | string) || (n.newSignatureId === null) !== (n.downstreamState === null) || number(n.startVersion) !== number(n.baseDraftVersion) + 1 || number(n.version, 1) > number(d.version)) throw new Error('Invalid chain binding'); return { id: text(n.id), version: number(n.version, 1), kind: n.kind as Kind, parentId: nullable(n.parentId), baseSignatureId: text(n.baseSignatureId), baseRevisionId: text(n.baseRevisionId), baseDraftVersion: number(n.baseDraftVersion), startRevisionId: text(n.startRevisionId), startVersion: number(n.startVersion), reason: text(n.reason), actorId: text(n.actorId), createdAt: text(n.createdAt), newSignatureId: nullable(n.newSignatureId), downstreamState: nullable(n.downstreamState) }; });
+ if (new Set(nodes.map(n => n.id)).size !== nodes.length || nodes.some((n, i) => i > 0 && n.version >= nodes[i - 1].version)) throw new Error('Unordered chain');
+ return { caseId: id, version: number(d.version), assignmentVersion: number(d.assignmentVersion), ready: d.ready as boolean, draftId: nullable(d.draftId), revisionId: nullable(d.revisionId), draftVersion: number(d.draftVersion, -1), frozenSignatureId: nullable(d.frozenSignatureId), frozenRevisionId: nullable(d.frozenRevisionId), pending: d.pending as boolean, canCreate: d.canCreate as boolean, page, nodes };
+}
+export async function load(id: string, page: number, signal: AbortSignal) { return parseDetail(await readJson(await request(base + id + '/amendments?page=' + page, { signal })), id, page); }
+export interface Snapshot { caseId: string; signatureId: string; currentFrozen: boolean; revision: Revision; artifactId: string | null }
+export function parseSnapshot(v: unknown, id: string, signature: string): Snapshot { const s = obj(v); if (s.caseId !== id || s.signatureId !== signature || typeof s.currentFrozen !== 'boolean') throw new Error('Mismatched frozen snapshot'); return { caseId: id, signatureId: signature, currentFrozen: s.currentFrozen, revision: parseRevision(s.revision, id), artifactId: nullable(s.artifactId) }; }
+export async function snapshot(id: string, signature: string, signal: AbortSignal) { return parseSnapshot(await readJson(await request(base + id + '/amendments/snapshots/' + signature, { signal })), id, signature); }
+export async function send(c: Command, key: string) {
+ const abort = new AbortController(), timer = setTimeout(() => abort.abort(), 15000);
+ try { const csrf = await fetchCsrf(abort.signal); const result = obj(await readJson(await request(base + c.caseId + '/amendments', { method: 'POST', signal: abort.signal, headers: { 'Content-Type': 'application/json', [csrf.headerName]: csrf.token, 'Idempotency-Key': key }, body: JSON.stringify(c.body) }))), r = obj(result.receipt); if (r.resourceType !== 'REPORT_AMENDMENT' || !text(r.resourceId) || r.status !== 200 || r.version !== c.body.expectedVersion + 1) throw new Error('Mismatched amendment receipt'); return true; } finally { clearTimeout(timer); }
+}

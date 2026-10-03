@@ -23,6 +23,10 @@ public class OutputService {
  private long version(UUID artifact) { return jdbc.queryForObject("SELECT version FROM report_output_head WHERE artifact_id=?",Long.class,artifact); }
  private void validate(Object input) { var errors=validator.validate(input);if(!errors.isEmpty()) throw new jakarta.validation.ConstraintViolationException(errors); }
  @Transactional(timeout=10) public Detail detail(UUID id) { var f=reviews.outputFrozen(id);var a=find(id,f.signatureId());return new Detail(id,f.signatureId(),f.signatureVersion(),f.revision().id(),f.dependenciesCurrent(),a,a==null?-1:version(a.id())); }
+ @Transactional(timeout=10) public Detail historical(UUID id,UUID artifact) {
+  var c=reviews.outputAccess(id);jdbc.queryForList("SELECT id FROM pathology_request WHERE id=? FOR SHARE",c.requestId());var a=require(id,artifact);
+  return new Detail(id,a.signatureId(),a.signatureVersion(),a.revisionId(),false,a,version(artifact));
+ }
  private void bind(UUID id,Create input,ReviewService.Frozen f) { if(!id.equals(input.confirmedCaseId())) throw conflict("REPORT_IDENTITY_MISMATCH");if(!f.signatureId().equals(input.signatureId())||f.signatureVersion()!=input.signatureVersion()||!f.revision().id().equals(input.revisionId())) throw conflict("VERSION_CONFLICT"); }
  private SyntheticPdf.Rendered render(ReviewService.Frozen f) {
   var r=f.revision();ReportSchema.validate(f.schemaCode(),r.fields());var sections=new ArrayList<SyntheticPdf.Section>();
@@ -78,7 +82,7 @@ public class OutputService {
    public IdempotentCommands.Mutation mutate(CurrentActor.Actor actor) {
     jdbc.queryForList("SELECT id FROM pathology_request WHERE id=? FOR UPDATE",initial.requestId());printPermit(id,kind);var a=require(id,artifact);bind(id,input,a);long old=version(artifact);
     if(!read&&old!=input.expectedVersion()) throw conflict("VERSION_CONFLICT");
-    if((kind==Kind.PRINT_REQUEST||kind==Kind.REPRINT_REQUEST)&&!reviews.outputFrozenLocked(id).dependenciesCurrent()) throw conflict("REPORT_OUTPUT_STALE");
+    if(kind==Kind.PRINT_REQUEST||kind==Kind.REPRINT_REQUEST) {var f=reviews.outputFrozenLocked(id);if(!f.dependenciesCurrent()||!f.signatureId().equals(a.signatureId()))throw conflict("REPORT_OUTPUT_STALE");}
     if(input.requestId()!=null) {
      var requests=jdbc.queryForList("SELECT actor_id FROM report_output_event WHERE artifact_id=? AND id=? AND kind IN ('PRINT_REQUEST','REPRINT_REQUEST')",UUID.class,artifact,input.requestId());
      if(requests.isEmpty()||result&&!requests.getFirst().equals(actor.id())) throw missing();

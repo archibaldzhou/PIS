@@ -13,8 +13,8 @@ class PostgresMigrationTest {
     void initializesAnEmptySchemaAndIsRepeatableWithoutReapplyingMigrations() throws Exception {
         try (var database = new PostgresTestDatabase()) {
             var flyway = database.configuration("classpath:db/migration").load();
-            assertThat(flyway.migrate().migrationsExecuted).isEqualTo(17);
-            assertThat(flyway.info().current().getVersion().toString()).isEqualTo("17");
+            assertThat(flyway.migrate().migrationsExecuted).isEqualTo(18);
+            assertThat(flyway.info().current().getVersion().toString()).isEqualTo("18");
             assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
             assertThat(flyway.migrate().migrationsExecuted).isZero();
             try (var connection = database.connection();
