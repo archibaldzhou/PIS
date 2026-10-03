@@ -10,13 +10,31 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class PostgresMigrationTest {
     @Test
+    void versionTwentyNineAddsManifestAndPreservesVersionTwentyEightData() throws Exception {
+        try (var database = new PostgresTestDatabase()) {
+            database.configuration("classpath:db/migration").target("28").load().migrate();
+            try (var connection=database.connection();var statement=connection.createStatement()) {
+                statement.executeUpdate("INSERT INTO hospital(id,code,name) VALUES('11111111-1111-4111-8111-111111111130','SYN-T31','Synthetic QC migration')");
+            }
+            var latest=database.configuration("classpath:db/migration").target("29").load();
+            assertThat(latest.migrate().migrationsExecuted).isEqualTo(1);
+            assertThat(latest.info().current().getVersion().toString()).isEqualTo("29");
+            assertThat(latest.validateWithResult().validationSuccessful).isTrue();
+            assertThat(latest.migrate().migrationsExecuted).isZero();
+            try (var connection=database.connection();var statement=connection.createStatement();var rows=statement.executeQuery("SELECT name FROM hospital WHERE code='SYN-T31'")) {
+                assertThat(rows.next()).isTrue();assertThat(rows.getString(1)).isEqualTo("Synthetic QC migration");
+            }
+        }
+    }
+
+    @Test
     void versionTwentyEightAddsQcAndPreservesVersionTwentySevenData() throws Exception {
         try (var database = new PostgresTestDatabase()) {
             database.configuration("classpath:db/migration").target("27").load().migrate();
             try (var connection=database.connection();var statement=connection.createStatement()) {
                 statement.executeUpdate("INSERT INTO hospital(id,code,name) VALUES('11111111-1111-4111-8111-111111111130','SYN-T30','Synthetic QC migration')");
             }
-            var latest=database.configuration("classpath:db/migration").load();
+            var latest=database.configuration("classpath:db/migration").target("28").load();
             assertThat(latest.migrate().migrationsExecuted).isEqualTo(1);
             assertThat(latest.info().current().getVersion().toString()).isEqualTo("28");
             assertThat(latest.validateWithResult().validationSuccessful).isTrue();
@@ -31,13 +49,13 @@ class PostgresMigrationTest {
     void initializesAnEmptySchemaAndIsRepeatableWithoutReapplyingMigrations() throws Exception {
         try (var database = new PostgresTestDatabase()) {
             var flyway = database.configuration("classpath:db/migration").load();
-            assertThat(flyway.migrate().migrationsExecuted).isEqualTo(28);
-            assertThat(flyway.info().current().getVersion().toString()).isEqualTo("28");
+            assertThat(flyway.migrate().migrationsExecuted).isEqualTo(29);
+            assertThat(flyway.info().current().getVersion().toString()).isEqualTo("29");
             // Explicit production baseline: a new migration requires deliberate contract review.
             assertThat(java.util.Arrays.stream(flyway.info().applied())
                 .filter(migration -> migration.getVersion() != null)
                 .map(migration -> migration.getVersion().toString()).toList())
-                .containsExactlyElementsOf(java.util.stream.IntStream.rangeClosed(1, 28)
+                .containsExactlyElementsOf(java.util.stream.IntStream.rangeClosed(1, 29)
                     .mapToObj(Integer::toString).toList());
             assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
             assertThat(flyway.migrate().migrationsExecuted).isZero();

@@ -21,7 +21,7 @@ export function Scan({ requestId, onDirty, onClean, onPending, onExpired, onQc }
  }
  function command(j: api.Job, action: string) { if (locked.current || pending) return; if (!reason.trim()) { setError('必须填写本次人工操作原因。'); return; } intent.current = { key: crypto.randomUUID(), target: `/${j.id}/${action}`, body: { expectedVersion: j.version, leaseId: j.leaseId, reason } }; setPending(true); onPending(true); changed(); void run(send); }
  function reset(next: string) { setSlide(next); setBarcode(''); setCaseId(''); setPatient(''); setObjects(''); setSource(''); setScanner(''); setReason(''); setPrevious(undefined); setResults([]); dirty.current = queued.length > 0; if (dirty.current) onDirty(); else onClean(); }
- return <section aria-label="合成扫描导入"><Typography.Title level={2}>扫描任务与导入</Typography.Title><Alert type="warning" title="仅合成头契约；厂商适配未配置，导入不代表发布；数字QC另行核验，T31阅片器未实现。" />
+ return <section aria-label="合成扫描导入"><Typography.Title level={2}>扫描任务与导入</Typography.Title><Alert type="warning" title="仅合成头或显式RGB夹具；厂商适配未配置，导入不代表发布；数字QC通过后仅RGB可进入合成阅片器。" />
   {error && <Alert role="alert" type="error" title={error} />}{notice && <Alert role="status" type="info" title={notice} />}
   <p>申请 {requestId}；病例 {view?.caseId ?? '未知'}；患者ID {view?.patientId ?? '未知'}。请人工核对，不从文件自动修正身份。</p>
   <Space wrap><Button disabled={busy} onClick={() => void run(refresh)}>刷新导入与授权</Button><Button disabled={!busy} onClick={() => { active.current?.abort(); locked.current = false; setBusy(false); setNotice('仅停止等待，操作可能已完成；使用原键确认。'); }}>停止等待导入</Button><Button disabled={busy || !pending} onClick={() => void run(send)}>原键确认导入操作</Button><Button disabled={busy || !pending} onClick={() => setAbandon(true)}>停止本地跟踪</Button></Space>

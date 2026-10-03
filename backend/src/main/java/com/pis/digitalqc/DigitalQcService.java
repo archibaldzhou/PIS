@@ -179,6 +179,15 @@ public class DigitalQcService {
         if(h.version()!=publicationVersion||!h.state().equals("PUBLISHED")||!publicationInvalid(c,h).isEmpty())throw conflict("DIGITAL_QC_NOT_READY");
         return c;
     }
+    /** Public consumer gate. Never cache the authorization result; caller rechecks after I/O/cache. */
+    public record ConsumerBinding(UUID hospitalId,UUID requestId,UUID scanId,UUID slideId,UUID objectId,
+        String objectHash,long scanVersion,long publicationVersion,UUID actorId,long authVersion) {}
+    public ConsumerBinding authorizeConsumer(UUID request,UUID scan,long publicationVersion,String action) {
+        if(!Set.of("VIEWER_MANIFEST","VIEWER_TILE","VIEWER_THUMBNAIL","VIEWER_PREPARE").contains(action))throw problem(HttpStatus.BAD_REQUEST,"DIGITAL_QC_ACTION");
+        return tx.execute(s->{var c=consumable(request,scan,publicationVersion);var actor=access.actor();
+            audit.append(c.hospital(),action+"_V1","SCAN_IMPORT",scan,null,publicationVersion);var j=c.job();
+            return new ConsumerBinding(c.hospital(),request,scan,j.slideId(),j.objectId(),j.objectHash(),j.version(),publicationVersion,actor.id(),actor.authVersion());});
+    }
     public StorageProvider.Slice consume(UUID request,UUID scan,long publicationVersion,String range) {
         var before=tx.execute(s->{var c=consumable(request,scan,publicationVersion);audit.append(c.hospital(),"DIGITAL_QC_CONSUME_ATTEMPT_V1","SCAN_IMPORT",scan,null,publicationVersion);return c.job();});
         var bytes=storage.bytes(request,before.objectId(),range,"DOWNLOAD");

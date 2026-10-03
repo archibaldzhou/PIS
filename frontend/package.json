@@ -22,7 +22,8 @@
   "dependencies": {
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "antd": "6.6.5"
+    "antd": "6.6.5",
+    "openseadragon": "6.1.1"
   },
   "devDependencies": {
     "@types/react": "19.0.10",
