@@ -101,6 +101,17 @@ public class DiagnosisService {
   if(!c.state().equals("ACTIVE")||!access.actor().id().equals(c.owner())) throw missing();
   return new ReportContext(id,c.request(),c.hospital(),c.patient(),c.number(),c.version(),item(c,quality.diagnosisReadiness(List.of(id)).getOrDefault(id,false)).ready());
  }
+ /** Separate review boundary: qualified reader, without granting draft editing ownership. */
+ public record ReviewContext(UUID caseId,UUID requestId,UUID hospitalId,UUID patientId,UUID scopeId,UUID ownerId,String number,long assignmentVersion,boolean ready,String dependencies) { }
+ public ReviewContext reviewContext(UUID id) {
+  var c=context(id,Action.CLAIM);boolean qualified=c.owner()!=null&&rights(c.scope(),c.owner()).diagnose();
+  String owner=c.owner()==null?"NONE":qualificationSnapshot(c.scope(),c.owner());
+  return new ReviewContext(id,c.request(),c.hospital(),c.patient(),c.scope(),c.owner(),c.number(),c.version(),qualified&&c.state().equals("ACTIVE")&&item(c,quality.diagnosisReadiness(List.of(id)).getOrDefault(id,false)).ready(),c.state()+":"+c.version()+":"+owner+":"+quality.reportSnapshot(c.request()));
+ }
+ public String qualificationSnapshot(UUID scope,UUID user) {
+  if(!rights(scope,user).diagnose()) return "UNAVAILABLE";
+  return jdbc.queryForObject("SELECT jsonb_build_array(u.id,u.auth_version,to_jsonb(g),to_jsonb(d),to_jsonb(s))::text FROM app_user u JOIN workflow_grant g ON g.user_id=u.id JOIN diagnosis_grant d ON d.user_id=u.id AND d.scope_id=g.scope_id JOIN workflow_scope s ON s.id=g.scope_id WHERE u.id=? AND s.id=?",String.class,user,scope);
+ }
  private static ApiException missing() { return new ApiException(HttpStatus.NOT_FOUND,"DIAGNOSIS_NOT_FOUND","Diagnosis resource unavailable"); }
  private static ApiException conflict(String code) { return new ApiException(HttpStatus.CONFLICT,code,"Diagnosis command requires review"); }
 }

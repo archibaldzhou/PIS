@@ -64,3 +64,5 @@ T15新增V13授权只读投影、同快照计数/分页、逐项批量领取与�
 T16 独立诊断资格、分配/领取/转交、原子门禁及追加历史已实现。九域源码引用检查、75前端单测、17系统Chromium UI测试、类型/构建/npm audit及PG17 SQL探针本地通过；Maven离线依赖缺失，Java编译/完整集成和真实Spring E2E未验证。本次依用户最新指示不等待CI、不push，见[T16记录](api/t16-development-status.md)。
 
 T17增加report域，源码引用无环检查扩展十域。模板不可变、草稿CAS/历史/权限/幂等及审计回滚测试已补充；完整后端和真实E2E受Maven依赖缺失阻塞，不能推断通过。已运行证据见[T17记录](api/t17-development-status.md)。
+
+T18新增复核资格、依赖快照/代次、退回重修、合成模拟冻结及并发/审计测试。前端和PG SQL检查通过范围见[T18记录](api/t18-development-status.md)；完整后端与真实E2E仍受离线BOM缺失阻塞，CI未验证。

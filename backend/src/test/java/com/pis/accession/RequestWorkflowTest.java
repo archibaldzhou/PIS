@@ -1377,6 +1377,115 @@ class RequestWorkflowTest {
         jdbc.update("UPDATE diagnosis_grant SET revoked_at=statement_timestamp() WHERE user_id=?",f.user);
         assertThat(b.send("GET",path,null,null,false).statusCode()).isEqualTo(404);assertThat(b.send("POST",path+"/draft",body,csrf,false).statusCode()).isEqualTo(404);
     }
+    @org.springframework.beans.factory.annotation.Autowired com.pis.report.ReviewService reviews;
+    private void reviewGrant(Fixture actor,Fixture scope) {
+        diagnosisGrant(actor,scope,false,true);
+        jdbc.update("INSERT INTO report_review_grant(user_id,scope_id,qualification,can_review,can_simulate_sign) VALUES(?,?,'SYN-REPORT-REVIEW-1',true,true)",actor.user,scope.scope);
+    }
+    private DiagnosisSetup reviewSetup(Fixture f,boolean separateAuthor,boolean separateSigner) {
+        reportTemplates();var d=diagnosisSetup(f);reviewGrant(f,f);
+        jdbc.update("INSERT INTO report_review_policy(scope_id,code,separate_author_review,separate_review_sign) VALUES(?,'SYN-REVIEW-1',?,?)",f.scope,separateAuthor,separateSigner);
+        f.as(()->{diagnosis.decide(d.caseId(),dd(d.caseId(),-1,null),"review-claim",com.pis.diagnosis.DiagnosisContracts.Action.CLAIM);reports.save(d.caseId(),rs(d.caseId(),-1,1,"Synthetic manual review"),"review-draft");return null;});return d;
+    }
+    private com.pis.report.ReviewContracts.Decision rd(UUID id,boolean sign) {
+        var d=reviews.detail(id);var r=d.draft();return new com.pis.report.ReviewContracts.Decision(d.version(),id,r.id(),r.version(),d.assignmentVersion(),r.templateCode(),r.templateVersion(),d.dependencyToken(),"Synthetic manual review reason",sign);
+    }
+    @Test void reviewSeparationReturnAndSimulationFreezeKeepExactSnapshots() {
+        var f=new Fixture();var d=reviewSetup(f,true,true);var reviewer=new Fixture();reviewGrant(reviewer,f);var foreign=new Fixture();
+        f.as(()->{assertCode(()->reviews.decide(d.caseId(),rd(d.caseId(),false),"self",com.pis.report.ReviewContracts.Action.APPROVE),"REPORT_SEPARATION_REQUIRED");return null;});
+        foreign.as(()->{assertCode(()->reviews.detail(d.caseId()),"DIAGNOSIS_NOT_FOUND");return null;});
+        reviewer.as(()->{var returned=rd(d.caseId(),false);reviews.decide(d.caseId(),returned,"return",com.pis.report.ReviewContracts.Action.RETURN);assertThat(reviews.decide(d.caseId(),returned,"return",com.pis.report.ReviewContracts.Action.RETURN).replayed()).isTrue();assertCode(()->reviews.decide(d.caseId(),rd(d.caseId(),false),"same-revision",com.pis.report.ReviewContracts.Action.APPROVE),"REPORT_REVISION_REQUIRED");return null;});
+        f.as(()->reports.save(d.caseId(),rs(d.caseId(),0,2,"Synthetic revised manual"),"returned-new"));
+        reviewer.as(()->{reviews.decide(d.caseId(),rd(d.caseId(),false),"approve",com.pis.report.ReviewContracts.Action.APPROVE);assertThat(reviews.detail(d.caseId()).ready()).isTrue();assertCode(()->reviews.decide(d.caseId(),rd(d.caseId(),true),"same-signer",com.pis.report.ReviewContracts.Action.SIMULATE_SIGN),"REPORT_REVIEW_STALE");return null;});
+        f.as(()->{var sign=rd(d.caseId(),true);reviews.decide(d.caseId(),sign,"simulate",com.pis.report.ReviewContracts.Action.SIMULATE_SIGN);assertThat(reviews.decide(d.caseId(),sign,"simulate",com.pis.report.ReviewContracts.Action.SIMULATE_SIGN).replayed()).isTrue();assertThat(reviews.detail(d.caseId()).events()).extracting(e->e.action()).containsExactly(com.pis.report.ReviewContracts.Action.SIMULATE_SIGN,com.pis.report.ReviewContracts.Action.APPROVE,com.pis.report.ReviewContracts.Action.RETURN);assertCode(()->reports.save(d.caseId(),rs(d.caseId(),1,1,"Frozen"),"frozen"),"REPORT_SIMULATED_FROZEN");return null;});
+    }
+    @Test void reviewInvalidatesAfterDraftQcAssignmentAndQualificationChanges() {
+        var f=new Fixture();var d=reviewSetup(f,false,false);var other=new Fixture();reviewGrant(other,f);
+        f.as(()->{reviews.decide(d.caseId(),rd(d.caseId(),false),"first",com.pis.report.ReviewContracts.Action.APPROVE);var stale=rd(d.caseId(),true);reports.save(d.caseId(),rs(d.caseId(),0,2,"New synthetic"),"new");assertThat(reviews.detail(d.caseId()).state()).isEqualTo("STALE");assertCode(()->reviews.decide(d.caseId(),stale,"stale",com.pis.report.ReviewContracts.Action.SIMULATE_SIGN),"VERSION_CONFLICT");reviews.decide(d.caseId(),rd(d.caseId(),false),"second",com.pis.report.ReviewContracts.Action.APPROVE);return null;});
+        jdbc.update("UPDATE report_review_grant SET revoked_at=statement_timestamp() WHERE user_id=?",f.user);
+        other.as(()->{assertThat(reviews.detail(d.caseId()).ready()).isFalse();assertCode(()->reviews.decide(d.caseId(),rd(d.caseId(),true),"revoked",com.pis.report.ReviewContracts.Action.SIMULATE_SIGN),"REPORT_REVIEW_STALE");return null;});
+        jdbc.update("UPDATE report_review_grant SET revoked_at=NULL WHERE user_id=?",f.user);
+        f.as(()->{assertThat(reviews.detail(d.caseId()).ready()).isFalse();reviews.decide(d.caseId(),rd(d.caseId(),false),"third",com.pis.report.ReviewContracts.Action.APPROVE);quality.decide(d.slide(),new com.pis.quality.QualityContracts.Decision(0L,d.slide(),"Synthetic QC withdrawal"),"withdraw","REVOKE");assertThat(reviews.detail(d.caseId()).ready()).isFalse();quality.assess(d.slide(),qa(d.slide(),1,0,null,com.pis.quality.QualityContracts.Outcome.PASS),"reassess");assertThat(reviews.detail(d.caseId()).ready()).isFalse();reviews.decide(d.caseId(),rd(d.caseId(),false),"fourth",com.pis.report.ReviewContracts.Action.APPROVE);diagnosis.decide(d.caseId(),dd(d.caseId(),0,other.user),"transfer",com.pis.diagnosis.DiagnosisContracts.Action.TRANSFER);assertThat(reviews.detail(d.caseId()).ready()).isFalse();return null;});
+        other.as(()->{diagnosis.decide(d.caseId(),dd(d.caseId(),1,null),"accept",com.pis.diagnosis.DiagnosisContracts.Action.CLAIM);assertThat(reviews.detail(d.caseId()).ready()).isFalse();return null;});
+    }
+    @Test void reviewAuditFailureRollsBackHeadEventAndReceipt() {
+        var f=new Fixture();var d=reviewSetup(f,false,false);var input=f.as(()->rd(d.caseId(),false));
+        jdbc.execute("CREATE FUNCTION reject_review_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.operation_code LIKE 'REPORT_REVIEW_%' THEN RAISE EXCEPTION 'synthetic failure'; END IF; RETURN NEW; END $$");jdbc.execute("CREATE TRIGGER reject_review_audit BEFORE INSERT ON audit_event FOR EACH ROW EXECUTE FUNCTION reject_review_audit()");
+        try { f.as(()->{assertThatThrownBy(()->reviews.decide(d.caseId(),input,"atomic-review",com.pis.report.ReviewContracts.Action.APPROVE)).isInstanceOf(org.springframework.dao.DataAccessException.class);return null;}); }
+        finally {jdbc.execute("DROP TRIGGER reject_review_audit ON audit_event");jdbc.execute("DROP FUNCTION reject_review_audit()");}
+        f.as(()->{assertThat(reviews.detail(d.caseId()).version()).isEqualTo(-1);assertThat(reviews.detail(d.caseId()).events()).isEmpty();reviews.decide(d.caseId(),input,"atomic-review",com.pis.report.ReviewContracts.Action.APPROVE);return null;});
+    }
+    @Test void concurrentReviewsAndSimulatedSignaturesHaveOneWinnerUnderRealRootLock() throws Exception {
+        for(var pair:List.of(List.of(com.pis.report.ReviewContracts.Action.APPROVE,com.pis.report.ReviewContracts.Action.APPROVE),List.of(com.pis.report.ReviewContracts.Action.SIMULATE_SIGN,com.pis.report.ReviewContracts.Action.SIMULATE_SIGN),List.of(com.pis.report.ReviewContracts.Action.APPROVE,com.pis.report.ReviewContracts.Action.SIMULATE_SIGN))) {
+            var f=new Fixture();var d=reviewSetup(f,false,false);
+            if(pair.contains(com.pis.report.ReviewContracts.Action.SIMULATE_SIGN)) f.as(()->reviews.decide(d.caseId(),rd(d.caseId(),false),"prepare",com.pis.report.ReviewContracts.Action.APPROVE));
+            var first=f.as(()->rd(d.caseId(),pair.get(0)==com.pis.report.ReviewContracts.Action.SIMULATE_SIGN));var second=f.as(()->rd(d.caseId(),pair.get(1)==com.pis.report.ReviewContracts.Action.SIMULATE_SIGN));
+            try(var blocker=DB.connection();var executor=Executors.newVirtualThreadPerTaskExecutor()) {
+                blocker.setAutoCommit(false);try(var st=blocker.prepareStatement("SELECT id FROM pathology_request WHERE id=? FOR UPDATE")){st.setObject(1,d.request());st.executeQuery().close();}
+                java.util.function.Function<Integer,String> run=n->f.as(()->{try{reviews.decide(d.caseId(),n==0?first:second,"race-"+n,pair.get(n));return "SUCCESS";}catch(ApiException e){return e.code();}});
+                var a=executor.submit(()->run.apply(0));var b=executor.submit(()->run.apply(1));
+                try{long end=System.nanoTime()+TimeUnit.SECONDS.toNanos(2);boolean waiting=false;while(System.nanoTime()<end){if(jdbc.queryForObject("SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%SELECT id FROM pathology_request WHERE id=%'",Long.class)>=2){waiting=true;break;}Thread.sleep(10);}assertThat(waiting).isTrue();}finally{blocker.rollback();}
+                assertThat(List.of(a.get(5,TimeUnit.SECONDS),b.get(5,TimeUnit.SECONDS))).containsExactlyInAnyOrder("SUCCESS","VERSION_CONFLICT");
+            }
+        }
+    }
+    @Test void reviewHttpRequiresExplicitQualificationAndExactWhitelistedSnapshot() throws Exception {
+        var f=new Fixture();var d=reviewSetup(f,false,false);var b=new Browser();String path="/api/requests/reports/cases/"+d.caseId()+"/review";
+        assertThat(b.send("GET",path,null,null,false).statusCode()).isEqualTo(401);
+        var initial=f.as(()->rd(d.caseId(),false));String password="Synthetic-review-http-42!";jdbc.update("UPDATE app_user SET password_hash=? WHERE id=?",encoder.encode(password),f.user);
+        String login="username="+f.principal.getUsername()+"&password="+java.net.URLEncoder.encode(password,java.nio.charset.StandardCharsets.UTF_8);
+        assertThat(b.send("POST","/api/auth/login",login,b.csrf(),true).statusCode()).isEqualTo(204);String csrf=b.csrf();
+        var json=tools.jackson.databind.json.JsonMapper.builder().build();var current=json.readTree(b.send("GET",path,null,null,false).body());
+        var input=new com.pis.report.ReviewContracts.Decision(initial.expectedVersion(),initial.confirmedCaseId(),initial.revisionId(),initial.draftVersion(),initial.assignmentVersion(),initial.templateCode(),initial.templateVersion(),current.get("dependencyToken").stringValue(),"Synthetic HTTP review",false);String body=json.writeValueAsString(input);
+        assertThat(b.send("POST",path+"/APPROVE",body,null,false).statusCode()).isEqualTo(403);
+        assertThat(b.send("POST",path+"/APPROVE",body.replace("\"reason\":","\"adminOverride\":true,\"reason\":"),csrf,false).statusCode()).isEqualTo(400);
+        assertThat(b.send("POST",path+"/APPROVE",body.replace("Synthetic HTTP review"," "),csrf,false).statusCode()).isEqualTo(400);
+        assertThat(b.send("POST",path+"/APPROVE",body.replace("\"templateVersion\":1","\"templateVersion\":2"),csrf,false).statusCode()).isEqualTo(409);
+        assertThat(b.send("POST",path+"/APPROVE",body,csrf,false).statusCode()).isEqualTo(200);
+        assertThat(b.send("POST",path+"/APPROVE",body,csrf,false).headers().firstValue("Idempotency-Replayed")).contains("true");
+        assertThat(b.send("POST",path+"/APPROVE",body.replace("Synthetic HTTP review","Changed"),csrf,false).statusCode()).isEqualTo(409);
+        jdbc.update("UPDATE report_review_grant SET can_review=false,can_simulate_sign=false WHERE user_id=?",f.user);
+        assertThat(b.send("GET",path,null,null,false).statusCode()).isEqualTo(404);assertThat(b.send("POST",path+"/APPROVE",body,csrf,false).statusCode()).isEqualTo(404);
+        jdbc.update("INSERT INTO user_role_scope(user_id,role_code,hospital_id,scope_kind,case_filter) VALUES(?,'SECURITY_ADMIN_TEMPLATE',?,'HOSPITAL','ALL_IN_SCOPE')",f.user,f.hospital);
+        assertThat(b.send("POST",path+"/SIMULATE_SIGN",body.replace("\"simulationAcknowledged\":false","\"simulationAcknowledged\":true"),csrf,false).statusCode()).isIn(401,404);
+    }
+    @Test void reviewRacesWithDraftQcAndAssignmentAlwaysLoseReadinessAfterDependencyChanges() throws Exception {
+        for(String change:List.of("DRAFT","QC","ASSIGNMENT")) {
+            var f=new Fixture();var d=reviewSetup(f,false,false);var other=new Fixture();reviewGrant(other,f);
+            var input=f.as(()->rd(d.caseId(),false));
+            try(var blocker=DB.connection();var executor=Executors.newVirtualThreadPerTaskExecutor()) {
+                blocker.setAutoCommit(false);try(var st=blocker.prepareStatement("SELECT id FROM pathology_request WHERE id=? FOR UPDATE")){st.setObject(1,d.request());st.executeQuery().close();}
+                var approval=executor.submit(()->f.as(()->{try{reviews.decide(d.caseId(),input,"racing-review",com.pis.report.ReviewContracts.Action.APPROVE);return "SUCCESS";}catch(ApiException e){return e.code();}}));
+                var mutation=executor.submit(()->f.as(()->{
+                    if(change.equals("DRAFT")) reports.save(d.caseId(),rs(d.caseId(),0,2,"Concurrent manual text"),"racing-draft");
+                    else if(change.equals("QC")) quality.decide(d.slide(),new com.pis.quality.QualityContracts.Decision(0L,d.slide(),"Synthetic concurrent QC"),"racing-qc","REVOKE");
+                    else diagnosis.decide(d.caseId(),dd(d.caseId(),0,other.user),"racing-transfer",com.pis.diagnosis.DiagnosisContracts.Action.TRANSFER);
+                    return "CHANGED";
+                }));
+                try{long end=System.nanoTime()+TimeUnit.SECONDS.toNanos(2);boolean waiting=false;while(System.nanoTime()<end){if(jdbc.queryForObject("SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%pathology_request%FOR UPDATE%'",Long.class)>=2){waiting=true;break;}Thread.sleep(10);}assertThat(waiting).isTrue();}finally{blocker.rollback();}
+                assertThat(mutation.get(5,TimeUnit.SECONDS)).isEqualTo("CHANGED");assertThat(approval.get(5,TimeUnit.SECONDS)).isIn("SUCCESS","VERSION_CONFLICT","REPORT_REVIEW_NOT_READY");
+            }
+            f.as(()->{assertThat(reviews.detail(d.caseId()).ready()).isFalse();return null;});
+        }
+    }
+    @Test void reviewQualificationRevocationDuringGrantLockWaitCannotAuthorizeCommand() throws Exception {
+        var f=new Fixture();var d=reviewSetup(f,false,false);var input=f.as(()->rd(d.caseId(),false));
+        try(var blocker=DB.connection();var executor=Executors.newVirtualThreadPerTaskExecutor()) {
+            blocker.setAutoCommit(false);
+            try(var st=blocker.prepareStatement("UPDATE report_review_grant SET revoked_at=statement_timestamp() WHERE user_id=? AND scope_id=?")){st.setObject(1,f.user);st.setObject(2,f.scope);assertThat(st.executeUpdate()).isEqualTo(1);}
+            var result=executor.submit(()->f.as(()->{try{reviews.decide(d.caseId(),input,"revoke-wait",com.pis.report.ReviewContracts.Action.APPROVE);return "SUCCESS";}catch(ApiException e){return e.code();}}));
+            try{long end=System.nanoTime()+TimeUnit.SECONDS.toNanos(2);boolean waiting=false;while(System.nanoTime()<end){if(jdbc.queryForObject("SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%report_review_grant%FOR SHARE%'",Long.class)>0){waiting=true;break;}Thread.sleep(10);}assertThat(waiting).isTrue();}finally{blocker.commit();}
+            assertThat(result.get(5,TimeUnit.SECONDS)).isEqualTo("REPORT_REVIEW_NOT_FOUND");
+        }
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM report_review_event WHERE case_id=?",Long.class,d.caseId())).isZero();
+    }
+    @Test void reviewHistoryIsPagedAndPolicyAbsenceNeverEnablesSimulation() {
+        var f=new Fixture();var d=reviewSetup(f,false,false);
+        f.as(()->{for(int i=0;i<21;i++) reviews.decide(d.caseId(),rd(d.caseId(),false),"history-"+i,com.pis.report.ReviewContracts.Action.APPROVE);
+            assertThat(reviews.history(d.caseId(),1).events()).hasSize(20);assertThat(reviews.history(d.caseId(),2).events()).singleElement().satisfies(e->assertThat(e.version()).isZero());assertCode(()->reviews.history(d.caseId(),0),"REPORT_PAGE_INVALID");return null;});
+        var disabled=new Fixture();var other=diagnosisSetup(disabled);reviewGrant(disabled,disabled);
+        disabled.as(()->{assertCode(()->reviews.detail(other.caseId()),"REPORT_REVIEW_DISABLED");return null;});
+    }
     private String editResult(Fixture f,UUID id,String key) { return f.as(()->{ try { service.edit(id,new Edit(0L,COMPLETE),key); return "SUCCESS"; } catch(ApiException e) { return e.code(); } }); }
     private static void assertCode(Runnable action,String code) { assertThatThrownBy(action::run).isInstanceOfSatisfying(ApiException.class,e->assertThat(e.code()).isEqualTo(code)); }
     final class Fixture {

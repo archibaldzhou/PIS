@@ -35,9 +35,11 @@ public class E2eFixtureConfiguration {
         jdbc.update("INSERT INTO workflow_grant(user_id,scope_id,can_read,can_write,can_receive,can_exception,can_print,can_reprint,can_gross,can_process,can_handoff,can_material,can_qc) SELECT id,?,true,true,true,true,true,true,true,true,true,true,true FROM app_user WHERE username=?",scope,username);
         jdbc.update("INSERT INTO workflow_grant(user_id,scope_id,can_read,can_process,can_handoff) SELECT id,?,true,true,true FROM app_user WHERE username=?",scope,value("PIS_E2E_HANDOFF_USERNAME", "synthetic.technician"));
         jdbc.update("INSERT INTO diagnosis_grant(user_id,scope_id,can_assign,can_diagnose,qualification) SELECT g.user_id,g.scope_id,u.username=?,true,'SYN-DIAG-ASSIGNMENT-1' FROM workflow_grant g JOIN app_user u ON u.id=g.user_id WHERE g.scope_id=?",username,scope);
+        jdbc.update("INSERT INTO report_review_policy(scope_id,code,separate_author_review,separate_review_sign) VALUES(?,'SYN-REVIEW-1',true,true)",scope);
+        jdbc.update("INSERT INTO report_review_grant(user_id,scope_id,qualification,can_review,can_simulate_sign) SELECT user_id,scope_id,'SYN-REPORT-REVIEW-1',true,true FROM diagnosis_grant WHERE scope_id=?",scope);
         jdbc.update("INSERT INTO patient(id,hospital_id,display_name) VALUES(?,?,'合成申请患者')",patient,hospital);
         jdbc.update("INSERT INTO encounter(hospital_id,patient_id,source_system_id,encounter_number,department_id) VALUES(?,?,?,'SYN-WORKFLOW-001',?)",hospital,patient,source,department);
-        for(var number:java.util.List.of("SYN-RECEIVE-001","SYN-RETURN-001","SYN-RESOLVE-001","SYN-LABEL-001","SYN-GROSS-001","SYN-TECH-001","SYN-MATERIAL-001","SYN-DIRECT-001","SYN-QC-001","SYN-WORKLIST-001","SYN-DIAGNOSIS-001","SYN-REPORT-001")) {
+        for(var number:java.util.List.of("SYN-RECEIVE-001","SYN-RETURN-001","SYN-RESOLVE-001","SYN-LABEL-001","SYN-GROSS-001","SYN-TECH-001","SYN-MATERIAL-001","SYN-DIRECT-001","SYN-QC-001","SYN-WORKLIST-001","SYN-DIAGNOSIS-001","SYN-REPORT-001","SYN-REVIEW-001")) {
             // Independent patient/encounter per scenario; shared list still exercises exact resource selection.
             var scenarioPatient=java.util.UUID.randomUUID();
             jdbc.update("INSERT INTO patient(id,hospital_id,display_name) VALUES(?,?,'合成申请患者')",scenarioPatient,hospital);

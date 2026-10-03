@@ -136,3 +136,5 @@ npm 11.21 的依赖安装脚本采用明确允许机制；本项目的 `allowScr
 配置、环境变量、数据保留、迁移规则及账号分离路线见[数据库开发说明](docs/database-development.md)。
 
 T17本地实现：[人工结构化报告草稿交付记录](docs/api/t17-development-status.md)。不可变模板与修订、当前已领取医生权限和CAS保存；完整后端及真实E2E受依赖缺失阻塞，CI未验证。
+
+T18本地实现：[复核与模拟签署交付记录](docs/api/t18-development-status.md)。独立合成资格、显式职责分离、依赖失效、退回及冻结快照；无临床/CA效力，完整后端、真实E2E和CI未验证。

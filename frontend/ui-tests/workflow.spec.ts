@@ -490,3 +490,39 @@ test('report case switch discards late responses and confirms dirty leave or can
   await page.getByRole('button', { name: '编辑报告草稿 ' + a }).click(); await page.getByRole('button', { name: '放弃并切换', exact: true }).click(); await expect(page.getByLabel('诊断草稿（人工）')).toHaveValue('合成原稿-' + a);
   await page.getByLabel('诊断草稿（人工）').fill('合成未保存A'); await page.getByRole('button', { name: '申请单查询', exact: true }).click(); await page.getByRole('button', { name: '继续编辑', exact: true }).click(); await expect(page.getByLabel('诊断草稿（人工）')).toHaveValue('合成未保存A');
 });
+
+function reviewFixture(id: string, state = 'DRAFT', version = -1) {
+ return { caseId: id, patientId: encounter.patientId, number: 'SYN-REVIEW', assignmentVersion: 0, version, state, ready: state === 'APPROVED', canReview: true, canSimulateSign: true, dependencyToken: 'a'.repeat(64), policy: { code: 'SYN-REVIEW-1', separateAuthorReview: false, separateReviewSign: false }, draft: { id: 'revision-' + id, caseId: id, version: 0, templateCode: 'SYN-REPORT', templateVersion: 1, fields: { gross: '', microscopy: '', diagnosis: '合成人工正文', notes: '' }, assignmentVersion: 0, authorId: 'synthetic-author', reason: 'Synthetic', createdAt: '2026-10-03T00:00:00Z' }, events: [] };
+}
+test('review retries original key, cancels action and simulation, preserves conflict input and freezes confirmed simulation', async ({ page }) => {
+ await start(page); await page.route('**/review/history?*', r => r.fulfill({ json: { caseId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', page: 1, events: [] } })); const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'; let state = 'DRAFT', version = -1;
+ const item = { caseId: id, requestId: 'synthetic-request', patientId: encounter.patientId, number: 'SYN-REVIEW', state: 'ACTIVE', version: 0, ownerId: 'synthetic-user', ready: true };
+ await page.route('**/api/requests/diagnosis/scopes/*', r => r.fulfill({ json: { total: 1, page: 1, pageSize: 10, items: [item] } }));
+ await page.route('**/api/requests/reports/cases/' + id + '/review', r => r.fulfill({ json: reviewFixture(id, state, version) }));
+ const sent: { body: unknown; key: string }[] = []; let signing = 0;
+ await page.route('**/api/requests/reports/cases/' + id + '/review/*', async r => { sent.push({ body: r.request().postDataJSON() as unknown, key: r.request().headers()['idempotency-key'] }); if (sent.length === 1) return r.abort('failed'); if (r.request().url().endsWith('SIMULATE_SIGN') && ++signing === 1) return r.fulfill({ status: 409, json: { code: 'REPORT_REVIEW_STALE', title: 'Synthetic conflict' } }); state = r.request().url().endsWith('APPROVE') ? 'APPROVED' : 'SIMULATED_SIGNED'; version++; await r.fulfill({ json: { receipt: { status: 200, resourceType: 'REPORT_REVIEW', resourceId: id, version }, replayed: sent.length === 2 } }); });
+ await page.route('**/review/history?*', r => r.fulfill({ json: { caseId: id, page: 1, events: [] } }));
+ await page.getByRole('button', { name: '复核与模拟签署', exact: true }).click(); await page.getByRole('button', { name: '复核合成报告 ' + id }).click();
+ await page.getByLabel('复核或退回原因').fill('合成复核意见'); await page.getByLabel('合成复核动作').click(); await page.getByRole('option', { name: '退回修改', exact: true }).click(); await page.getByRole('button', { name: '保留当前输入' }).click(); await expect(page.getByLabel('复核或退回原因')).toHaveValue('合成复核意见');
+ await page.getByLabel('核对复核病例 UUID').fill(id); await page.getByRole('button', { name: '提交合成复核操作' }).dblclick(); await expect(page.getByRole('button', { name: '确认原复核请求' })).toBeVisible(); expect(sent).toHaveLength(1);
+ await page.getByRole('button', { name: '申请单查询', exact: true }).click(); await expect(page.getByText('原请求结果尚未确认，请先使用页面上的原请求确认结果。')).toBeVisible();
+ await page.getByRole('button', { name: '确认原复核请求' }).click(); await expect(page.getByLabel('复核版本身份')).toContainText('状态 APPROVED'); expect(sent[1]).toEqual(sent[0]);
+ await page.getByLabel('合成复核动作').click(); await page.getByRole('option', { name: '模拟签署（无临床效力）', exact: true }).click(); await page.getByRole('button', { name: '清除并切换动作' }).click(); await expect(page.getByLabel('复核或退回原因')).toHaveValue('');
+ await page.getByLabel('核对复核病例 UUID').fill(id); await page.getByLabel('复核或退回原因').fill('合成模拟意见'); await page.getByRole('button', { name: '提交合成复核操作' }).click(); await page.getByRole('button', { name: '取消模拟' }).click(); expect(sent).toHaveLength(2);
+ await page.getByRole('button', { name: '提交合成复核操作' }).click(); await page.getByRole('button', { name: '确认合成模拟' }).click(); await expect(page.getByText('复核依赖已变化或职责分离不满足，请重新核对。', { exact: true })).toBeVisible(); await expect(page.getByLabel('复核或退回原因')).toHaveValue('合成模拟意见');
+ await page.getByRole('button', { name: '提交合成复核操作' }).click(); await page.getByRole('button', { name: '确认合成模拟' }).click(); await expect(page.getByLabel('复核版本身份')).toContainText('状态 SIMULATED_SIGNED'); await expect(page.getByRole('button', { name: '提交合成复核操作' })).toBeDisabled();
+ await page.screenshot({ path: 'test-results/review-desktop.png', fullPage: true }); await page.setViewportSize({ width: 390, height: 844 }); await page.screenshot({ path: 'test-results/review-mobile.png', fullPage: true }); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+test('review late case responses cannot overwrite selection; dirty switching and leaving are cancellable', async ({ page }) => {
+ await start(page); await page.route('**/review/history?*', r => r.fulfill({ json: { caseId: new URL(r.request().url()).pathname.split('/')[5], page: 1, events: [] } })); const a = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', b = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+ const item = (id: string) => ({ caseId: id, requestId: 'request-' + id, patientId: encounter.patientId, number: 'SYN-' + id, state: 'ACTIVE', version: 0, ownerId: 'synthetic-user', ready: true });
+ await page.route('**/api/requests/diagnosis/scopes/*', r => r.fulfill({ json: { total: 2, page: 1, pageSize: 10, items: [item(a), item(b)] } }));
+ let release: () => void = () => {}; const hold = new Promise<void>(r => { release = r; }); let finish: () => void = () => {}; const finished = new Promise<void>(r => { finish = r; }); let slow = true;
+ await page.route('**/api/requests/reports/cases/' + a + '/review', async r => { if (slow) { slow = false; await hold; try { await r.fulfill({ json: reviewFixture(a) }); } finally { finish(); } } else await r.fulfill({ json: reviewFixture(a) }); });
+ await page.route('**/api/requests/reports/cases/' + b + '/review', r => r.fulfill({ json: reviewFixture(b) }));
+ await page.getByRole('button', { name: '复核与模拟签署', exact: true }).click(); const started = page.waitForRequest(r => r.url().endsWith('/' + a + '/review')); await page.getByRole('button', { name: '复核合成报告 ' + a }).click(); await started;
+ await page.getByRole('button', { name: '复核合成报告 ' + b }).click(); await expect(page.getByLabel('复核版本身份')).toContainText(b); release(); await finished; await expect(page.getByLabel('复核版本身份')).not.toContainText(a);
+ await page.getByLabel('复核或退回原因').fill('B合成意见'); await page.getByRole('button', { name: '复核合成报告 ' + a }).click(); await page.getByRole('button', { name: '继续编辑', exact: true }).click(); await expect(page.getByLabel('复核或退回原因')).toHaveValue('B合成意见');
+ await page.getByRole('button', { name: '复核合成报告 ' + a }).click(); await page.getByRole('button', { name: '放弃并切换' }).click(); await expect(page.getByLabel('复核版本身份')).toContainText(a); await expect(page.getByLabel('复核或退回原因')).toHaveValue('');
+ await page.getByLabel('复核或退回原因').fill('A合成意见'); await page.getByRole('button', { name: '申请单查询', exact: true }).click(); await page.getByRole('button', { name: '继续编辑', exact: true }).click(); await expect(page.getByLabel('复核或退回原因')).toHaveValue('A合成意见');
+});
