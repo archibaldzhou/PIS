@@ -1,0 +1,81 @@
+
+> pis-frontend@0.0.1 test:ui
+> playwright test --config playwright.ui.config.ts viewer-validation.spec.ts
+
+[2m[WebServer] [22m(node:271037) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[2m[WebServer] [22m(Use `node --trace-warnings ...` to show where the warning was created)
+[2m[WebServer] [22m(node:271050) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[2m[WebServer] [22m(Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 3 tests using 1 worker
+
+(node:271070) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:271070) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  1 ui-tests/viewer-validation.spec.ts:5:2 › T33 real OSD pixels and bounded A B lifecycle 1280 (7.7s)
+(node:271211) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:271211) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  2 ui-tests/viewer-validation.spec.ts:5:2 › T33 real OSD pixels and bounded A B lifecycle 1024 (6.4s)
+(node:271350) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:271350) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  3 ui-tests/viewer-validation.spec.ts:43:1 › T33 corrupt binary never becomes a blank success and retry requires current authorization (2.9s)
+
+
+  1) ui-tests/viewer-validation.spec.ts:5:2 › T33 real OSD pixels and bounded A B lifecycle 1280 ───
+
+    Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoBeLessThanOrEqual[2m([22m[32mexpected[39m[2m)[22m
+
+    Expected: <= [32m8[39m
+    Received:    [31m10[39m
+
+      37 |   await page.getByRole('button', { name: '停止加载图像' }).click();
+      38 |   await expect(page.getByLabel('合成瓦片画布', { exact: true }).locator('canvas')).toHaveCount(0);
+    > 39 |   await expect.poll(() => pending.size).toBe(0); expect(peak).toBeLessThanOrEqual(8); expect(requests).toBeLessThan(250);
+         |                                                               ^
+      40 |   writeFileSync(info.outputPath(`t33-browser-${viewport.width}.json`), JSON.stringify({ viewport, browser: page.context().browser()?.version(), colors, cycles, peakTileRequests: peak, totalTileRequests: requests, pendingAtStop: pending.size, finalCanvases: 0, heap: 'UNMEASURED: DOM and request counts do not establish heap leak freedom', transport: 'synthetic HTTP fixture; real OpenSeadragon canvas' }, null, 2));
+      41 |  });
+      42 | }
+        at /workspace/PIS/frontend/ui-tests/viewer-validation.spec.ts:39:63
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/viewer-validation-T33-real-d8a47--bounded-A-B-lifecycle-1280/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/viewer-validation-T33-real-d8a47--bounded-A-B-lifecycle-1280/error-context.md
+
+  2) ui-tests/viewer-validation.spec.ts:5:2 › T33 real OSD pixels and bounded A B lifecycle 1024 ───
+
+    Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoBeLessThanOrEqual[2m([22m[32mexpected[39m[2m)[22m
+
+    Expected: <= [32m8[39m
+    Received:    [31m10[39m
+
+      37 |   await page.getByRole('button', { name: '停止加载图像' }).click();
+      38 |   await expect(page.getByLabel('合成瓦片画布', { exact: true }).locator('canvas')).toHaveCount(0);
+    > 39 |   await expect.poll(() => pending.size).toBe(0); expect(peak).toBeLessThanOrEqual(8); expect(requests).toBeLessThan(250);
+         |                                                               ^
+      40 |   writeFileSync(info.outputPath(`t33-browser-${viewport.width}.json`), JSON.stringify({ viewport, browser: page.context().browser()?.version(), colors, cycles, peakTileRequests: peak, totalTileRequests: requests, pendingAtStop: pending.size, finalCanvases: 0, heap: 'UNMEASURED: DOM and request counts do not establish heap leak freedom', transport: 'synthetic HTTP fixture; real OpenSeadragon canvas' }, null, 2));
+      41 |  });
+      42 | }
+        at /workspace/PIS/frontend/ui-tests/viewer-validation.spec.ts:39:63
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/viewer-validation-T33-real-3048e--bounded-A-B-lifecycle-1024/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/viewer-validation-T33-real-3048e--bounded-A-B-lifecycle-1024/error-context.md
+
+  2 failed
+    ui-tests/viewer-validation.spec.ts:5:2 › T33 real OSD pixels and bounded A B lifecycle 1280 ────
+    ui-tests/viewer-validation.spec.ts:5:2 › T33 real OSD pixels and bounded A B lifecycle 1024 ────
+  1 passed (22.0s)
+npm notice
+npm notice New major version of npm available! 11.21.0 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice

@@ -1,0 +1,18 @@
+
+> pis-frontend@0.0.1 test
+> vitest run --run src/features/viewer/tile-queue.test.ts
+
+
+ RUN  v4.1.11 /workspace/PIS/frontend
+
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  21:26:36
+   Duration  150ms (transform 33ms, setup 0ms, import 43ms, tests 6ms, environment 0ms)
+
+npm notice
+npm notice New major version of npm available! 11.21.0 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice
