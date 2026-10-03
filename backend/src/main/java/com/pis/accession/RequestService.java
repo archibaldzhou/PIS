@@ -62,6 +62,10 @@ public class RequestService {
         instant(r.getObject("sampled_at",OffsetDateTime.class)),List.of());
     private static Instant instant(OffsetDateTime value) { return value==null?null:value.toInstant(); }
     private static Object timestamp(Instant value) { return value==null?null:value.atOffset(ZoneOffset.UTC); }
+    /** Minimal public cross-domain scope contract; does not expose patient or draft content. */
+    @Transactional(timeout=10)
+    public WorkflowAccess.Scope authorizedScope(UUID requestId) { return requireResource(requestId,false); }
+
     @Transactional(timeout=10)
     public Detail detail(UUID id) {
         requireResource(id,false);

@@ -1,0 +1,30 @@
+-- Contract metadata only. No accounts, grants, model bytes, execution or clinical approval seeds.
+CREATE TABLE ai_registry_grant(user_id uuid NOT NULL REFERENCES app_user(id),scope_id uuid NOT NULL REFERENCES workflow_scope(id),qualification text NOT NULL CHECK(qualification='SYN-AI-CONTRACT-1'),can_register boolean NOT NULL DEFAULT false,can_validate boolean NOT NULL DEFAULT false,can_assess boolean NOT NULL DEFAULT false,valid_until timestamptz NOT NULL,revoked_at timestamptz,PRIMARY KEY(user_id,scope_id));
+CREATE TABLE ai_model_series(id uuid PRIMARY KEY,scope_id uuid NOT NULL REFERENCES workflow_scope(id),hospital_id uuid NOT NULL REFERENCES hospital(id),code text NOT NULL CHECK(code~'^SYN-[A-Za-z0-9_-]{1,60}$'),head bigint NOT NULL DEFAULT -1 CHECK(head BETWEEN -1 AND 99),UNIQUE(scope_id,code),UNIQUE(id,scope_id));
+CREATE TABLE ai_model_version(id uuid PRIMARY KEY,model_id uuid NOT NULL REFERENCES ai_model_series(id),ordinal bigint NOT NULL CHECK(ordinal BETWEEN 0 AND 99),metadata jsonb NOT NULL CHECK(jsonb_typeof(metadata)='object'),digest text NOT NULL CHECK(digest~'^[a-f0-9]{64}$'),actor_id uuid NOT NULL REFERENCES app_user(id),reason text NOT NULL CHECK(length(btrim(reason)) BETWEEN 1 AND 500),created_at timestamptz NOT NULL DEFAULT statement_timestamp(),UNIQUE(model_id,ordinal));
+CREATE TABLE ai_model_state(version_id uuid PRIMARY KEY REFERENCES ai_model_version(id),revision bigint NOT NULL DEFAULT 0 CHECK(revision BETWEEN 0 AND 99),state text NOT NULL DEFAULT 'DRAFT' CHECK(state IN('DRAFT','VALIDATION_ONLY','DISABLED','RETIRED')));
+CREATE TABLE ai_model_event(version_id uuid NOT NULL REFERENCES ai_model_version(id),revision bigint NOT NULL,state text NOT NULL CHECK(state IN('DRAFT','VALIDATION_ONLY','DISABLED','RETIRED')),actor_id uuid NOT NULL REFERENCES app_user(id),reason text NOT NULL CHECK(length(btrim(reason)) BETWEEN 1 AND 500),created_at timestamptz NOT NULL DEFAULT statement_timestamp(),PRIMARY KEY(version_id,revision));
+CREATE TABLE ai_scan_profile(scan_id uuid NOT NULL REFERENCES viewer_manifest(scan_id),version bigint NOT NULL CHECK(version BETWEEN 0 AND 99),publication_version bigint NOT NULL,manifest_hash text NOT NULL,profile jsonb NOT NULL CHECK(jsonb_typeof(profile)='object'),actor_id uuid NOT NULL REFERENCES app_user(id),reason text NOT NULL CHECK(length(btrim(reason)) BETWEEN 1 AND 500),created_at timestamptz NOT NULL DEFAULT statement_timestamp(),PRIMARY KEY(scan_id,version),FOREIGN KEY(scan_id,manifest_hash) REFERENCES viewer_manifest(scan_id,manifest_hash));
+CREATE TABLE ai_assessment(id uuid PRIMARY KEY,scope_id uuid NOT NULL REFERENCES workflow_scope(id),scan_id uuid NOT NULL,profile_version bigint NOT NULL,model_version_id uuid NOT NULL REFERENCES ai_model_version(id),snapshot jsonb NOT NULL CHECK(jsonb_typeof(snapshot)='object'),reason text NOT NULL CHECK(length(btrim(reason)) BETWEEN 1 AND 500),actor_id uuid NOT NULL REFERENCES app_user(id),created_at timestamptz NOT NULL DEFAULT statement_timestamp(),FOREIGN KEY(scan_id,profile_version) REFERENCES ai_scan_profile(scan_id,version));
+CREATE TRIGGER trg_ai_version_immutable BEFORE UPDATE OR DELETE ON ai_model_version FOR EACH ROW EXECUTE FUNCTION protect_gross_append_only();
+CREATE TRIGGER trg_ai_event_immutable BEFORE UPDATE OR DELETE ON ai_model_event FOR EACH ROW EXECUTE FUNCTION protect_gross_append_only();
+CREATE TRIGGER trg_ai_profile_immutable BEFORE UPDATE OR DELETE ON ai_scan_profile FOR EACH ROW EXECUTE FUNCTION protect_gross_append_only();
+CREATE TRIGGER trg_ai_assessment_immutable BEFORE UPDATE OR DELETE ON ai_assessment FOR EACH ROW EXECUTE FUNCTION protect_gross_append_only();
+CREATE FUNCTION guard_ai_series() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+ IF NOT EXISTS(SELECT 1 FROM workflow_scope WHERE id=NEW.scope_id AND hospital_id=NEW.hospital_id) THEN RAISE EXCEPTION 'AI scope mismatch' USING ERRCODE='23514';END IF;
+ IF TG_OP='UPDATE' AND (NEW.id<>OLD.id OR NEW.scope_id<>OLD.scope_id OR NEW.hospital_id<>OLD.hospital_id OR NEW.code<>OLD.code OR NEW.head<>OLD.head+1) THEN RAISE EXCEPTION 'AI immutable identity/CAS' USING ERRCODE='23514';END IF;RETURN NEW;END $$;
+CREATE TRIGGER trg_ai_series_binding BEFORE INSERT OR UPDATE ON ai_model_series FOR EACH ROW EXECUTE FUNCTION guard_ai_series();
+CREATE FUNCTION guard_ai_state() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+ IF TG_OP='DELETE' OR NEW.version_id<>OLD.version_id OR NEW.revision<>OLD.revision+1 OR OLD.state='RETIRED' OR NEW.state='DRAFT' OR NEW.state=OLD.state THEN RAISE EXCEPTION 'AI state CAS required' USING ERRCODE='23514';END IF;RETURN NEW;END $$;
+CREATE TRIGGER trg_ai_state BEFORE UPDATE OR DELETE ON ai_model_state FOR EACH ROW EXECUTE FUNCTION guard_ai_state();
+-- Defense in depth: a snapshot cannot bind a model from another scope or a mismatched version.
+CREATE FUNCTION guard_ai_bindings() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+ IF TG_TABLE_NAME='ai_model_version' THEN
+  IF NEW.metadata->>'digest' IS DISTINCT FROM NEW.digest OR NOT EXISTS(SELECT 1 FROM ai_model_series WHERE id=NEW.model_id AND head=NEW.ordinal) THEN RAISE EXCEPTION 'AI version binding mismatch' USING ERRCODE='23514';END IF;
+ ELSIF TG_TABLE_NAME='ai_assessment' THEN
+  IF NOT EXISTS(SELECT 1 FROM scan_import i JOIN ai_model_version v ON v.id=NEW.model_version_id JOIN ai_model_series s ON s.id=v.model_id WHERE i.id=NEW.scan_id AND i.scope_id=NEW.scope_id AND s.scope_id=NEW.scope_id)
+   OR NEW.snapshot->>'scanId' IS DISTINCT FROM NEW.scan_id::text OR NEW.snapshot->>'scopeId' IS DISTINCT FROM NEW.scope_id::text OR NEW.snapshot->>'modelVersionId' IS DISTINCT FROM NEW.model_version_id::text OR NEW.snapshot->>'profileVersion' IS DISTINCT FROM NEW.profile_version::text OR NEW.snapshot->>'executionAllowed' IS DISTINCT FROM 'false'
+  THEN RAISE EXCEPTION 'AI assessment binding mismatch' USING ERRCODE='23514';END IF;
+ END IF;RETURN NEW;END $$;
+CREATE TRIGGER trg_ai_version_binding BEFORE INSERT ON ai_model_version FOR EACH ROW EXECUTE FUNCTION guard_ai_bindings();
+CREATE TRIGGER trg_ai_assessment_binding BEFORE INSERT ON ai_assessment FOR EACH ROW EXECUTE FUNCTION guard_ai_bindings();

@@ -1,0 +1,1 @@
+PASS PG17 V1-V31: prior storage/scan/QC/ROI constraints, AI model/state CAS races, retirement, exact snapshot binding, rollback and immutable versions

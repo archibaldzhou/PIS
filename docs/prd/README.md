@@ -64,3 +64,5 @@
 - T32：[ROI、测量及双视图PRD](development-roi-v1.md)，已查看UI-041实际原型，用户授权合成开发，未获医院校准或临床验证；[ADR0022](../adr/0022-versioned-roi-pixel-coordinates.md)与[接口/交付记录](../api/t32-roi.md)。
 
 - T33：[阅片可测量验证PRD](development-viewer-validation-v1.md)，用户授权合成开发验证，已查看UI-041及实际阅片截图；[兼容性矩阵、可复现命令与交付边界](../api/t33-viewer-validation.md)。无临床/厂商兼容批准。
+
+- T34：[AI注册与适用契约PRD](development-ai-registry-v1.md)，用户授权合成开发，已查看UI-043实际原型；[ADR0023](../adr/0023-synthetic-ai-registry-contract.md)、[接口和验证边界](../api/t34-ai-registry.md)。无模型安装/运行、临床或监管批准。

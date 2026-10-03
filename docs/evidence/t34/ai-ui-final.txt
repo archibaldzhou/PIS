@@ -1,0 +1,27 @@
+
+> pis-frontend@0.0.1 test:ui
+> playwright test --config playwright.ui.config.ts ai.spec.ts
+
+[2m[WebServer] [22m(node:303292) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[2m[WebServer] [22m(Use `node --trace-warnings ...` to show where the warning was created)
+[2m[WebServer] [22m(node:303310) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[2m[WebServer] [22m(Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 5 tests using 1 worker
+
+(node:303337) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:303337) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 ui-tests/ai.spec.ts:9:1 › AI registry has explicit missing evidence, separate nonclinical capabilities and dirty switch confirmation (4.5s)
+  ✓  2 ui-tests/ai.spec.ts:10:1 › AI canceled wait keeps original payload/key and late response cannot switch selected model (3.2s)
+  ✓  3 ui-tests/ai.spec.ts:11:1 › AI profile conflict is explicit and abandoning retry requires current reload (3.4s)
+  ✓  4 ui-tests/ai.spec.ts:12:1 › AI judgment is nonexecuting and current recheck removes it after revocation (3.1s)
+  ✓  5 ui-tests/ai.spec.ts:14:1 › AI example only populates explicit synthetic metadata and saving is a separate manual operation (2.9s)
+
+  5 passed (19.1s)
+npm notice
+npm notice New major version of npm available! 11.21.0 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice
