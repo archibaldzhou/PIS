@@ -30,3 +30,13 @@ T33经父会话核验完整CI成功后，已正常快进并推送main：`0f78e80
 复现：从仓库根执行`python3 backend/src/test/probes/ai-postgres.py`、`bash backend/src/test/probes/viewer-validation.sh`；前端`npm --prefix frontend test`、`npm --prefix frontend run lint`、`npm --prefix frontend run build`、`PIS_UI_BROWSER_PATH=/usr/bin/chromium npm --prefix frontend run test:ui`。完整环境执行`backend/mvnw -f backend/pom.xml -B -ntp verify`及`npm --prefix frontend run test:e2e`。本地版本：Node22.23.3/npm11.21.0、Java21.0.12.1、PG17固定digest；合成开发默认false。
 
 阅片并发修复提交：`a4f0f63e135fcac5b41e9809c203e7cc7866c8e2`。记录中的文本日志仅规范化行尾空白，未删除失败信息或修改结果。
+
+## T34 CI重放断言修复
+
+父会话核验`943a693a56515a3f7b2e62caa4a1a171c782ee0c`的CI 37160350916：后端/前端阶段通过，真实E2E 43/44通过；失败读取了AI接口未承诺的`Idempotency-Replayed`响应头。T07要求`Result.replayed`，HTTP响应头是可选项。AI、扫描、数字QC控制器直接返回Result；申请/存储部分接口额外包装响应头。本次不修改控制器、不补造响应头或改变幂等业务实现。
+
+原失败日志未给出重复请求HTTP状态/正文，本地完整服务也无法运行，因此不声称已重现那次具体响应。修复后的E2E首先检查实际HTTP状态（失败时附合成响应正文），再核对响应体`replayed:true`和完整原回执；独立GET核对判定内容及SHA-256相同，执行许可仍为false。增加同键不同原因必须409 IDEMPOTENCY_KEY_REUSED的断言。原有模型停用、QC撤销、资源权限和UI交互断言保留。
+
+新增后端真实HTTP/PG回归覆盖：原回执ID/版本一致、判定内容/hash一致、存储snapshot不变、业务记录/幂等命令/AI_ASSESS_V1成功写审计各一条；有效CSRF下旧auth_version会话重放401 SESSION_EXPIRED，新会话重新认证后同键仍返回原资源；AI资格和workflow范围撤销后重放404。读取/授权审计允许正常追加，不把全部审计总数错误限定为一条。
+
+本次本地通过：173单测、lint、TypeScript/build、13项AI/阅片UI、PG17 V1–V31独立探针、Java语法/词法/受检异常声明检查；真实E2E仅发现44项。新增后端HTTP/PG集成和真实服务E2E未本地执行，离线Maven仍缺Zipkin3.5.3、Brave6.3.1等BOM，在编译前失败。PG探针与UI合成HTTP夹具不是该HTTP回归通过的证据。原始检查输出（仅规范化行尾空白）见`docs/evidence/t34/replay-fix/`；完整CI由父会话按新SHA核验。T34不合main，不启动T35。

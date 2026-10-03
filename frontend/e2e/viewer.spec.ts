@@ -103,9 +103,18 @@ test('viewer renders actual authorized RGB pyramid and revocation rejects warmed
   expect((await page.request.post(`${modelsPath}/${modelId}/state`,{headers:headers(),data:{expectedVersion:0,state:'VALIDATION_ONLY',reason:'Synthetic validation only'}})).status()).toBe(200);
   expect((await page.request.post(`${aiPath}/profile`,{headers:headers(),data:{publicationVersion:2,manifestHash:aiScan.manifestHash,expectedVersion:-1,profile:{pathology:'SYN-PATH',stain:'SYN-STAIN',scannerVersion:'SYN-V1'},reason:'Synthetic source metadata'}})).status()).toBe(200);
   const aiHeaders=headers(),aiInput={modelVersionId:modelId,stateVersion:1,profileVersion:0,publicationVersion:2,manifestHash:aiScan.manifestHash,calibrationVersion:aiScan.calibrationVersion,reason:'Synthetic exact qualification'};
-  const aiResult=await page.request.post(`${aiPath}/assess`,{headers:aiHeaders,data:aiInput});expect(aiResult.status()).toBe(200);const aiId=(await aiResult.json() as {receipt:{resourceId:string}}).receipt.resourceId;
-  const decision=await page.request.get(`${aiPath}/assess/${aiId}`);expect(decision.status()).toBe(200);expect(await decision.json()).toMatchObject({outcome:'VALIDATION_ONLY_APPLICABLE',executionAllowed:false,modelVersionId:modelId,manifestHash:aiScan.manifestHash});
-  expect((await page.request.post(`${aiPath}/assess`,{headers:aiHeaders,data:aiInput})).headers()['idempotency-replayed']).toBe('true');
+  const aiResult=await page.request.post(`${aiPath}/assess`,{headers:aiHeaders,data:aiInput});expect(aiResult.status(),await aiResult.text()).toBe(200);
+  const firstReceipt=await aiResult.json() as {receipt:{resourceId:string;resourceType:string;version:number;status:number};replayed:boolean};
+  expect(firstReceipt.replayed).toBe(false);expect(firstReceipt.receipt).toMatchObject({resourceType:'AI_ASSESSMENT',version:0,status:200});const aiId=firstReceipt.receipt.resourceId;
+  const decision=await page.request.get(`${aiPath}/assess/${aiId}`);expect(decision.status()).toBe(200);const firstDecision=await decision.json() as Record<string,unknown>;
+  expect(firstDecision).toMatchObject({outcome:'VALIDATION_ONLY_APPLICABLE',executionAllowed:false,modelVersionId:modelId,manifestHash:aiScan.manifestHash});
+  // T07's required replay signal is in Result; the HTTP header is optional.
+  const replay=await page.request.post(`${aiPath}/assess`,{headers:aiHeaders,data:aiInput});expect(replay.status(),await replay.text()).toBe(200);
+  expect(await replay.json()).toEqual({...firstReceipt,replayed:true});
+  const reread=await page.request.get(`${aiPath}/assess/${aiId}`);expect(reread.status()).toBe(200);const repeatedDecision=await reread.json() as Record<string,unknown>;
+  expect(repeatedDecision).toEqual(firstDecision);expect(createHash('sha256').update(JSON.stringify(repeatedDecision)).digest('hex')).toBe(createHash('sha256').update(JSON.stringify(firstDecision)).digest('hex'));
+  const changed=await page.request.post(`${aiPath}/assess`,{headers:aiHeaders,data:{...aiInput,reason:'Synthetic different intent'}});
+  expect(changed.status(),await changed.text()).toBe(409);expect(await changed.json()).toMatchObject({code:'IDEMPOTENCY_KEY_REUSED'});
   await page.getByRole('button',{name:'核对此扫描AI适用契约',exact:true}).click();await page.getByRole('button',{name:`选择模型 ${modelId}`,exact:true}).click();await page.getByRole('button',{name:'核对当前扫描适用资料',exact:true}).click();await page.getByLabel('AI操作原因',{exact:true}).fill('Synthetic browser assessment');await page.getByRole('button',{name:'判定合成适用性（不执行）',exact:true}).click();await expect(page.getByRole('region',{name:'AI模型契约管理'}).getByRole('status')).toContainText('VALIDATION_ONLY_APPLICABLE');
   await page.screenshot({path:info.outputPath('real-service-synthetic-ai-contract.png'),fullPage:true});
   expect((await page.request.post(`${modelsPath}/${modelId}/state`,{headers:headers(),data:{expectedVersion:1,state:'DISABLED',reason:'Synthetic recall'}})).status()).toBe(200);

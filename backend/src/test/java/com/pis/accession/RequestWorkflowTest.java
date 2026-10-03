@@ -2404,5 +2404,40 @@ class RequestWorkflowTest {
         SecurityContextHolder.getContext().setAuthentication(UsernamePasswordAuthenticationToken.authenticated(current,null,List.of()));
         try{assertCode(()->ai.catalog(f.scope,1),"AI_NOT_FOUND");assertCode(()->ai.register(f.scope,aiInput(UUID.randomUUID(),-1),"admin"),"AI_NOT_FOUND");}finally{SecurityContextHolder.clearContext();}
     }
+    @Test void aiHttpReplayKeepsReceiptSnapshotAndSingleWriteAcrossReauthentication()throws Exception{
+        var f=new Fixture();aiGrant(f);var d=viewerSource(f);var scan=publishedViewer(f,d);
+        var input=f.as(()->{tileViewer.prepare(d.request(),scan,1,"prepare");var hash=tileViewer.manifest(d.request(),scan,1).content().manifestHash();var id=ai.register(f.scope,aiInput(UUID.randomUUID(),-1),"model").receipt().resourceId();ai.change(f.scope,id,new com.pis.ai.AiContracts.StateChange(0L,"VALIDATION_ONLY","Synthetic"),"state");ai.profile(d.request(),scan,new com.pis.ai.AiContracts.ProfileInput(1L,hash,-1L,new com.pis.ai.AiContracts.Profile("SYN-PATH","SYN-STAIN","SYN-V1"),"Synthetic"),"profile");return new com.pis.ai.AiContracts.Assess(id,1L,0L,1L,hash,null,"Synthetic exact HTTP qualification");});
+        var json=tools.jackson.databind.json.JsonMapper.builder().build();String body=json.writeValueAsString(input),path="/api/requests/"+d.request()+"/scans/"+scan+"/ai/assess";
+        String password="Synthetic-ai-replay-42!";jdbc.update("UPDATE app_user SET password_hash=? WHERE id=?",encoder.encode(password),f.user);
+        String login="username="+f.principal.getUsername()+"&password="+java.net.URLEncoder.encode(password,java.nio.charset.StandardCharsets.UTF_8);
+        var first=new Browser();assertThat(first.send("POST","/api/auth/login",login,first.csrf(),true).statusCode()).isEqualTo(204);
+        var created=first.send("POST",path,body,first.csrf(),false);assertThat(created.statusCode()).as("Synthetic creation: %s",created.body()).isEqualTo(200);
+        var saved=json.readValue(created.body(),com.pis.idempotency.IdempotentCommands.Result.class);assertThat(saved.replayed()).isFalse();UUID id=saved.receipt().resourceId();
+        var before=first.send("GET",path+"/"+id,null,null,false);assertThat(before.statusCode()).isEqualTo(200);var decision=json.readValue(before.body(),com.pis.ai.AiContracts.Decision.class);assertThat(decision.outcome()).isEqualTo("VALIDATION_ONLY_APPLICABLE");assertThat(decision.executionAllowed()).isFalse();
+        String persisted=jdbc.queryForObject("SELECT snapshot::text FROM ai_assessment WHERE id=?",String.class,id);
+        var replay=first.send("POST",path,body,first.csrf(),false);assertThat(replay.statusCode()).as("Synthetic replay: %s",replay.body()).isEqualTo(200);
+        assertThat(json.readValue(replay.body(),com.pis.idempotency.IdempotentCommands.Result.class)).isEqualTo(new com.pis.idempotency.IdempotentCommands.Result(saved.receipt(),true));
+        var after=first.send("GET",path+"/"+id,null,null,false);assertThat(after.statusCode()).isEqualTo(200);assertThat(json.readValue(after.body(),com.pis.ai.AiContracts.Decision.class)).isEqualTo(decision);
+        assertThat(com.pis.scan.ScanFormat.sha(after.body().getBytes(java.nio.charset.StandardCharsets.UTF_8))).isEqualTo(com.pis.scan.ScanFormat.sha(before.body().getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        assertHttpError(first.send("POST",path,body.replace("Synthetic exact HTTP qualification","Synthetic changed intent"),first.csrf(),false),409,"IDEMPOTENCY_KEY_REUSED");
+        // A changed authentication version invalidates the old browser, not the original intent's identity.
+        String oldCsrf=first.csrf();
+        jdbc.update("UPDATE app_user SET password_hash=? WHERE id=?",encoder.encode(password),f.user);
+        assertHttpError(first.send("POST",path,body,oldCsrf,false),401,"SESSION_EXPIRED");
+        assertThat(first.send("GET",path+"/"+id,null,null,false).statusCode()).isEqualTo(401);
+        var current=new Browser();assertThat(current.send("POST","/api/auth/login",login,current.csrf(),true).statusCode()).isEqualTo(204);
+        var freshReplay=current.send("POST",path,body,current.csrf(),false);assertThat(freshReplay.statusCode()).as("Reauthenticated replay: %s",freshReplay.body()).isEqualTo(200);
+        assertThat(json.readValue(freshReplay.body(),com.pis.idempotency.IdempotentCommands.Result.class)).isEqualTo(new com.pis.idempotency.IdempotentCommands.Result(saved.receipt(),true));
+        jdbc.update("UPDATE ai_registry_grant SET can_assess=false WHERE user_id=?",f.user);
+        assertHttpError(current.send("POST",path,body,current.csrf(),false),404,"AI_NOT_FOUND");
+        jdbc.update("UPDATE ai_registry_grant SET can_assess=true WHERE user_id=?",f.user);
+        jdbc.update("UPDATE workflow_grant SET revoked_at=statement_timestamp() WHERE user_id=? AND scope_id=?",f.user,f.scope);
+        assertThat(current.send("POST",path,body,current.csrf(),false).statusCode()).isEqualTo(404);
+        assertThat(jdbc.queryForObject("SELECT snapshot::text FROM ai_assessment WHERE id=?",String.class,id)).isEqualTo(persisted);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM ai_assessment WHERE scan_id=?",Long.class,scan)).isEqualTo(1);
+        // Authorization/read audits remain additive; only the successful business mutation must occur once.
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM audit_event WHERE resource_id=? AND operation_code='AI_ASSESS_V1'",Long.class,id)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM idempotency_command WHERE actor_user_id=? AND operation_code='AI_ASSESS_V1'",Long.class,f.user)).isEqualTo(1);
+    }
 
 }
