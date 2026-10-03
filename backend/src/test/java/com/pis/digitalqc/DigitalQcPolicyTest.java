@@ -1,0 +1,9 @@
+package com.pis.digitalqc;
+import java.util.*;
+import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.*;
+class DigitalQcPolicyTest {
+ private DigitalQcContracts.Evaluation input(String coverage,String focus,String missing,int percent,int tiles,List<DigitalQcContracts.Region> regions){return new DigitalQcContracts.Evaluation(-1L,2L,UUID.randomUUID(),UUID.randomUUID(),"a".repeat(64),"SYN-DIGITAL-QC-1",coverage,focus,missing,percent,tiles,regions,"Synthetic");}
+ @Test void onlyAllExplicitPassWithCompleteCoverageAndNoMissingOrDefectsPasses(){assertThat(DigitalQcPolicy.passed(input("PASS","PASS","PASS",100,0,List.of()))).isTrue();for(String value:List.of("UNKNOWN","FAIL","UNRECOGNIZED")){assertThat(DigitalQcPolicy.passed(input(value,"PASS","PASS",100,0,List.of()))).isFalse();assertThat(DigitalQcPolicy.passed(input("PASS",value,"PASS",100,0,List.of()))).isFalse();assertThat(DigitalQcPolicy.passed(input("PASS","PASS",value,100,0,List.of()))).isFalse();}assertThat(DigitalQcPolicy.passed(input("PASS","PASS","PASS",99,0,List.of()))).isFalse();assertThat(DigitalQcPolicy.passed(input("PASS","PASS","PASS",100,1,List.of()))).isFalse();assertThat(DigitalQcPolicy.passed(input("PASS","PASS","PASS",100,0,List.of(new DigitalQcContracts.Region(0,0,1,1,"Synthetic"))))).isFalse();}
+ @Test void exactBoundaryAndOverflowDoNotEscapeSyntheticDimensions(){assertThat(DigitalQcPolicy.regionsFit(input("FAIL","FAIL","FAIL",0,1,List.of(new DigitalQcContracts.Region(31,31,1,1,"Synthetic"))),32,32)).isTrue();assertThat(DigitalQcPolicy.regionsFit(input("FAIL","FAIL","FAIL",0,1,List.of(new DigitalQcContracts.Region(31,31,2,2,"Synthetic"))),32,32)).isFalse();assertThat(DigitalQcPolicy.regionsFit(input("FAIL","FAIL","FAIL",0,1,List.of(new DigitalQcContracts.Region(Integer.MAX_VALUE,0,Integer.MAX_VALUE,1,"Synthetic"))),32,32)).isFalse();}
+}

@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { signInWorkflow, handoffUsername } from './workflow-login';
 import type { Version, View } from '../src/features/storage/api';
 import type { Job } from '../src/features/scan/api';
-test('synthetic scan binds real stored object and slide, leases, isolates publication and rejects cancelled callbacks', async ({ page, browser }) => {
+test('digital QC evaluates an exact synthetic scan, publishes explicitly and revokes consumption', async ({ page, browser }) => {
   await signInWorkflow(page);
   const scopes = await (await page.request.get('/api/requests/scopes')).json() as { id: string }[];
   expect(scopes).toHaveLength(1); const scope = scopes[0].id;
@@ -48,14 +48,22 @@ test('synthetic scan binds real stored object and slide, leases, isolates public
   expect((await page.request.post(`${scanPath}/${scanId}/PROCESS`, { headers: completedKey, data: completion })).status()).toBe(200);
   expect((await (await page.request.post(`${scanPath}/${scanId}/PROCESS`, { headers: completedKey, data: completion })).json() as { replayed: boolean }).replayed).toBe(true);
   const completed = await (await page.request.get(`${scanPath}/${scanId}`)).json() as Job; expect(completed.state).toBe('PENDING_DIGITAL_QC'); expect(completed.objectHash).toBe(sha256); expect(completed.errorCode).toBe('DIGITAL_QC_REQUIRED');
+  const qcPath = `${scanPath}/${scanId}/digital-qc`;
+  expect((await page.request.get(`${qcPath}/bytes?publicationVersion=0`)).status()).toBe(409);
+  const evaluation = { expectedVersion: -1, scanVersion: completed.version, objectId: id, slideId: slide, objectHash: sha256, checklist: 'SYN-DIGITAL-QC-1', coverage: 'PASS', focus: 'UNKNOWN', missing: 'PASS', coveragePercent: 100, missingTiles: 0, regions: [], note: 'Synthetic unknown focus' };
+  expect((await page.request.post(qcPath, { headers: headers(), data: evaluation })).status()).toBe(200);
+  expect((await page.request.post(`${qcPath}/PUBLISH`, { headers: headers(), data: { expectedVersion: 0, assessmentVersion: 0, reason: 'Synthetic blocked publish' } })).status()).toBe(409);
+  const revised = { ...evaluation, expectedVersion: 0, focus: 'PASS', note: 'Synthetic explicit pass' }; const qcKey = headers();
+  expect((await page.request.post(qcPath, { headers: qcKey, data: revised })).status()).toBe(200);
+  expect((await (await page.request.post(qcPath, { headers: qcKey, data: revised })).json() as { replayed: boolean }).replayed).toBe(true);
   await page.getByRole('button', { name: '申请登记工作区' }).click(); await page.getByLabel('授权工作范围').click(); await page.getByText('合成申请工作范围', { exact: true }).last().click();
-  await page.getByRole('button', { name: `查看 ${detail.requestNumber}`, exact: true }).click(); await page.getByRole('button', { name: '处理此申请扫描导入' }).click();
-  await expect(page.getByRole('cell', { name: 'PENDING_DIGITAL_QC', exact: true })).toBeVisible(); await page.getByLabel('人工操作原因', { exact: true }).fill('Synthetic cancellation'); await page.getByRole('button', { name: '取消任务', exact: true }).click(); await expect(page.getByRole('cell', { name: 'CANCELLED', exact: true })).toBeVisible();
-  expect((await page.request.post(`${scanPath}/${scanId}/PROCESS`, { headers: headers(), data: completion })).status()).toBe(409);
+  await page.getByRole('button', { name: `查看 ${detail.requestNumber}`, exact: true }).click(); await page.getByRole('button', { name: '处理此申请扫描导入' }).click(); await page.getByRole('button', { name: '数字QC 0', exact: true }).click();
+  await expect(page.getByText('EVALUATED_NOT_PUBLISHED / 当前依赖有效', { exact: true })).toBeVisible();
+  await page.getByLabel('QC人工备注或原因', { exact: true }).fill('Synthetic explicit publication'); await page.getByRole('button', { name: '发布合成契约版本' }).click();
+  await expect(page.getByText('PUBLISHED_SYNTHETIC_CONTRACT / 当前依赖有效', { exact: true })).toBeVisible();
+  const download = await page.request.get(`${qcPath}/bytes?publicationVersion=2`, { headers: { Range: 'bytes=0-31' } }); expect(download.status()).toBe(206); expect(download.headers()['x-pis-capability']).toBe('SYNTHETIC_CONTRACT_ONLY_NO_VIEWER'); expect(await download.body()).toEqual(data.subarray(0, 32));
+  await page.getByLabel('QC人工备注或原因', { exact: true }).fill('Synthetic revoke after review'); await page.getByRole('button', { name: '撤销QC并隔离' }).click(); await expect(page.getByText('ISOLATED / QC_REVOKED', { exact: true })).toBeVisible();
+  expect((await page.request.get(`${qcPath}/bytes?publicationVersion=2`)).status()).toBe(409);
   const other = await browser.newContext({ baseURL: 'http://127.0.0.1:5173' });
-  try {
-    const receiver = await other.newPage(); await receiver.goto('/'); await receiver.getByLabel('用户名', { exact: true }).fill(handoffUsername()); await receiver.getByLabel('密码', { exact: true }).fill(process.env.PIS_E2E_HANDOFF_PASSWORD ?? 'Synthetic-handoff-only-42!');
-    const accepted = receiver.waitForResponse(r => new URL(r.url()).pathname === '/api/auth/login'); await receiver.getByRole('button', { name: '登录', exact: true }).click(); expect((await accepted).status()).toBe(204);
-    expect((await receiver.request.get(`${scanPath}/${scanId}`)).status()).toBe(404);
-  } finally { await other.close(); }
+  try { const receiver = await other.newPage(); await receiver.goto('/'); await receiver.getByLabel('用户名', { exact: true }).fill(handoffUsername()); await receiver.getByLabel('密码', { exact: true }).fill(process.env.PIS_E2E_HANDOFF_PASSWORD ?? 'Synthetic-handoff-only-42!'); const accepted = receiver.waitForResponse(r => new URL(r.url()).pathname === '/api/auth/login'); await receiver.getByRole('button', { name: '登录', exact: true }).click(); expect((await accepted).status()).toBe(204); expect((await receiver.request.get(qcPath)).status()).toBe(404); expect((await receiver.request.get(`${qcPath}/bytes?publicationVersion=2`)).status()).toBe(404); } finally { await other.close(); }
 });

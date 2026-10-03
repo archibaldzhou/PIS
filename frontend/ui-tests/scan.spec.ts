@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 const rid = '44444444-4444-4444-8444-444444444444', vid = '55555555-5555-4555-8555-555555555555';
-const view = { requestId: rid, caseId: 'case-syn', patientId: 'patient-syn', page: 1, jobs: [], slides: [{ id: 'slide-a', barcode: 'SYN-A', version: 0, status: 'PASS' }, { id: 'slide-b', barcode: 'SYN-B', version: 0, status: 'PASS' }], capabilities: { SYNTHETIC_HEADER_V1: 'CONTRACT_ONLY', TIFF_CONTAINER: 'NOT_CONFIGURED', SVS: 'NOT_CONFIGURED', NDPI: 'NOT_CONFIGURED', MRXS: 'NOT_CONFIGURED', ARCHIVE: 'UNSUPPORTED' }, publication: 'NOT_PUBLISHED_T30_REQUIRED' };
+const view = { requestId: rid, caseId: 'case-syn', patientId: 'patient-syn', page: 1, jobs: [], slides: [{ id: 'slide-a', barcode: 'SYN-A', version: 0, status: 'PASS' }, { id: 'slide-b', barcode: 'SYN-B', version: 0, status: 'PASS' }], capabilities: { SYNTHETIC_HEADER_V1: 'CONTRACT_ONLY', TIFF_CONTAINER: 'NOT_CONFIGURED', SVS: 'NOT_CONFIGURED', NDPI: 'NOT_CONFIGURED', MRXS: 'NOT_CONFIGURED', ARCHIVE: 'UNSUPPORTED' }, publication: 'NOT_PUBLISHED_BY_IMPORT' };
 const scope = '11111111-1111-4111-8111-111111111111';
 const encounter = { id: '22222222-2222-4222-8222-222222222222', patientId: '33333333-3333-4333-8333-333333333333', patientLabel: '合成患者', encounterNumber: 'SYN-001' };
 async function start(page: Page) {

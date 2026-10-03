@@ -47,7 +47,7 @@ export async function request(path: string, options: RequestInit = {}): Promise<
     throw new ApiError(403, 'FORBIDDEN', '请求被拒绝，请重试或联系管理员');
   }
   const workflowErrors: Record<string, string> = {
-    SCAN_NOT_FOUND: '导入病例、对象或扫描资格不可用。', SCAN_DUPLICATE: '该原件已有导入任务，请查询原任务。', SCAN_STATE: '任务状态已变化，请刷新。', SCAN_LEASE_STALE: '尝试已取消、过期或代次不符，结果未激活。', SCAN_SOURCE_CHANGED: '材料或QC依据已变化，不能继续此尝试。', SCAN_RETRY_BLOCKED: '尚未到重试时间、次数已尽或输入已失效。', SCAN_RESCAN_BINDING: '重扫必须引用确切旧任务及新的原件版本。', SCAN_OBJECT_NOT_READY: '原件尚未完成校验。', SCAN_LIMIT: '开发导入任务达到上限。',
+    DIGITAL_QC_NOT_FOUND: '数字QC专业资格或资源不可用。', DIGITAL_QC_NOT_READY: '精确版本QC未就绪、已撤销或来源变化，请刷新核对。', DIGITAL_QC_SOURCE_CHANGED: '扫描来源已变化，不能沿用旧评价。', DIGITAL_QC_BINDING: '评价与确切扫描原件不匹配。', DIGITAL_QC_REGION: '缺陷区域必须位于当前合成尺寸内。', DIGITAL_QC_STATE: '当前QC状态不支持该操作。', DIGITAL_QC_LIMIT: '该版本已达到合成评价历史上限。', SCAN_NOT_FOUND: '导入病例、对象或扫描资格不可用。', SCAN_DUPLICATE: '该原件已有导入任务，请查询原任务。', SCAN_STATE: '任务状态已变化，请刷新。', SCAN_LEASE_STALE: '尝试已取消、过期或代次不符，结果未激活。', SCAN_SOURCE_CHANGED: '材料或QC依据已变化，不能继续此尝试。', SCAN_RETRY_BLOCKED: '尚未到重试时间、次数已尽或输入已失效。', SCAN_RESCAN_BINDING: '重扫必须引用确切旧任务及新的原件版本。', SCAN_OBJECT_NOT_READY: '原件尚未完成校验。', SCAN_LIMIT: '开发导入任务达到上限。',
 
     STORAGE_NOT_FOUND: '原件或当前病例资格不可用。', STORAGE_NOT_CONFIGURED: '私有存储尚未配置。', STORAGE_ISOLATED: '当前病例状态或身份隔离阻断存储。', STORAGE_QUOTA: '合成存储配额不足。', STORAGE_INTEGRITY: '字节长度、合成标记或摘要不匹配，未发布原件。', STORAGE_STATE: '存储状态已变化，请核对确切版本。', STORAGE_RATE: '读取达到开发速率或字节上限。', STORAGE_RANGE: '仅支持不超过1MiB的明确单段Range。', STORAGE_BUSY: '存储处理繁忙，请核对状态后重试。', STORAGE_IO: '原件不可读取，未绕过校验。',
 
