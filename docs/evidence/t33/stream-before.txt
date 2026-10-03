@@ -1,0 +1,37 @@
+
+> pis-frontend@0.0.1 test
+> vitest run src/features/viewer/api.test.ts
+
+
+ RUN  v4.1.11 /workspace/PIS/frontend
+
+ ❯ src/features/viewer/api.test.ts (6 tests | 1 failed) 41ms
+     × cancels a body that exceeds its declared authorized tile size before draining it 14ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/features/viewer/api.test.ts > bounded corrupt streaming tile response > cancels a body that exceeds its declared authorized tile size before draining it
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/features/viewer/api.test.ts:17:676
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 5 passed (6)
+   Start at  21:10:04
+   Duration  251ms (transform 91ms, setup 0ms, import 108ms, tests 41ms, environment 0ms)
+
+npm notice
+npm notice New major version of npm available! 11.21.0 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice

@@ -11,4 +11,20 @@ export async function publication(rid: string, scan: string, signal: AbortSignal
 export async function load(rid: string, scan: string, pub: number, signal: AbortSignal) { return parseManifest(await readJson(await request(`${base(rid, scan)}?publicationVersion=${pub}`, { signal, cache: 'no-store' })), rid, scan, pub); }
 export async function prepare(rid: string, scan: string, pub: number, key: string, signal: AbortSignal) { const csrf = await fetchCsrf(signal); const v = obj(await readJson(await request(base(rid, scan), { method: 'POST', signal, headers: { 'Content-Type': 'application/json', [csrf.headerName]: csrf.token, 'Idempotency-Key': key }, body: JSON.stringify({ publicationVersion: pub }) }))); const r = obj(v.receipt); if (r.resourceId !== scan || r.resourceType !== 'VIEWER_MANIFEST' || r.version !== 0 || r.status !== 200) throw Error('清单回执不匹配'); }
 export async function choices(rid: string, signal: AbortSignal): Promise<{ id: string; label: string }[]> { const v = obj(await readJson(await request(`/api/requests/${encodeURIComponent(rid)}/scans?page=1`, { signal }))); if (v.requestId !== rid || !Array.isArray(v.jobs) || v.jobs.length > 20) throw Error('扫描列表不匹配'); return v.jobs.map(x => { const j = obj(x); if (j.requestId !== rid) throw Error('扫描列表跨病例'); return { id: text(j.id), label: `${text(j.slideId)} / 扫描 ${number(j.ordinal, 0, 999)}` }; }); }
-export async function binary(url: string, expected: Tile, signal: AbortSignal): Promise<Blob> { if (!url.startsWith('/api/requests/') || url.includes('://') || url.includes('..')) throw Error('非法瓦片地址'); const r = await request(url, { signal, cache: 'no-store' }); if (r.headers.get('Content-Type')?.split(';')[0] !== 'image/png' || Number(r.headers.get('Content-Length')) !== expected.size) throw Error('瓦片类型或大小不匹配'); const b = await r.arrayBuffer(); const bytes = new Uint8Array(b); if (bytes.length !== expected.size || bytes.length > 100000 || [137, 80, 78, 71, 13, 10, 26, 10].some((v, i) => bytes[i] !== v)) throw Error('瓦片PNG无效'); const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', b)), x => x.toString(16).padStart(2, '0')).join(''); if (digest !== expected.sha256 || r.headers.get('X-Content-SHA256') !== digest) throw Error('瓦片摘要不匹配'); return new Blob([b], { type: 'image/png' }); }
+export async function binary(url: string, expected: Tile, signal: AbortSignal): Promise<Blob> { if (!url.startsWith('/api/requests/') || url.includes('://') || url.includes('..')) throw Error('非法瓦片地址'); number(expected.size, 1, 100000); const r = await request(url, { signal, cache: 'no-store' }); if (r.headers.get('Content-Type')?.split(';')[0] !== 'image/png' || Number(r.headers.get('Content-Length')) !== expected.size) throw Error('瓦片类型或大小不匹配'); if (!r.body) throw Error('瓦片响应体缺失');
+ const reader = r.body.getReader(), bytes = new Uint8Array(expected.size);
+ let offset = 0;
+ const abort = () => { void reader.cancel(); };
+ signal.addEventListener('abort', abort, { once: true });
+ try {
+  signal.throwIfAborted();
+  for (;;) {
+   const chunk = await reader.read();
+   signal.throwIfAborted();
+   if (chunk.done) break;
+   if (chunk.value.length > bytes.length - offset) { await reader.cancel(); throw Error('瓦片响应超过大小上限'); }
+   bytes.set(chunk.value, offset); offset += chunk.value.length;
+  }
+ } finally { signal.removeEventListener('abort', abort); reader.releaseLock(); }
+ if (offset !== expected.size) throw Error('瓦片长度不匹配');
+ const b = bytes.buffer; if (bytes.length !== expected.size || bytes.length > 100000 || [137, 80, 78, 71, 13, 10, 26, 10].some((v, i) => bytes[i] !== v)) throw Error('瓦片PNG无效'); const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', b)), x => x.toString(16).padStart(2, '0')).join(''); if (digest !== expected.sha256 || r.headers.get('X-Content-SHA256') !== digest) throw Error('瓦片摘要不匹配'); return new Blob([b], { type: 'image/png' }); }
