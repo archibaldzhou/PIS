@@ -46,3 +46,5 @@
 [T23细胞学制备开发PRD](development-cytology-v1.md)已查看 UI-015 实际原型；独立标本/制备台账、直接涂片/液基/可选细胞蜡块、守恒的合成份数及来源QC失效传播。不含临床分类或自动诊断，见[ADR 0013](../adr/0013-cytology-preparation-lineage.md)与[交付记录](../api/t23-development-status.md)。
 
 [T24特殊染色/IHC开发PRD](development-staining-v1.md)已查看UI-013/017/018实际原型。单病例冻结成员、明确人工对照、版本化技术结果、新身份来源链及失效门禁；无厂商方案或临床推荐。见[ADR0014](../adr/0014-synthetic-stain-batches.md)和[本地交付记录](../api/t24-development-status.md)。
+
+[T25院内会诊/复阅开发PRD](development-consultation-v1.md)已查看UI-021实际原型，限定病例、目的与期限，汇总需人工处理及明确确认；非签署采纳保留原草稿。见[ADR0015](../adr/0015-case-scoped-consultation.md)及[交付记录](../api/t25-development-status.md)。

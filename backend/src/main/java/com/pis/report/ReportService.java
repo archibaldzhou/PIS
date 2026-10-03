@@ -33,7 +33,15 @@ public class ReportService {
    public void authorize(CurrentActor.Actor actor) { diagnosis.reportContext(id); }
    public void authorizeReplay(CurrentActor.Actor actor,CommandReceipt receipt) { diagnosis.reportContext(id); }
    public IdempotentCommands.Mutation mutate(CurrentActor.Actor actor) {
-    jdbc.queryForList("SELECT id FROM pathology_request WHERE id=? FOR UPDATE",initial.requestId());var c=diagnosis.reportContext(id);
+    return appendDraft(id,input,actor);
+   }
+  });
+ }
+ /** Shared draft mutation; caller supplies the atomic command/audit transaction. */
+ @Transactional(propagation=org.springframework.transaction.annotation.Propagation.MANDATORY)
+ public IdempotentCommands.Mutation appendDraft(UUID id,Save input,CurrentActor.Actor actor) {
+  var errors=validator.validate(input);if(!errors.isEmpty())throw new jakarta.validation.ConstraintViolationException(errors);
+    jdbc.queryForList("SELECT id FROM pathology_request WHERE id=? FOR UPDATE",diagnosis.reportContext(id).requestId());var c=diagnosis.reportContext(id);
     if(!id.equals(input.confirmedCaseId())) throw conflict("REPORT_IDENTITY_MISMATCH");
     if(c.assignmentVersion()!=input.assignmentVersion()) throw conflict("VERSION_CONFLICT");
     if(!c.ready()) throw conflict("DIAGNOSIS_NOT_READY");
@@ -46,8 +54,6 @@ public class ReportService {
     if(old==null) jdbc.update("INSERT INTO report_draft(case_id,version,revision_id) VALUES(?,0,?)",id,revision);
     else if(jdbc.update("UPDATE report_draft SET version=version+1,revision_id=? WHERE case_id=? AND version=?",revision,id,version)!=1) throw conflict("VERSION_CONFLICT");
     return new IdempotentCommands.Mutation(new CommandReceipt(200,"REPORT_DRAFT",id,next),version<0?null:version);
-   }
-  });
  }
  private static ApiException conflict(String code) { return new ApiException(HttpStatus.CONFLICT,code,"Report draft requires review"); }
 }

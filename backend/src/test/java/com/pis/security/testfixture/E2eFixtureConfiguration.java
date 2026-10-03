@@ -42,7 +42,7 @@ public class E2eFixtureConfiguration {
         jdbc.update("INSERT INTO frozen_grant(user_id,scope_id,qualification,can_record,can_review,can_qc) SELECT user_id,scope_id,'SYN-FROZEN-1',true,true,true FROM diagnosis_grant WHERE scope_id=?",scope);
         jdbc.update("INSERT INTO cytology_grant(user_id,scope_id,qualification,can_prepare,can_qc) SELECT user_id,scope_id,'SYN-CYTOLOGY-1',true,true FROM workflow_grant WHERE scope_id=? AND can_material",scope);
         jdbc.update("INSERT INTO stain_grant(user_id,scope_id,qualification,can_request,can_execute,can_qc) SELECT user_id,scope_id,'SYN-STAIN-1',true,true,true FROM workflow_grant WHERE scope_id=? AND can_material",scope);
-        for(var number:java.util.List.of("SYN-RECEIVE-001","SYN-RETURN-001","SYN-RESOLVE-001","SYN-LABEL-001","SYN-GROSS-001","SYN-TECH-001","SYN-MATERIAL-001","SYN-DIRECT-001","SYN-QC-001","SYN-WORKLIST-001","SYN-DIAGNOSIS-001","SYN-REPORT-001","SYN-REVIEW-001","SYN-OUTPUT-001","SYN-AMEND-001","SYN-DELIVERY-001","SYN-FROZEN-001","SYN-CYTOLOGY-001","SYN-STAIN-001")) {
+        for(var number:java.util.List.of("SYN-RECEIVE-001","SYN-RETURN-001","SYN-RESOLVE-001","SYN-LABEL-001","SYN-GROSS-001","SYN-TECH-001","SYN-MATERIAL-001","SYN-DIRECT-001","SYN-QC-001","SYN-WORKLIST-001","SYN-DIAGNOSIS-001","SYN-REPORT-001","SYN-REVIEW-001","SYN-OUTPUT-001","SYN-AMEND-001","SYN-DELIVERY-001","SYN-FROZEN-001","SYN-CYTOLOGY-001","SYN-STAIN-001","SYN-CONSULT-001")) {
             // Independent patient/encounter per scenario; shared list still exercises exact resource selection.
             var scenarioPatient=java.util.UUID.randomUUID();
             jdbc.update("INSERT INTO patient(id,hospital_id,display_name) VALUES(?,?,'合成申请患者')",scenarioPatient,hospital);

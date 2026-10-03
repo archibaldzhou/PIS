@@ -112,6 +112,20 @@ public class DiagnosisService {
   if(!rights(scope,user).diagnose()) return "UNAVAILABLE";
   return jdbc.queryForObject("SELECT jsonb_build_array(u.id,u.auth_version,to_jsonb(g),to_jsonb(d),to_jsonb(s))::text FROM app_user u JOIN workflow_grant g ON g.user_id=u.id JOIN diagnosis_grant d ON d.user_id=u.id AND d.scope_id=g.scope_id JOIN workflow_scope s ON s.id=g.scope_id WHERE u.id=? AND s.id=?",String.class,user,scope);
  }
+ /** Bounded internal consultation boundary; caller has authorized this scope and holds the request lock. */
+ public Map<UUID,String> qualificationSnapshots(UUID scope,List<UUID> users) {
+  if(users.isEmpty())return Map.of();if(users.size()>10)throw new IllegalArgumentException("Bounded consultation participants required");
+  var sorted=users.stream().distinct().sorted().toList();String placeholders=String.join(",",java.util.Collections.nCopies(sorted.size(),"?"));
+  var args=new ArrayList<Object>();args.add(scope);args.addAll(sorted);
+  if(TransactionSynchronizationManager.isActualTransactionActive()) {
+   jdbc.queryForList("SELECT id FROM app_user WHERE id IN ("+placeholders+") ORDER BY id FOR SHARE",sorted.toArray());
+   jdbc.queryForList("SELECT user_id FROM workflow_grant WHERE scope_id=? AND user_id IN ("+placeholders+") ORDER BY user_id FOR SHARE",args.toArray());
+   jdbc.queryForList("SELECT user_id FROM diagnosis_grant WHERE scope_id=? AND user_id IN ("+placeholders+") ORDER BY user_id FOR SHARE",args.toArray());
+  }
+  var result=new HashMap<UUID,String>();
+  jdbc.query("SELECT u.id,jsonb_build_array(u.id,u.auth_version,to_jsonb(g),to_jsonb(d),to_jsonb(s))::text AS snapshot "+ELIGIBLE+" AND d.can_diagnose AND u.id IN ("+placeholders+")",r->{result.put(r.getObject("id",UUID.class),r.getString("snapshot"));},args.toArray());
+  return Map.copyOf(result);
+ }
  private static ApiException missing() { return new ApiException(HttpStatus.NOT_FOUND,"DIAGNOSIS_NOT_FOUND","Diagnosis resource unavailable"); }
  private static ApiException conflict(String code) { return new ApiException(HttpStatus.CONFLICT,code,"Diagnosis command requires review"); }
 }

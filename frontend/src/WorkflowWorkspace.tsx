@@ -13,6 +13,7 @@ import { Frozen } from './features/frozen/Frozen';
 import { DeliveryEditor } from './features/report/DeliveryEditor';
 import { AmendmentEditor } from './features/report/AmendmentEditor';
 import { OutputEditor } from './features/report/OutputEditor';
+import { ConsultationEditor } from './features/report/ConsultationEditor';
 import { ReviewEditor } from './features/report/ReviewEditor';
 import { ReportEditor } from './features/report/ReportEditor';
 import { Diagnosis } from './features/diagnosis/Diagnosis';
@@ -24,7 +25,7 @@ import { Grossing } from './features/grossing/Grossing';
 import { Labels } from './features/labels/Labels';
 import { Reception } from './features/specimen/Reception';
 
-const pages = { requests: '申请单查询', registration: '病理申请录入', reception: '标本接收与异常', labels: '标签打印与重打', grossing: '取材记录与取材盒', technical: '技术任务与交接', materials: '蜡块与玻片谱系', quality: '技术QC与隔离', worklist: '工作列表与追踪', diagnosis: '诊断分配与领取', report: '报告草稿', review: '复核与模拟签署', output: '固定PDF与打印记录', amendments: '报告补充与更正', delivery: '本地投递与回执', frozen: '术中冰冻工作站', cytology: '细胞学制备工作站', staining: '特殊染色与IHC批次' };
+const pages = { requests: '申请单查询', registration: '病理申请录入', reception: '标本接收与异常', labels: '标签打印与重打', grossing: '取材记录与取材盒', technical: '技术任务与交接', materials: '蜡块与玻片谱系', quality: '技术QC与隔离', worklist: '工作列表与追踪', diagnosis: '诊断分配与领取', report: '报告草稿', review: '复核与模拟签署', output: '固定PDF与打印记录', amendments: '报告补充与更正', delivery: '本地投递与回执', frozen: '术中冰冻工作站', cytology: '细胞学制备工作站', staining: '特殊染色与IHC批次', consultation: '院内会诊与复阅' };
 type Page = keyof typeof pages;
 export function WorkflowWorkspace({ onClose, onLogout, onExpired, api = accessionApi }: {
   onClose: () => void; onLogout: () => void; onExpired: () => void; api?: AccessionApi;
@@ -105,6 +106,7 @@ export function WorkflowWorkspace({ onClose, onLogout, onExpired, api = accessio
       {scope && page === 'output' && <Diagnosis key={scope} editorKind="output" scopeId={scope} onDirty={() => setDirty(true)} onClean={() => setDirty(false)} onPending={v => { setUnresolved(v); if (!v) setNavWarning(''); }} onExpired={onExpired} renderEditor={(id, callbacks) => <OutputEditor id={id} {...callbacks} />} />}
       {scope && page === 'amendments' && <Diagnosis key={scope} editorKind="amendment" scopeId={scope} onDirty={() => setDirty(true)} onClean={() => setDirty(false)} onPending={v => { setUnresolved(v); if (!v) setNavWarning(''); }} onExpired={onExpired} renderEditor={(id, callbacks) => <AmendmentEditor id={id} {...callbacks} />} />}
       {scope && page === 'delivery' && <Diagnosis key={scope} editorKind="delivery" scopeId={scope} onDirty={() => setDirty(true)} onClean={() => setDirty(false)} onPending={v => { setUnresolved(v); if (!v) setNavWarning(''); }} onExpired={onExpired} renderEditor={(id, callbacks) => <DeliveryEditor id={id} {...callbacks} />} />}
+      {scope && page === 'consultation' && <Diagnosis key={scope} editorKind="consultation" scopeId={scope} onDirty={() => setDirty(true)} onClean={() => setDirty(false)} onPending={v => { setUnresolved(v); if (!v) setNavWarning(''); }} onExpired={onExpired} renderEditor={(id, callbacks) => <ConsultationEditor id={id} {...callbacks} />} />}
       {scope && page === 'review' && <Diagnosis key={scope} editorKind="review" scopeId={scope} onDirty={() => setDirty(true)} onClean={() => setDirty(false)} onPending={v => { setUnresolved(v); if (!v) setNavWarning(''); }} onExpired={onExpired} renderEditor={(id, callbacks) => <ReviewEditor id={id} {...callbacks} />} />}
       {scope && page === 'report' && <Diagnosis key={scope} scopeId={scope} onDirty={() => setDirty(true)} onClean={() => setDirty(false)} onPending={v => { setUnresolved(v); if (!v) setNavWarning(''); }} onExpired={onExpired} renderEditor={(id, callbacks) => <ReportEditor id={id} {...callbacks} />} /> }
       {scope && page === 'diagnosis' && <Diagnosis key={scope} scopeId={scope} onDirty={() => setDirty(true)} onClean={() => setDirty(false)} onPending={value => { setUnresolved(value); if (!value) setNavWarning(''); }} onExpired={onExpired} />}
