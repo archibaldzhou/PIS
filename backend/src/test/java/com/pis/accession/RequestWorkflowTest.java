@@ -47,6 +47,7 @@ class RequestWorkflowTest {
     @Autowired com.pis.material.MaterialService materials;
     @Autowired com.pis.quality.QualityService quality;
     @Autowired com.pis.worklist.WorklistService worklist;
+    @Autowired com.pis.diagnosis.DiagnosisService diagnosis;
     @Autowired WorkflowAccess workflowAccess;
     @Autowired jakarta.validation.Validator validator;
     @Autowired org.springframework.transaction.PlatformTransactionManager transactionManager;
@@ -1220,6 +1221,103 @@ class RequestWorkflowTest {
                 assertThat(all.items()).filteredOn(i->!i.active()).singleElement().satisfies(i->{ assertThat(i.overdue()).isFalse(); assertThat(i.dueAt()).isNull(); }); return null;
             }));
         }
+    }
+    private void diagnosisGrant(Fixture actor,Fixture scope,boolean assign,boolean diagnose) {
+        jdbc.update("INSERT INTO workflow_grant(user_id,scope_id,can_read) VALUES(?,?,true) ON CONFLICT(user_id,scope_id) DO NOTHING",actor.user,scope.scope);
+        jdbc.update("INSERT INTO diagnosis_grant(user_id,scope_id,can_assign,can_diagnose,qualification) VALUES(?,?,?,?,'SYN-DIAG-ASSIGNMENT-1') ON CONFLICT(user_id,scope_id) DO UPDATE SET can_assign=excluded.can_assign,can_diagnose=excluded.can_diagnose,version=diagnosis_grant.version+1",actor.user,scope.scope,assign,diagnose);
+    }
+    private record DiagnosisSetup(UUID request,UUID caseId,UUID slide) { }
+    private DiagnosisSetup diagnosisSetup(Fixture f) {
+        var rid=grossRequest(f); materialGrant(f); qcGrant(f); diagnosisGrant(f,f,true,true);
+        var cid=f.as(()->service.detail(rid)).containers().getFirst().id();
+        var slide=f.as(()->materials.direct(rid,new com.pis.material.MaterialContracts.DirectCreate(2L,cid,"Synthetic diagnosis source"),"direct")).receipt().resourceId();
+        var caseId=f.as(()->materials.detail(slide)).entity().caseId();
+        f.as(()->quality.assess(slide,qa(slide,-1,0,null,com.pis.quality.QualityContracts.Outcome.PASS),"ready"));
+        return new DiagnosisSetup(rid,caseId,slide);
+    }
+    private com.pis.diagnosis.DiagnosisContracts.Decision dd(UUID id,long version,UUID target) { return new com.pis.diagnosis.DiagnosisContracts.Decision(version,id,target,"Synthetic assignment reason"); }
+    @Test void diagnosisAssignClaimTransferRequireExplicitQualifiedScopeAndKeepHistory() {
+        var f=new Fixture(); var s=diagnosisSetup(f); var receiver=new Fixture(); var foreign=new Fixture();
+        diagnosisGrant(receiver,f,false,true);
+        f.as(()->{
+            assertCode(()->diagnosis.list(foreign.scope,com.pis.diagnosis.DiagnosisContracts.State.ALL,1,10),"DIAGNOSIS_NOT_FOUND");
+            var page=diagnosis.list(f.scope,com.pis.diagnosis.DiagnosisContracts.State.ALL,1,10); assertThat(page.total()).isEqualTo(1); assertThat(page.items().getFirst().ready()).isTrue();
+            assertCode(()->diagnosis.decide(s.caseId(),dd(s.caseId(),-1,foreign.user),"bad-target",com.pis.diagnosis.DiagnosisContracts.Action.ASSIGN),"DIAGNOSIS_TARGET_UNAVAILABLE");
+            var first=diagnosis.decide(s.caseId(),dd(s.caseId(),-1,f.user),"assign",com.pis.diagnosis.DiagnosisContracts.Action.ASSIGN); assertThat(first.receipt().version()).isZero();
+            assertThat(diagnosis.decide(s.caseId(),dd(s.caseId(),-1,f.user),"assign",com.pis.diagnosis.DiagnosisContracts.Action.ASSIGN).replayed()).isTrue();
+            assertCode(()->diagnosis.decide(s.caseId(),dd(s.caseId(),-1,receiver.user),"assign",com.pis.diagnosis.DiagnosisContracts.Action.ASSIGN),"IDEMPOTENCY_KEY_REUSED");
+            diagnosis.decide(s.caseId(),dd(s.caseId(),0,null),"claim",com.pis.diagnosis.DiagnosisContracts.Action.CLAIM);
+            assertCode(()->diagnosis.decide(s.caseId(),dd(s.caseId(),0,receiver.user),"stale",com.pis.diagnosis.DiagnosisContracts.Action.TRANSFER),"VERSION_CONFLICT");
+            diagnosis.decide(s.caseId(),dd(s.caseId(),1,receiver.user),"transfer",com.pis.diagnosis.DiagnosisContracts.Action.TRANSFER);
+            assertCode(()->diagnosis.decide(s.caseId(),dd(s.caseId(),2,null),"wrong-owner",com.pis.diagnosis.DiagnosisContracts.Action.CLAIM),"DIAGNOSIS_STATE_CONFLICT"); return null;
+        });
+        receiver.as(()->{ assertCode(()->diagnosis.decide(s.caseId(),dd(s.caseId(),2,receiver.user),"no-assign",com.pis.diagnosis.DiagnosisContracts.Action.ASSIGN),"DIAGNOSIS_NOT_FOUND"); diagnosis.decide(s.caseId(),dd(s.caseId(),2,null),"accept",com.pis.diagnosis.DiagnosisContracts.Action.CLAIM); var detail=diagnosis.detail(s.caseId()); assertThat(detail.item().ownerId()).isEqualTo(receiver.user); assertThat(detail.events()).extracting(e->e.action()).containsExactly("CLAIM","TRANSFER","CLAIM","ASSIGN"); return null; });
+        foreign.as(()->{ assertCode(()->diagnosis.detail(s.caseId()),"DIAGNOSIS_NOT_FOUND"); assertCode(()->diagnosis.detail(UUID.randomUUID()),"DIAGNOSIS_NOT_FOUND"); return null; });
+        jdbc.update("UPDATE diagnosis_grant SET revoked_at=statement_timestamp(),version=version+1 WHERE user_id=?",f.user);
+        f.as(()->{ assertCode(()->diagnosis.decide(s.caseId(),dd(s.caseId(),-1,f.user),"assign",com.pis.diagnosis.DiagnosisContracts.Action.ASSIGN),"DIAGNOSIS_NOT_FOUND"); return null; });
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM audit_event WHERE resource_id=? AND operation_code LIKE 'DIAG_%'",Long.class,s.caseId())).isEqualTo(4);
+    }
+    @Test void diagnosisBlocksExpiredTargetsIdentityQuarantineAndAuditFailureRollsBackEverything() {
+        var f=new Fixture(); var s=diagnosisSetup(f); var receiver=new Fixture(); diagnosisGrant(receiver,f,false,true);
+        jdbc.update("UPDATE diagnosis_grant SET valid_from=statement_timestamp()-interval '2 hours',valid_until=statement_timestamp()-interval '1 hour' WHERE user_id=?",receiver.user);
+        f.as(()->{ assertCode(()->diagnosis.decide(s.caseId(),dd(s.caseId(),-1,receiver.user),"expired",com.pis.diagnosis.DiagnosisContracts.Action.ASSIGN),"DIAGNOSIS_TARGET_UNAVAILABLE"); assertThat(diagnosis.detail(s.caseId()).candidates()).noneMatch(c->c.id().equals(receiver.user)); return null; });
+        jdbc.execute("CREATE FUNCTION reject_diag_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.operation_code LIKE 'DIAG_%' THEN RAISE EXCEPTION 'synthetic failure'; END IF; RETURN NEW; END $$");
+        jdbc.execute("CREATE TRIGGER reject_diag_audit BEFORE INSERT ON audit_event FOR EACH ROW EXECUTE FUNCTION reject_diag_audit()");
+        try { f.as(()->{ assertThatThrownBy(()->diagnosis.decide(s.caseId(),dd(s.caseId(),-1,null),"atomic",com.pis.diagnosis.DiagnosisContracts.Action.CLAIM)).isInstanceOf(org.springframework.dao.DataAccessException.class); return null; }); }
+        finally { jdbc.execute("DROP TRIGGER reject_diag_audit ON audit_event"); jdbc.execute("DROP FUNCTION reject_diag_audit()"); }
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM diagnosis_assignment WHERE case_id=?",Long.class,s.caseId())).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM diagnosis_event WHERE case_id=?",Long.class,s.caseId())).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM idempotency_command WHERE hospital_id=? AND operation_code LIKE 'DIAG_%'",Long.class,f.hospital)).isZero();
+        f.as(()->{
+            diagnosis.decide(s.caseId(),dd(s.caseId(),-1,null),"atomic",com.pis.diagnosis.DiagnosisContracts.Action.CLAIM);
+            quality.assess(s.slide(),qa(s.slide(),0,0,null,com.pis.quality.QualityContracts.Outcome.IDENTITY_MISMATCH),"identity");
+            assertThat(diagnosis.detail(s.caseId()).item().ready()).isFalse();
+            assertCode(()->diagnosis.decide(s.caseId(),dd(s.caseId(),0,f.user),"blocked",com.pis.diagnosis.DiagnosisContracts.Action.TRANSFER),"DIAGNOSIS_NOT_READY");
+            assertThat(diagnosis.detail(s.caseId()).item().version()).isZero(); return null;
+        });
+    }
+    @Test void diagnosisConcurrentAssignClaimTransferHaveOneCasWinnerAfterActualRootLockWait() throws Exception {
+        for(var action:com.pis.diagnosis.DiagnosisContracts.Action.values()) {
+            var f=new Fixture(); var s=diagnosisSetup(f); var receiver=new Fixture(); diagnosisGrant(receiver,f,false,true);
+            if(action==com.pis.diagnosis.DiagnosisContracts.Action.TRANSFER) f.as(()->diagnosis.decide(s.caseId(),dd(s.caseId(),-1,null),"initial",com.pis.diagnosis.DiagnosisContracts.Action.CLAIM));
+            long version=action==com.pis.diagnosis.DiagnosisContracts.Action.TRANSFER?0:-1; UUID target=action==com.pis.diagnosis.DiagnosisContracts.Action.CLAIM?null:receiver.user;
+            try(var blocker=DB.connection();var executor=Executors.newVirtualThreadPerTaskExecutor()) {
+                blocker.setAutoCommit(false); try(var st=blocker.prepareStatement("SELECT id FROM pathology_request WHERE id=? FOR UPDATE")) { st.setObject(1,s.request());st.executeQuery().close(); }
+                java.util.function.Function<String,String> run=key->(action==com.pis.diagnosis.DiagnosisContracts.Action.CLAIM && key.equals("two")?receiver:f).as(()->{ try { diagnosis.decide(s.caseId(),dd(s.caseId(),version,target),key,action);return "SUCCESS"; } catch(ApiException e) { return e.code(); } });
+                var a=executor.submit(()->run.apply("one")); var b=executor.submit(()->run.apply("two"));
+                try { long end=System.nanoTime()+TimeUnit.SECONDS.toNanos(2);boolean waiting=false;while(System.nanoTime()<end) { if(jdbc.queryForObject("SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%SELECT id FROM pathology_request WHERE id=%'",Long.class)>=2) {waiting=true;break;} Thread.sleep(10); } assertThat(waiting).isTrue(); } finally { blocker.rollback(); }
+                assertThat(List.of(a.get(5,TimeUnit.SECONDS),b.get(5,TimeUnit.SECONDS))).containsExactlyInAnyOrder("SUCCESS","VERSION_CONFLICT");
+            }
+            assertThat(f.as(()->diagnosis.detail(s.caseId())).item().version()).isEqualTo(version+1);
+        }
+    }
+    @Test void diagnosisTargetRevocationDuringLockWaitRejectsAssignmentWithoutReceipt() throws Exception {
+        var f=new Fixture();var s=diagnosisSetup(f);var receiver=new Fixture();diagnosisGrant(receiver,f,false,true);
+        try(var blocker=DB.connection();var executor=Executors.newVirtualThreadPerTaskExecutor()) {
+            blocker.setAutoCommit(false);
+            try(var st=blocker.prepareStatement("UPDATE diagnosis_grant SET revoked_at=statement_timestamp(),version=version+1 WHERE user_id=? AND scope_id=?")) { st.setObject(1,receiver.user);st.setObject(2,f.scope);st.executeUpdate(); }
+            var pending=executor.submit(()->f.as(()->{ assertCode(()->diagnosis.decide(s.caseId(),dd(s.caseId(),-1,receiver.user),"revoked-target",com.pis.diagnosis.DiagnosisContracts.Action.ASSIGN),"DIAGNOSIS_TARGET_UNAVAILABLE");return null; }));
+            try { long end=System.nanoTime()+TimeUnit.SECONDS.toNanos(2);boolean waiting=false;while(System.nanoTime()<end) { if(jdbc.queryForObject("SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%SELECT user_id FROM diagnosis_grant%FOR SHARE%'",Long.class)>0) {waiting=true;break;} Thread.sleep(10); } assertThat(waiting).isTrue();blocker.commit(); } finally { blocker.rollback(); }
+            pending.get(5,TimeUnit.SECONDS);
+        }
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM diagnosis_assignment WHERE case_id=?",Long.class,s.caseId())).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM audit_event WHERE resource_id=? AND operation_code LIKE 'DIAG_%'",Long.class,s.caseId())).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM idempotency_command WHERE hospital_id=? AND operation_code LIKE 'DIAG_%'",Long.class,f.hospital)).isZero();
+    }
+    @Test void diagnosisHttpMaintainsCsrfFieldsAndNoReportEndpoints() throws Exception {
+        var f=new Fixture(); var s=diagnosisSetup(f); String path="/api/requests/diagnosis/cases/"+s.caseId(); var b=new Browser();
+        assertThat(b.send("GET",path,null,null,false).statusCode()).isEqualTo(401);
+        String password="Synthetic-diagnosis-http-42!"; jdbc.update("UPDATE app_user SET password_hash=? WHERE id=?",encoder.encode(password),f.user);
+        String login="username="+f.principal.getUsername()+"&password="+java.net.URLEncoder.encode(password,java.nio.charset.StandardCharsets.UTF_8);
+        assertThat(b.send("POST","/api/auth/login",login,b.csrf(),true).statusCode()).isEqualTo(204);String csrf=b.csrf();
+        String body="""
+            {"expectedVersion":-1,"confirmedCaseId":"%s","targetUserId":null,"reason":"Synthetic HTTP claim"}
+            """.formatted(s.caseId());
+        assertThat(b.send("POST",path+"/claim",body,null,false).statusCode()).isEqualTo(403);
+        assertThat(b.send("POST",path+"/claim",body.replace("\"reason\":","\"adminOverride\":true,\"reason\":"),csrf,false).statusCode()).isEqualTo(400);
+        assertThat(b.send("POST",path+"/claim",body,csrf,false).statusCode()).isEqualTo(200);
+        assertThat(b.send("POST",path+"/sign",body,csrf,false).statusCode()).isEqualTo(404);
+        assertThat(b.send("GET","/api/requests/diagnosis/scopes/"+f.scope+"?pageSize=51",null,null,false).statusCode()).isEqualTo(400);
     }
     private String editResult(Fixture f,UUID id,String key) { return f.as(()->{ try { service.edit(id,new Edit(0L,COMPLETE),key); return "SUCCESS"; } catch(ApiException e) { return e.code(); } }); }
     private static void assertCode(Runnable action,String code) { assertThatThrownBy(action::run).isInstanceOfSatisfying(ApiException.class,e->assertThat(e.code()).isEqualTo(code)); }

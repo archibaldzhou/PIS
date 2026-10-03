@@ -14,6 +14,8 @@ T14 技术QC、隔离和返工已实现，完整验证分支CI已通过，见[T1
 
 T15 已实现授权工作列表、当前页逐项批量领取、合成超期和既有流程追踪，完整CI待核验，见[T15记录](docs/api/t15-development-status.md)。
 
+T16 诊断分配、领取与转交已完成本地实现，独立合成资格与材料QC门禁，未包含报告/签署。完整后端与真实E2E尚未验证；按本次指示不等待GitHub，见[T16记录](docs/api/t16-development-status.md)。
+
 开发连通性与认证验证：React + Ant Design 登录后调用 Spring Boot 的 `GET /api/hello`，显示 **Hello World**。
 
 ## 范围

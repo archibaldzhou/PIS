@@ -1,14 +1,14 @@
-package com.pis.worklist;
+package com.pis.diagnosis;
 import com.pis.database.PostgresTestDatabase;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import static org.assertj.core.api.Assertions.*;
-class WorklistMigrationTest {
- @Test void v12UpgradeAddsOnlyMinimalRealProjectionsAndPreservesHistoryChecksums() throws Exception {
+class DiagnosisMigrationTest {
+ @Test void v13UpgradePreservesAuditAndDeniesImplicitDiagnosisQualifications() throws Exception {
   try(var db=new PostgresTestDatabase()) {
-   db.configuration("classpath:db/migration").target("12").load().migrate();
+   db.configuration("classpath:db/migration").target("13").load().migrate();
    try(var connection=db.connection()) {
     var j=new JdbcTemplate(new SingleConnectionDataSource(connection,true));
     UUID h=UUID.randomUUID(),p=UUID.randomUUID(),s=UUID.randomUUID(),r=UUID.randomUUID(),u=UUID.randomUUID(),campus=UUID.randomUUID(),dept=UUID.randomUUID(),scope=UUID.randomUUID();
@@ -23,15 +23,15 @@ class WorklistMigrationTest {
     j.update("INSERT INTO pathology_request(id,hospital_id,patient_id,source_system_id,request_number) VALUES(?,?,?,?,'SYN-LIST')",r,h,p,s);
     j.update("INSERT INTO request_workflow(request_id,hospital_id,scope_id,state,created_by,clinical_history) VALUES(?,?,?,'DRAFT',?,'Synthetic hidden clinical text')",r,h,scope,u);
     j.update("INSERT INTO audit_event(id,actor_user_id,actor_auth_version,hospital_id,operation_code,resource_type,resource_id,result_version,trace_id) VALUES(?,?,0,?,'REQUEST_CREATE_V1','PATHOLOGY_REQUEST',?,0,?)",UUID.randomUUID(),u,h,r,UUID.randomUUID());
-    String history="SELECT version,checksum FROM flyway_schema_history WHERE version IS NOT NULL AND version::integer<=12 ORDER BY installed_rank";
+    String history="SELECT version,checksum FROM flyway_schema_history WHERE version IS NOT NULL AND version::integer<=13 ORDER BY installed_rank";
     var checksums=j.queryForList(history); var audit=j.queryForList("SELECT * FROM audit_event");
-    var latest=db.configuration("classpath:db/migration").target("13").load(); assertThat(latest.migrate().migrationsExecuted).isEqualTo(1); assertThat(latest.validateWithResult().validationSuccessful).isTrue();
+    var latest=db.configuration("classpath:db/migration").target("14").load(); assertThat(latest.migrate().migrationsExecuted).isEqualTo(1); assertThat(latest.validateWithResult().validationSuccessful).isTrue();
     assertThat(j.queryForList(history)).isEqualTo(checksums); assertThat(j.queryForList("SELECT * FROM audit_event")).isEqualTo(audit);
     assertThat(j.queryForObject("SELECT count(*) FROM workflow_work_item",Long.class)).isEqualTo(1);
     assertThat(j.queryForObject("SELECT state FROM workflow_work_item WHERE entity_id=?",String.class,r)).isEqualTo("DRAFT");
     assertThat(j.queryForObject("SELECT action FROM workflow_trace_event WHERE request_id=?",String.class,r)).isEqualTo("REQUEST_CREATE_V1");
     assertThat(j.queryForList("SELECT column_name FROM information_schema.columns WHERE table_schema=current_schema() AND table_name IN ('workflow_work_item','workflow_trace_event')",String.class)).doesNotContain("display_name","clinical_history","reason","password_hash","actor_id");
-    assertThat(j.queryForObject("SELECT count(*) FROM workflow_grant",Long.class)).isZero(); assertThat(latest.migrate().migrationsExecuted).isZero();
+    assertThat(j.queryForObject("SELECT count(*) FROM diagnosis_grant",Long.class)).isZero(); assertThat(j.queryForObject("SELECT count(*) FROM diagnosis_assignment",Long.class)).isZero(); assertThat(latest.migrate().migrationsExecuted).isZero();
    }
   }
  }

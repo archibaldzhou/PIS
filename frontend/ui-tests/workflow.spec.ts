@@ -389,3 +389,62 @@ test('worklist partial results preserve successes while denied query is not empt
   await page.getByRole('button', { name: '刷新工作列表' }).click(); await expect(page.getByText('无权查看', { exact: true })).toBeVisible();
   await expect(page.getByText('当前授权过滤集没有工作项；不是未来模块的零统计。')).toHaveCount(0);
 });
+
+test('diagnosis uncertain claim keeps case version and key and prevents navigation', async ({ page }) => {
+  await start(page);
+  const id = '88888888-8888-4888-8888-888888888888';
+  let saved = false;
+  const item = () => ({ caseId: id, requestId: 'synthetic-request', patientId: encounter.patientId, number: 'SYN-DIAG', state: saved ? 'ACTIVE' : 'UNASSIGNED', version: saved ? 0 : -1, ownerId: saved ? 'synthetic-user' : null, ready: true });
+  await page.route('**/api/requests/diagnosis/scopes/*', r => r.fulfill({ json: { total: 1, page: 1, pageSize: 10, items: [item()] } }));
+  await page.route('**/api/requests/diagnosis/cases/' + id, r => r.fulfill({ json: { item: item(), actorId: 'synthetic-user', canAssign: true, canDiagnose: true, candidates: [{ id: 'synthetic-user', name: '合成本人' }], events: [] } }));
+  const sent: { key: string; body: unknown }[] = [];
+  await page.route('**/api/requests/diagnosis/cases/' + id + '/claim', async r => { sent.push({ key: r.request().headers()['idempotency-key'], body: r.request().postDataJSON() as unknown }); if (sent.length === 1) await r.abort('failed'); else { saved = true; await r.fulfill({ json: { receipt: { status: 200, resourceType: 'DIAGNOSIS_ASSIGNMENT', resourceId: id, version: 0 }, replayed: true } }); } });
+  await page.getByRole('button', { name: '诊断分配与领取', exact: true }).click();
+  await page.getByRole('button', { name: '处理诊断分配 ' + id, exact: true }).click();
+  await page.getByLabel('核对诊断病例 UUID').fill(id); await page.getByLabel('分配领取转交原因').fill('合成领取原因');
+  await page.getByRole('button', { name: '提交诊断分配操作', exact: true }).dblclick();
+  await expect(page.getByRole('button', { name: '重试原诊断分配请求' })).toBeVisible(); expect(sent).toHaveLength(1);
+  await expect(page.getByLabel('诊断分配身份')).toContainText('UNASSIGNED');
+  await page.getByRole('button', { name: '申请单查询', exact: true }).click(); await expect(page.getByText('原请求结果尚未确认，请先使用页面上的原请求确认结果。')).toBeVisible();
+  await page.getByRole('button', { name: '重试原诊断分配请求' }).click(); await expect(page.getByLabel('诊断分配身份')).toContainText('ACTIVE');
+  expect(sent).toHaveLength(2); expect(sent[1]).toEqual(sent[0]);
+  await expect(page.getByText('原请求结果尚未确认，请先使用页面上的原请求确认结果。')).toHaveCount(0);
+  await page.screenshot({ path: 'test-results/diagnosis-desktop.png', fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 }); await page.screenshot({ path: 'test-results/diagnosis-mobile.png', fullPage: true });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('diagnosis dirty case switch clears hidden target and distinguishes forbidden from empty', async ({ page }) => {
+  await start(page);
+  const a = '88888888-8888-4888-8888-888888888888', b = '99999999-9999-4999-8999-999999999999'; let forbidden = false;
+  const item = (id: string) => ({ caseId: id, requestId: 'synthetic-request-' + id, patientId: encounter.patientId, number: 'SYN-' + id, state: 'UNASSIGNED', version: -1, ownerId: null, ready: id === a });
+  await page.route('**/api/requests/diagnosis/scopes/*', r => forbidden ? r.fulfill({ status: 404, json: { code: 'DIAGNOSIS_NOT_FOUND' } }) : r.fulfill({ json: { total: 2, page: 1, pageSize: 10, items: [item(a), item(b)] } }));
+  for (const id of [a, b]) await page.route('**/api/requests/diagnosis/cases/' + id, r => r.fulfill({ json: { item: item(id), actorId: 'synthetic-user', canAssign: true, canDiagnose: true, candidates: [{ id: 'synthetic-target', name: '合成目标' }], events: [] } }));
+  await page.getByRole('button', { name: '诊断分配与领取', exact: true }).click(); await page.getByRole('button', { name: '处理诊断分配 ' + a }).click();
+  await page.getByLabel('诊断分配操作', { exact: true }).click(); await page.getByRole('option', { name: '分配给合格人员', exact: true }).click();
+  await page.getByLabel('同范围合格人员').click(); await page.getByRole('option', { name: '合成目标 / synthetic-target', exact: true }).click();
+  await page.getByLabel('分配领取转交原因').fill('合成未提交原因');
+  await page.getByRole('button', { name: '处理诊断分配 ' + a }).click(); await expect(page.getByRole('dialog')).toHaveCount(0); await expect(page.getByLabel('分配领取转交原因')).toHaveValue('合成未提交原因');
+  await page.getByLabel('诊断分配操作', { exact: true }).click(); await page.getByRole('option', { name: '本人领取', exact: true }).click();
+  await page.getByRole('button', { name: '清除并切换', exact: true }).click(); await expect(page.getByLabel('同范围合格人员')).toHaveCount(0); await expect(page.getByLabel('分配领取转交原因')).toHaveValue('');
+  await page.getByLabel('分配领取转交原因').fill('另一个未提交原因'); await page.getByRole('button', { name: '处理诊断分配 ' + b }).click();
+  await page.getByRole('button', { name: '放弃并切换', exact: true }).click(); await expect(page.getByLabel('诊断分配身份')).toContainText(b); await expect(page.getByLabel('诊断分配身份')).not.toContainText(a);
+  await expect(page.getByLabel('分配领取转交原因')).toHaveValue(''); await expect(page.getByRole('button', { name: '提交诊断分配操作' })).toBeDisabled();
+  forbidden = true; await page.getByRole('button', { name: '刷新诊断队列与资格' }).click(); await expect(page.getByText('诊断对象或范围不可用，或没有诊断授权。')).toBeVisible();
+});
+
+test('late diagnosis detail cannot replace the newly selected case', async ({ page }) => {
+  await start(page);
+  const a = '88888888-8888-4888-8888-888888888888', b = '99999999-9999-4999-8999-999999999999';
+  const item = (id: string) => ({ caseId: id, requestId: 'request-' + id, patientId: encounter.patientId, number: 'SYN-' + id, state: 'UNASSIGNED', version: -1, ownerId: null, ready: false });
+  const detail = (id: string) => ({ item: item(id), actorId: 'synthetic-user', canAssign: true, canDiagnose: true, candidates: [], events: [] });
+  await page.route('**/api/requests/diagnosis/scopes/*', r => r.fulfill({ json: { total: 2, page: 1, pageSize: 10, items: [item(a), item(b)] } }));
+  let release: () => void = () => {}; const hold = new Promise<void>(resolve => { release = resolve; });
+  let finish: () => void = () => {}; const finished = new Promise<void>(resolve => { finish = resolve; });
+  await page.route('**/api/requests/diagnosis/cases/' + a, async r => { await hold; try { await r.fulfill({ json: detail(a) }); } finally { finish(); } });
+  await page.route('**/api/requests/diagnosis/cases/' + b, r => r.fulfill({ json: detail(b) }));
+  await page.getByRole('button', { name: '诊断分配与领取', exact: true }).click();
+  const started = page.waitForRequest(r => r.url().endsWith('/cases/' + a)); await page.getByRole('button', { name: '处理诊断分配 ' + a }).click(); await started;
+  await page.getByRole('button', { name: '处理诊断分配 ' + b }).click(); await expect(page.getByLabel('诊断分配身份')).toContainText(b);
+  release(); await finished; await expect(page.getByLabel('诊断分配身份')).toContainText(b); await expect(page.getByLabel('诊断分配身份')).not.toContainText(a);
+});

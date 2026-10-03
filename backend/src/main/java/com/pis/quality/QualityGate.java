@@ -68,5 +68,14 @@ public class QualityGate {
  public void event(UUID material,long version,String action,UUID assessment,UUID related,String reason,UUID actor) {
   jdbc.update("INSERT INTO quality_event(material_id,version,action,assessment_id,related_task_id,reason,actor_id) VALUES(?,?,?,?,?,?,?)",material,version,action,assessment,related,reason,actor);
  }
+ /** Readiness boundary for authorized case IDs; callers hold the request lock for mutations. */
+ public java.util.Map<UUID,Boolean> diagnosisReadiness(java.util.List<UUID> cases) {
+  if(cases.isEmpty()) return java.util.Map.of();
+  if(cases.size()>50) throw new IllegalArgumentException("Bounded case projection required");
+  String placeholders=String.join(",",java.util.Collections.nCopies(cases.size(),"?"));
+  var result=new java.util.HashMap<UUID,Boolean>();
+  jdbc.query("SELECT c.id, EXISTS(SELECT 1 FROM material_entity m WHERE m.case_id=c.id AND m.kind='SLIDE' AND m.state='ACTIVE') AND NOT EXISTS(SELECT 1 FROM material_entity m JOIN workflow_quality_projection q ON q.id=m.id WHERE m.case_id=c.id AND m.state='ACTIVE' AND q.state<>'PASS') AND NOT EXISTS(SELECT 1 FROM quality_head h WHERE h.request_id=c.request_id AND h.state='IDENTITY_MISMATCH') AS ready FROM pathology_case c WHERE c.id IN ("+placeholders+")", r->{ result.put(r.getObject("id",UUID.class),r.getBoolean("ready")); },cases.toArray());
+  return java.util.Map.copyOf(result);
+ }
  public static ApiException blocked() { return new ApiException(HttpStatus.CONFLICT,"QC_QUARANTINED","Quality quarantine requires review"); }
 }
