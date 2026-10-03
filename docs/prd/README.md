@@ -52,3 +52,5 @@
 [T26人工归档/借阅/盘点开发PRD](development-archive-v1.md)已查看UI-026/027实际图片，区分人工登记和未验证的物理事实，保留确切报告产物与不可变盘点历史，无销毁或外部分享。见[ADR0016](../adr/0016-manual-archive-custody.md)和[本地交付记录](../api/t26-development-status.md)。
 
 [T27工作量/TAT/QC统计PRD](development-statistics-v1.md)已查看UI-028/031实际图片。授权优先、固定快照、自然时长、开放病例单列及来源下钻，不包含CSV或对外投递。见[ADR0017](../adr/0017-authorized-statistics-snapshots.md)及[接口与验证记录](../api/t27-statistics.md)。
+
+[T28私有原件存储PRD](development-storage-v1.md)已查看UI-042实际图片。本地私有root、不可变版本/摘要、流式暂存、完成对账、权限与容量；S3未配置，仅合成字节，非WSI验证。见[ADR0018](../adr/0018-private-immutable-original-storage.md)及[接口与验证记录](../api/t28-storage.md)。

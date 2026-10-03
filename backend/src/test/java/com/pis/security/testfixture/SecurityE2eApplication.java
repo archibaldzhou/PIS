@@ -9,10 +9,12 @@ import org.springframework.boot.SpringApplication;
 /** Test-classpath-only browser launcher; owns one random schema in a disposable PG17 _test DB. */
 public final class SecurityE2eApplication {
     private SecurityE2eApplication() { }
-    public static void main(String[] args) {
+    public static void main(String[] args) throws java.io.IOException {
         var database = new PostgresTestDatabase();
+        var storageRoot = java.nio.file.Files.createTempDirectory("pis-e2e-private-storage-");
         var arguments = new ArrayList<>(Arrays.asList(database.applicationArguments("classpath:db/migration")));
         arguments.remove("--server.port=0");
+        arguments.add("--pis.storage.local-root="+storageRoot);
         arguments.add("--server.port=8080");
         arguments.add("--spring.profiles.active=test");
         arguments.add("--pis.workflow.development-enabled=true");

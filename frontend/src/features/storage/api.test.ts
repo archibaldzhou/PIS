@@ -1,0 +1,13 @@
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { parseView, parseVersion, syntheticBytes, digest, bytes } from './api';
+const version = { id: 'version-synthetic', assetId: 'asset-synthetic', caseId: 'case-synthetic', rootId: 'root-synthetic', ordinal: 0, version: 4, state: 'READY', byteSize: 65536, sha256: 'a'.repeat(64), purpose: 'SYNTHETIC_ORIGINAL', createdAt: '2026-10-03T00:00:00Z' };
+const view = { requestId: 'request-synthetic', caseId: version.caseId, provider: 'CONFIGURED_LOCAL', providerRootId: version.rootId, s3: 'NOT_CONFIGURED', page: 1, versions: [version] };
+afterEach(() => vi.unstubAllGlobals());
+describe('private synthetic storage boundary', () => {
+ it('binds exact case, version and current request', () => { expect(parseView(view, view.requestId, 1).versions[0]).toEqual(version); expect(() => parseView(view, 'foreign', 1)).toThrow(); expect(() => parseVersion(version, 'foreign')).toThrow(); expect(() => parseVersion(version, version.caseId, 'foreign')).toThrow(); });
+ it('rejects unknown states, hash or fictional providers', () => { for (const patch of [{ state: 'SIGNED' }, { sha256: 'x'.repeat(64) }, { purpose: 'PATIENT' }, { byteSize: 67108865 }, { byteSize: 0 }, { version: -1 }]) expect(() => parseVersion({ ...version, ...patch }, version.caseId)).toThrow(); expect(() => parseView({ ...view, s3: 'VERIFIED' }, view.requestId, 1)).toThrow(); });
+ it('retains historical root identity and rejects wrong page or unbounded list', () => { expect(parseView({ ...view, providerRootId: 'other-root' }, view.requestId, 1).versions[0].rootId).toBe(version.rootId); expect(() => parseView(view, view.requestId, 2)).toThrow(); expect(() => parseView({ ...view, versions: Array(21).fill(version) }, view.requestId, 1)).toThrow(); });
+ it('generates deterministic bounded fixtures with exact marker and digest', async () => { const a = syntheticBytes(65536), b = syntheticBytes(65536); expect(a).toEqual(b); expect(new TextDecoder().decode(a.slice(0, 25))).toMatch(/^PIS-SYNTHETIC-STORAGE-V1\n/); expect(await digest(a)).toBe(await digest(b)); expect(syntheticBytes(2097152)).toHaveLength(2097152); expect(() => syntheticBytes(67108864)).toThrow(); });
+ it('rejects corrupted full bytes even when range headers look valid', async () => { const data = syntheticBytes(65536); vi.stubGlobal('fetch', vi.fn(async () => new Response(data, { status: 206, headers: { 'Content-Range': 'bytes 0-65535/65536', 'Content-Length': '65536', 'Content-Type': 'application/octet-stream' } }))); await expect(bytes(view.requestId, version, 'DOWNLOAD', new AbortController().signal)).rejects.toThrow('原件长度或摘要不匹配'); });
+
+});

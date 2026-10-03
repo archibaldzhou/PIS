@@ -1,7 +1,7 @@
 name: PIS CI
 on:
   push:
-    branches: [main, validation/t15-20261002]
+    branches: [main, validation/t15-20261002, validation/t28]
   pull_request:
 permissions:
   contents: read

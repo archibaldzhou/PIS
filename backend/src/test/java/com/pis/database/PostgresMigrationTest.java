@@ -13,13 +13,13 @@ class PostgresMigrationTest {
     void initializesAnEmptySchemaAndIsRepeatableWithoutReapplyingMigrations() throws Exception {
         try (var database = new PostgresTestDatabase()) {
             var flyway = database.configuration("classpath:db/migration").load();
-            assertThat(flyway.migrate().migrationsExecuted).isEqualTo(25);
-            assertThat(flyway.info().current().getVersion().toString()).isEqualTo("25");
+            assertThat(flyway.migrate().migrationsExecuted).isEqualTo(26);
+            assertThat(flyway.info().current().getVersion().toString()).isEqualTo("26");
             // Explicit production baseline: a new migration requires deliberate contract review.
             assertThat(java.util.Arrays.stream(flyway.info().applied())
                 .filter(migration -> migration.getVersion() != null)
                 .map(migration -> migration.getVersion().toString()).toList())
-                .containsExactlyElementsOf(java.util.stream.IntStream.rangeClosed(1, 25)
+                .containsExactlyElementsOf(java.util.stream.IntStream.rangeClosed(1, 26)
                     .mapToObj(Integer::toString).toList());
             assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
             assertThat(flyway.migrate().migrationsExecuted).isZero();
@@ -30,6 +30,24 @@ class PostgresMigrationTest {
                 assertThat(rows.getInt(1)).isEqualTo(1);
             }
             assertThatThrownBy(flyway::clean).isInstanceOf(FlywayException.class);
+        }
+    }
+
+    @Test
+    void versionTwentySixAddsOnlyStorageMetadataAndPreservesVersionTwentyFiveData() throws Exception {
+        try (var database = new PostgresTestDatabase()) {
+            var previous=database.configuration("classpath:db/migration").target("25").load();
+            assertThat(previous.migrate().migrationsExecuted).isEqualTo(25);
+            try(var connection=database.connection();var statement=connection.createStatement()) {
+                statement.executeUpdate("INSERT INTO hospital(id,code,name) VALUES('11111111-1111-4111-8111-111111111128','SYN-T28','Synthetic upgrade preservation')");
+            }
+            var latest=database.configuration("classpath:db/migration").load();
+            assertThat(latest.migrate().migrationsExecuted).isEqualTo(1);
+            assertThat(latest.info().current().getVersion().toString()).isEqualTo("26");
+            assertThat(latest.validateWithResult().validationSuccessful).isTrue();assertThat(latest.migrate().migrationsExecuted).isZero();
+            try(var connection=database.connection();var statement=connection.createStatement();var rows=statement.executeQuery("SELECT name,(SELECT count(*) FROM storage_version) AS originals FROM hospital WHERE code='SYN-T28'")) {
+                assertThat(rows.next()).isTrue();assertThat(rows.getString("name")).isEqualTo("Synthetic upgrade preservation");assertThat(rows.getLong("originals")).isZero();assertThat(rows.next()).isFalse();
+            }
         }
     }
 
