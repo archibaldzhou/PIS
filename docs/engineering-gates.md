@@ -82,3 +82,7 @@ T18新增复核资格、依赖快照/代次、退回重修、合成模拟冻结�
 ## T22 冰冻本地验证边界
 
 独立 frozen 域加入十二域源码引用检查，V20、资格/QC/身份、人工时间/更正、版本及沟通分离的后端测试和真实本地 E2E 源码已补充。99 前端单测、33 HTTP mock UI、PG17 SQL 探针、独立 Java 时间策略与本地前端检查通过，详见[T22记录](api/t22-development-status.md)。完整后端编译/测试及真实 E2E 仍受 Maven BOM 缺失阻塞，CI 未验证；不能将这些局部检查作为合并或投产结论。
+
+## T23 本地增量（2026-10-03）
+
+细胞学台账与来源传播见[T23交付记录](api/t23-development-status.md)。107项前端单测、完整36项mock UI及收尾5项复测、lint/typecheck/build/npm审计、真实PG17 SQL并发/回滚探针及独立Java数量策略通过。V21迁移与后端/真实E2E测试源码已补；Maven缺失BOM仍在POM阶段失败，完整Java编译/后端JUnit/真实服务E2E/CI未验证，不构成可合并或投产结论。

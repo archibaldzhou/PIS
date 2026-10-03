@@ -16,7 +16,7 @@ export function parseItem(v: unknown): Item {
   const item = obj(v), s = obj(item.subject), h = item.head === null ? null : obj(item.head);
   const effectiveState = str(item.effectiveState);
   if (!(states as readonly string[]).includes(effectiveState) || (h && !['PASS', 'FAIL', 'PENDING', 'IDENTITY_MISMATCH', 'REVOKED', 'REWORK_REQUIRED', 'INVALIDATED'].includes(str(h.state)))) throw new Error('Unknown quality state');
-  if (!['ACTIVE', 'VOID'].includes(str(s.state)) || !['BLOCK', 'SLIDE'].includes(str(s.kind))) throw new Error('Unknown quality subject');
+  if (!['ACTIVE', 'VOID', 'SOURCE_QUARANTINED'].includes(str(s.state)) || !['BLOCK', 'SLIDE'].includes(str(s.kind))) throw new Error('Unknown quality subject');
   const taskId = nullable(s.taskId), taskVersion = s.taskVersion === null ? null : num(s.taskVersion);
   if ((taskId === null) !== (taskVersion === null) || (h && h.materialId !== s.id)) throw new Error('Mismatched quality source');
   return { subject: { id: str(s.id), requestId: str(s.requestId), patientId: str(s.patientId), caseId: str(s.caseId), number: str(s.number), kind: str(s.kind), route: str(s.route), state: str(s.state), version: num(s.version), taskId, taskVersion, blockId: nullable(s.blockId) }, head: h ? { state: str(h.state), version: num(h.version), assessmentId: str(h.assessmentId), repairTaskId: nullable(h.repairTaskId) } : null, effectiveState };

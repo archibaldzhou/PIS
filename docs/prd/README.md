@@ -42,3 +42,5 @@
 [T21本地合成投递开发PRD](development-delivery-v1.md)已查看UI-024实际原型；仅本地outbox/inbox、完整业务ACK与对账，CA无真实签署能力。见[ADR 0011](../adr/0011-local-synthetic-delivery.md)。
 
 [T22术中冰冻开发PRD](development-frozen-v1.md)已对照 UI-016/UI-025 实际图片。独立冰冻材料与工作流、人工时间、版本化草稿、合成复核、独立回读/确认及确切常规版本差异关联；没有真实通信或临床动作。见[ADR 0012](../adr/0012-independent-frozen-workflow.md)与[本地交付记录](../api/t22-development-status.md)。
+
+[T23细胞学制备开发PRD](development-cytology-v1.md)已查看 UI-015 实际原型；独立标本/制备台账、直接涂片/液基/可选细胞蜡块、守恒的合成份数及来源QC失效传播。不含临床分类或自动诊断，见[ADR 0013](../adr/0013-cytology-preparation-lineage.md)与[交付记录](../api/t23-development-status.md)。

@@ -25,6 +25,7 @@ public class QualityService {
   String state=gate.effective(heads.apply(s.id()),s.version(),s.taskVersion());
   if(!s.state().equals("ACTIVE") || s.taskId()!=null&&!"SIMULATED_DONE".equals(s.taskState())&&List.of("PASS","NOT_ASSESSED").contains(state)) state="INVALIDATED";
   if(s.blockId()!=null) { var b=sources.apply(s.blockId()); String parent=gate.effective(heads.apply(b.id()),b.version(),b.taskVersion()); if(!b.state().equals("ACTIVE")||!List.of("PASS","NOT_ASSESSED").contains(parent)) state="SOURCE_QUARANTINED"; }
+  if(s.state().equals("SOURCE_QUARANTINED"))state="SOURCE_QUARANTINED";
   return new Item(s,heads.apply(s.id()),state);
  }
  @Transactional(timeout=10)

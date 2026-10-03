@@ -29,6 +29,8 @@ public class QualityGate {
   return h.materialVersion()==version && java.util.Objects.equals(h.taskVersion(),taskVersion)?"PASS":"INVALIDATED";
  }
  public void material(UUID id,long version,Long taskVersion) {
+  if(jdbc.queryForObject("SELECT count(*) FROM cytology_material_gate WHERE id=? AND state<>'PASS'",Long.class,id)>0)throw blocked();
+  if(jdbc.queryForObject("SELECT count(*) FROM material_entity m JOIN cytology_specimen s ON s.request_id=m.request_id WHERE m.id=? AND s.qc_state='IDENTITY_MISMATCH'",Long.class,id)>0)throw blocked();
   String state=effective(id,version,taskVersion);
   if(!state.equals("PASS")&&!state.equals("NOT_ASSESSED")) throw blocked();
  }
@@ -74,12 +76,12 @@ public class QualityGate {
   if(cases.size()>50) throw new IllegalArgumentException("Bounded case projection required");
   String placeholders=String.join(",",java.util.Collections.nCopies(cases.size(),"?"));
   var result=new java.util.HashMap<UUID,Boolean>();
-  jdbc.query("SELECT c.id, EXISTS(SELECT 1 FROM material_entity m WHERE m.case_id=c.id AND m.kind='SLIDE' AND m.state='ACTIVE') AND NOT EXISTS(SELECT 1 FROM material_entity m JOIN workflow_quality_projection q ON q.id=m.id WHERE m.case_id=c.id AND m.state='ACTIVE' AND q.state<>'PASS') AND NOT EXISTS(SELECT 1 FROM quality_head h WHERE h.request_id=c.request_id AND h.state='IDENTITY_MISMATCH') AS ready FROM pathology_case c WHERE c.id IN ("+placeholders+")", r->{ result.put(r.getObject("id",UUID.class),r.getBoolean("ready")); },cases.toArray());
+  jdbc.query("SELECT c.id, EXISTS(SELECT 1 FROM material_entity m WHERE m.case_id=c.id AND m.kind='SLIDE' AND m.state='ACTIVE') AND NOT EXISTS(SELECT 1 FROM material_entity m JOIN workflow_quality_projection q ON q.id=m.id WHERE m.case_id=c.id AND m.state='ACTIVE' AND q.state<>'PASS') AND NOT EXISTS(SELECT 1 FROM quality_head h WHERE h.request_id=c.request_id AND h.state='IDENTITY_MISMATCH') AND NOT EXISTS(SELECT 1 FROM cytology_specimen s WHERE s.request_id=c.request_id AND s.qc_state='IDENTITY_MISMATCH') AS ready FROM pathology_case c WHERE c.id IN ("+placeholders+")", r->{ result.put(r.getObject("id",UUID.class),r.getBoolean("ready")); },cases.toArray());
   return java.util.Map.copyOf(result);
  }
  /** Dependency snapshot for an authorized report caller holding the request root lock. */
  public String reportSnapshot(UUID request) {
-  return jdbc.queryForObject("SELECT jsonb_build_object('materials',(SELECT jsonb_agg(to_jsonb(m) ORDER BY m.id) FROM material_entity m WHERE m.request_id=?),'quality',(SELECT jsonb_agg(to_jsonb(h) ORDER BY h.material_id) FROM quality_head h WHERE h.request_id=?),'tasks',(SELECT jsonb_agg(to_jsonb(t) ORDER BY t.id) FROM technical_task t WHERE t.request_id=?))::text",String.class,request,request,request);
+  return jdbc.queryForObject("SELECT jsonb_build_object('materials',(SELECT jsonb_agg(to_jsonb(m) ORDER BY m.id) FROM material_entity m WHERE m.request_id=?),'quality',(SELECT jsonb_agg(to_jsonb(h) ORDER BY h.material_id) FROM quality_head h WHERE h.request_id=?),'tasks',(SELECT jsonb_agg(to_jsonb(t) ORDER BY t.id) FROM technical_task t WHERE t.request_id=?),'cytology',(SELECT jsonb_agg(jsonb_build_object('source',to_jsonb(s),'preparations',(SELECT jsonb_agg(to_jsonb(p) ORDER BY p.id) FROM cytology_preparation p WHERE p.specimen_id=s.id)) ORDER BY s.id) FROM cytology_specimen s WHERE s.request_id=?))::text",String.class,request,request,request,request);
  }
  public static ApiException blocked() { return new ApiException(HttpStatus.CONFLICT,"QC_QUARANTINED","Quality quarantine requires review"); }
 }

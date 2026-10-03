@@ -1,0 +1,17 @@
+import { describe, expect, it } from 'vitest';
+import { parseDetail } from './cytologyApi';
+const empty = { requestId: 'r', containerId: 'c', patientId: 'p', caseId: 'k', caseNumber: 'SYN', specimen: null, preparations: [], materials: [], page: 1, events: [] };
+const specimen = { id: 's', containerId: 'c', patientId: 'p', caseId: 'k', initialQuantity: 3, remaining: 1, version: 3, qcState: 'PASS', qcVersion: 0, sampleDescription: 'Synthetic' };
+const prep = { id: 'prep', path: 'DIRECT_SMEAR', metadata: 'Synthetic manually recorded method', transferred: 2, sourceQcVersion: 0, repeatOf: null, state: 'COMPLETED', version: 1 };
+const material = { id: 'slide', requestId: 'r', patientId: 'p', caseId: 'k', kind: 'SLIDE', route: 'CYTOLOGY_SLIDE', operation: 'ORIGINAL', number: 'DEV-S-SYN', barcode: 'synthetic-only', recordId: null, cassetteId: null, containerId: 'c', blockId: null, sourceSlideId: null, technicalTaskId: null, state: 'ACTIVE', version: 0, cytologyPreparationId: 'prep' };
+const event = { id: 'e', version: 3, preparationId: 'prep', action: 'COMPLETE', transferred: 2, consumed: 2, discarded: 0, returned: 0, slides: 2, reason: 'Synthetic', actorId: 'user', recordedAt: '2026-01-01T00:00:00Z' };
+const full = { ...empty, specimen, preparations: [prep], materials: [material], events: [event] };
+describe('cytology bounded identity and path boundary', () => {
+ it('accepts unregistered sources without inventing stock', () => expect(parseDetail(empty, 'r', 'c', 1).specimen).toBeNull());
+ it('accepts tracked direct smear and liquid slides with no block', () => { for (const path of ['DIRECT_SMEAR', 'LIQUID_BASED']) expect(parseDetail({ ...full, preparations: [{ ...prep, path }] }, 'r', 'c', 1).materials[0].blockId).toBeNull(); });
+ it('accepts explicit optional cell block identity', () => { expect(parseDetail({ ...full, preparations: [{ ...prep, path: 'CELL_BLOCK' }], materials: [{ ...material, id: 'block', kind: 'BLOCK', route: 'CYTOLOGY_BLOCK' }, { ...material, blockId: 'block' }] }, 'r', 'c', 1).materials).toHaveLength(2); });
+ it('rejects wrong patient, request, container, prep, page and untracked routes', () => { for (const patch of [{ patientId: 'other' }, { requestId: 'other' }, { containerId: 'other' }, { cytologyPreparationId: 'other' }, { cytologyPreparationId: null }]) expect(() => parseDetail({ ...full, materials: [{ ...material, ...patch }] }, 'r', 'c', 1)).toThrow(); expect(() => parseDetail(full, 'r', 'c', 2)).toThrow(); });
+ it('rejects block-shaped direct slides, incomplete preparation and duplicate material identities', () => { for (const patch of [{ materials: [{ ...material, blockId: 'unknown' }] }, { preparations: [{ ...prep, state: 'FAILED' }] }, { materials: [material, material] }]) expect(() => parseDetail({ ...full, ...patch }, 'r', 'c', 1)).toThrow(); });
+ it('rejects invented paths, states and impossible inventory', () => { for (const patch of [{ qcState: 'APPROVED' }, { remaining: 4 }, { remaining: -1 }, { initialQuantity: 100 }]) expect(() => parseDetail({ ...full, specimen: { ...specimen, ...patch } }, 'r', 'c', 1)).toThrow(); expect(() => parseDetail({ ...full, preparations: [{ ...prep, path: 'toString' }] }, 'r', 'c', 1)).toThrow(); });
+ it('rejects duplicated, unordered and oversized history', () => { for (const events of [[event, event], [{ ...event, version: 4 }], Array.from({ length: 21 }, () => event)]) expect(() => parseDetail({ ...full, events }, 'r', 'c', 1)).toThrow(); });
+});

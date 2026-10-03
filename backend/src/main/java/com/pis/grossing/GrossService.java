@@ -126,6 +126,7 @@ public class GrossService {
                         }
                         case "ADD_CASSETTE" -> {
                             var box=(AddCassette)input; sources(c,box.containerIds());
+                            for(UUID source:box.containerIds())if(jdbc.queryForObject("SELECT count(*) FROM cytology_specimen WHERE container_id=?",Long.class,source)>0)throw conflict("CYTOLOGY_LEDGER_REQUIRED");
                             if(jdbc.queryForObject("SELECT count(*) FROM gross_cassette WHERE record_id=?",Long.class,id)>=50) throw conflict("GROSS_LIMIT_REACHED");
                             eventTarget=UUID.randomUUID();
                             jdbc.update("INSERT INTO gross_cassette(id,record_id,hospital_id,request_id,case_id,cassette_number,site,pieces,state) VALUES(?,?,?,?,?,?,?,?,'PLANNED')",eventTarget,id,c.scope().hospitalId(),rid,c.caseId(),"DEV-C-"+eventTarget,box.site(),box.pieces());

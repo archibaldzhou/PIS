@@ -104,12 +104,13 @@ public class MaterialService {
                     version(c.request().version(),v.requestVersion()); container=v.confirmedContainerId();
                     UUID checkedContainer=container;
                     if(c.request().containers().stream().noneMatch(vv->vv.id().equals(checkedContainer))) throw conflict("MATERIAL_SOURCE_MISMATCH");
+                    if(jdbc.queryForObject("SELECT count(*) FROM cytology_specimen WHERE container_id=?",Long.class,container)>0)throw conflict("CYTOLOGY_LEDGER_REQUIRED");
                     route="DIRECT_CYTOLOGY"; reason=v.reason();
                 } else {
                     source=queries.row(parent); Entity blockSource;
                     if(input instanceof SlideCreate v) {
                         identity(parent,v.confirmedBlockId()); version(source.version(),v.blockVersion());
-                        if(!source.kind().equals("BLOCK")) throw conflict("MATERIAL_SOURCE_MISMATCH"); blockSource=source; reason=v.reason();
+                        if(!source.kind().equals("BLOCK")||!source.route().equals("CASSETTE")) throw conflict("MATERIAL_SOURCE_MISMATCH"); blockSource=source; reason=v.reason();
                         var t=task(c,v.taskId(),v.taskVersion(),"SECTIONING",source.cassetteId()); taskId=t.id();
                     } else {
                         var v=(Repeat)input; identity(parent,v.confirmedSourceSlideId()); version(source.version(),v.sourceSlideVersion());

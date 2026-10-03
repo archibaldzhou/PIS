@@ -12,3 +12,5 @@ describe('quality boundary never interprets an unknown or pending state as pass'
     expect(() => parseItem({ subject: source, head: { materialId: 'foreign', state: 'PASS', version: 0, assessmentId: 'a', repairTaskId: null }, effectiveState: 'PASS' })).toThrow();
   });
 });
+
+it('keeps cytology source quarantine visible without presenting an empty QC list', () => { expect(parseItem({ subject: { ...source, state: 'SOURCE_QUARANTINED', route: 'CYTOLOGY_SLIDE' }, head: null, effectiveState: 'SOURCE_QUARANTINED' }).effectiveState).toBe('SOURCE_QUARANTINED'); });
