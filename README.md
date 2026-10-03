@@ -142,3 +142,5 @@ T18本地实现：[复核与模拟签署交付记录](docs/api/t18-development-s
 T19本地实现：[固定合成PDF与打印记录](docs/api/t19-development-status.md)。保存不可变字节/哈希及冻结版本，审计预览下载和追加打印自报；每页标明非临床，仅合成演示。完整后端、真实E2E和CI仍未验证。
 
 T20本地实现：[补充、更正与新版本链](docs/api/t20-development-status.md)。原冻结报告/PDF不可变，新草稿独立复核及合成模拟签署，替代关系只标记待替换、未发送。完整后端、真实E2E和CI未验证。
+
+T21本地实现：[合成投递、ACK、重试与对账](docs/api/t21-development-status.md)。人工驱动持久化outbox/inbox，仅本地数据库模拟端，无外部传输；CA仅NOT_CONFIGURED/UNVERIFIED。完整后端、真实E2E和CI未验证。

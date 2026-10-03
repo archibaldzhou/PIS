@@ -1668,4 +1668,63 @@ class RequestWorkflowTest {
         f.as(()->{reviews.decide(d.caseId(),sign,"atomic-new-sign",com.pis.report.ReviewContracts.Action.SIMULATE_SIGN);assertThat(amendments.detail(d.caseId(),1).nodes().getFirst().downstreamState()).isEqualTo("PENDING_NOT_SENT");return null;});
     }
 
+    @org.springframework.beans.factory.annotation.Autowired com.pis.report.DeliveryService deliveries;
+    private com.pis.report.DeliveryContracts.Command dc(UUID id,UUID delivery) {
+        var a=outputs.detail(id).artifact();var item=delivery==null?null:deliveries.detail(id,1).items().stream().filter(i->i.id().equals(delivery)).findFirst().orElseThrow();return new com.pis.report.DeliveryContracts.Command(id,a.id(),a.signatureId(),a.revisionId(),a.sha256(),"LOCAL_SIM",item==null?0:item.version(),item==null?null:item.attemptId(),"Synthetic local delivery");
+    }
+    @Test void deliveryRequiresRealLocalInboxBeforeAckAndDeduplicatesReceiver() {
+        var f=new Fixture();var d=outputSetup(f);f.as(()->{
+            UUID id=d.caseId();outputs.create(id,oc(id),"delivery-artifact");var c=dc(id,null);UUID op=deliveries.enqueue(id,c,"queue").receipt().resourceId();assertThat(deliveries.enqueue(id,c,"queue").replayed()).isTrue();
+            deliveries.step(id,op,dc(id,op),"claim",com.pis.report.DeliveryContracts.Action.CLAIM);var attempt=dc(id,op);
+            assertCode(()->deliveries.step(id,op,attempt,"premature-ack",com.pis.report.DeliveryContracts.Action.ACK),"DELIVERY_ACK_MISMATCH");assertThat(jdbc.queryForObject("SELECT count(*) FROM report_delivery_rejection WHERE case_id=? AND code='DELIVERY_ACK_MISMATCH'",Long.class,id)).isEqualTo(1);
+            var wrong=new com.pis.report.DeliveryContracts.Command(id,attempt.artifactId(),attempt.signatureId(),attempt.revisionId(),"0".repeat(64),"LOCAL_SIM",attempt.expectedVersion(),attempt.attemptId(),"Synthetic wrong hash");assertCode(()->deliveries.step(id,op,wrong,"bad-ack",com.pis.report.DeliveryContracts.Action.ACK),"DELIVERY_BINDING");
+            for(var badInput:List.of(new com.pis.report.DeliveryContracts.Command(id,attempt.artifactId(),UUID.randomUUID(),attempt.revisionId(),attempt.sha256(),"LOCAL_SIM",attempt.expectedVersion(),attempt.attemptId(),"Synthetic wrong signature"),new com.pis.report.DeliveryContracts.Command(id,attempt.artifactId(),attempt.signatureId(),UUID.randomUUID(),attempt.sha256(),"LOCAL_SIM",attempt.expectedVersion(),attempt.attemptId(),"Synthetic wrong revision")))assertCode(()->deliveries.step(id,op,badInput,"invalid-binding-"+UUID.randomUUID(),com.pis.report.DeliveryContracts.Action.ACK),"DELIVERY_BINDING");
+            var destination=new com.pis.report.DeliveryContracts.Command(id,attempt.artifactId(),attempt.signatureId(),attempt.revisionId(),attempt.sha256(),"EXTERNAL",attempt.expectedVersion(),attempt.attemptId(),"Synthetic invalid destination");assertThatThrownBy(()->deliveries.step(id,op,destination,"invalid-endpoint",com.pis.report.DeliveryContracts.Action.ACK)).isInstanceOf(jakarta.validation.ConstraintViolationException.class);
+            deliveries.step(id,op,attempt,"receive",com.pis.report.DeliveryContracts.Action.RECEIVE);assertThat(deliveries.step(id,op,attempt,"receive",com.pis.report.DeliveryContracts.Action.RECEIVE).replayed()).isTrue();deliveries.step(id,op,dc(id,op),"repeat-receive",com.pis.report.DeliveryContracts.Action.RECEIVE);
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM report_local_inbox WHERE delivery_id=?",Long.class,op)).isEqualTo(1);deliveries.step(id,op,dc(id,op),"ack",com.pis.report.DeliveryContracts.Action.ACK);assertThat(deliveries.detail(id,1).items().getFirst().state()).isEqualTo("ACKED");deliveries.step(id,op,dc(id,op),"reconcile",com.pis.report.DeliveryContracts.Action.RECONCILE);assertThat(deliveries.detail(id,1).items().getFirst().state()).isEqualTo("RECONCILED");assertThat(deliveries.detail(id,1).caStatus()).isEqualTo("NOT_CONFIGURED");assertThat(com.pis.integration.CaAdapter.unavailable(true).status()).isEqualTo(com.pis.integration.CaAdapter.Status.UNVERIFIED);
+            assertThatThrownBy(()->jdbc.update("DELETE FROM report_local_inbox WHERE delivery_id=?",op)).isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);return null;
+        });
+    }
+    @Test void deliveryTimeoutRejectsLateAckAndPoisonTerminatesWithRollbackOnAuditFailure() {
+        var f=new Fixture();var d=outputSetup(f);f.as(()->{
+            UUID id=d.caseId();outputs.create(id,oc(id),"timeout-artifact");UUID op=deliveries.enqueue(id,dc(id,null),"timeout-queue").receipt().resourceId();deliveries.step(id,op,dc(id,op),"timeout-claim",com.pis.report.DeliveryContracts.Action.CLAIM);
+            var c=dc(id,op);assertCode(()->deliveries.step(id,op,c,"early-timeout",com.pis.report.DeliveryContracts.Action.TIMEOUT),"DELIVERY_STALE_ATTEMPT");
+            jdbc.update("UPDATE report_delivery_outbox SET version=version+1,lease_until=statement_timestamp()-interval '1 second' WHERE delivery_id=?",op);
+            assertCode(()->deliveries.step(id,op,dc(id,op),"late-ack",com.pis.report.DeliveryContracts.Action.ACK),"DELIVERY_STALE_ATTEMPT");deliveries.step(id,op,dc(id,op),"timeout",com.pis.report.DeliveryContracts.Action.TIMEOUT);
+            var retry=dc(id,op);var claim=new com.pis.report.DeliveryContracts.Command(id,retry.artifactId(),retry.signatureId(),retry.revisionId(),retry.sha256(),retry.destination(),retry.expectedVersion(),null,retry.reason());assertCode(()->deliveries.step(id,op,claim,"early-retry",com.pis.report.DeliveryContracts.Action.CLAIM),"DELIVERY_NOT_READY");return null;
+        });
+        var f2=new Fixture();var d2=outputSetup(f2);UUID op=f2.as(()->{outputs.create(d2.caseId(),oc(d2.caseId()),"poison-artifact");var result=deliveries.enqueue(d2.caseId(),dc(d2.caseId(),null),"poison-queue");deliveries.step(d2.caseId(),result.receipt().resourceId(),dc(d2.caseId(),result.receipt().resourceId()),"poison-claim",com.pis.report.DeliveryContracts.Action.CLAIM);return result.receipt().resourceId();});
+        jdbc.execute("CREATE FUNCTION reject_delivery_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.operation_code='DELIVERY_POISON_V1' THEN RAISE EXCEPTION 'synthetic outage'; END IF; RETURN NEW; END $$");jdbc.execute("CREATE TRIGGER reject_delivery_audit BEFORE INSERT ON audit_event FOR EACH ROW EXECUTE FUNCTION reject_delivery_audit()");
+        var input=f2.as(()->dc(d2.caseId(),op));try{f2.as(()->{assertThatThrownBy(()->deliveries.step(d2.caseId(),op,input,"poison",com.pis.report.DeliveryContracts.Action.POISON)).isInstanceOf(org.springframework.dao.DataAccessException.class);return null;});}finally{jdbc.execute("DROP TRIGGER reject_delivery_audit ON audit_event");jdbc.execute("DROP FUNCTION reject_delivery_audit()");}
+        f2.as(()->{deliveries.step(d2.caseId(),op,input,"poison",com.pis.report.DeliveryContracts.Action.POISON);assertThat(deliveries.detail(d2.caseId(),1).items().getFirst().state()).isEqualTo("DEAD");return null;});
+        jdbc.update("UPDATE report_review_grant SET revoked_at=statement_timestamp() WHERE user_id=?",f2.user);f2.as(()->{assertCode(()->deliveries.detail(d2.caseId(),1),"REPORT_REVIEW_NOT_FOUND");assertCode(()->deliveries.step(d2.caseId(),op,input,"poison",com.pis.report.DeliveryContracts.Action.POISON),"REPORT_REVIEW_NOT_FOUND");return null;});
+    }
+
+    @Test void concurrentDeliveryClaimsHaveExactlyOneAttemptAndOldCasCannotProgress() throws Exception {
+        var f=new Fixture();var d=outputSetup(f);UUID op=f.as(()->{outputs.create(d.caseId(),oc(d.caseId()),"race-artifact");return deliveries.enqueue(d.caseId(),dc(d.caseId(),null),"race-queue").receipt().resourceId();});var input=f.as(()->dc(d.caseId(),op));
+        try(var pool=Executors.newVirtualThreadPerTaskExecutor()) {
+            java.util.function.Function<String,String> claim=k->f.as(()->{try{deliveries.step(d.caseId(),op,input,k,com.pis.report.DeliveryContracts.Action.CLAIM);return "SUCCESS";}catch(ApiException e){return e.code();}});
+            var a=pool.submit(()->claim.apply("worker-a"));var b=pool.submit(()->claim.apply("worker-b"));assertThat(List.of(a.get(10,TimeUnit.SECONDS),b.get(10,TimeUnit.SECONDS))).containsExactlyInAnyOrder("SUCCESS","VERSION_CONFLICT");
+        }
+        assertThat(jdbc.queryForObject("SELECT attempts FROM report_delivery_outbox WHERE delivery_id=?",Integer.class,op)).isEqualTo(1);
+    }
+    @Test void replacementDeliveryChecksReceiverPredecessorAndCannotSilentlyOverwrite() {
+        for(boolean received:List.of(false,true)) {
+            var f=new Fixture();var d=outputSetup(f);f.as(()->{
+                UUID id=d.caseId();outputs.create(id,oc(id),"old-artifact");UUID old=deliveries.enqueue(id,dc(id,null),"old-queue").receipt().resourceId();deliveries.step(id,old,dc(id,old),"old-claim",com.pis.report.DeliveryContracts.Action.CLAIM);
+                if(received){deliveries.step(id,old,dc(id,old),"old-receive",com.pis.report.DeliveryContracts.Action.RECEIVE);deliveries.step(id,old,dc(id,old),"old-ack",com.pis.report.DeliveryContracts.Action.ACK);}
+                amendments.create(id,ac(id,com.pis.report.AmendmentContracts.Kind.CORRECTION),"delivery-correction");reviews.decide(id,rd(id,false),"correction-review",com.pis.report.ReviewContracts.Action.APPROVE);reviews.decide(id,rd(id,true),"correction-sign",com.pis.report.ReviewContracts.Action.SIMULATE_SIGN);outputs.create(id,oc(id),"new-artifact");UUID next=deliveries.enqueue(id,dc(id,null),"new-queue").receipt().resourceId();deliveries.step(id,next,dc(id,next),"new-claim",com.pis.report.DeliveryContracts.Action.CLAIM);deliveries.step(id,next,dc(id,next),"new-receive",com.pis.report.DeliveryContracts.Action.RECEIVE);
+                var item=deliveries.detail(id,1).items().stream().filter(i->i.id().equals(next)).findFirst().orElseThrow();assertThat(item.state()).isEqualTo(received?"ATTEMPTING":"REJECTED");assertThat(jdbc.queryForObject("SELECT count(*) FROM report_local_inbox WHERE delivery_id=?",Long.class,next)).isEqualTo(received?1:0);
+                assertThat(jdbc.queryForObject("SELECT downstream_state FROM report_replacement WHERE case_id=?",String.class,id)).isEqualTo("PENDING_NOT_SENT");return null;
+            });
+        }
+    }
+
+    @Test void durableInboxSurvivesLostAckAndLeaseRecoveryWithoutDuplicateReplacement() throws Exception {
+        var f=new Fixture();var d=outputSetup(f);UUID id=d.caseId();UUID op=f.as(()->{outputs.create(id,oc(id),"recover-artifact");var o=deliveries.enqueue(id,dc(id,null),"recover-queue").receipt().resourceId();deliveries.step(id,o,dc(id,o),"recover-claim",com.pis.report.DeliveryContracts.Action.CLAIM);deliveries.step(id,o,dc(id,o),"recover-receive",com.pis.report.DeliveryContracts.Action.RECEIVE);return o;});
+        var old=f.as(()->dc(id,op));jdbc.update("UPDATE report_delivery_outbox SET version=version+1,lease_until=statement_timestamp()-interval '1 second' WHERE delivery_id=?",op);
+        f.as(()->{deliveries.step(id,op,dc(id,op),"recover-timeout",com.pis.report.DeliveryContracts.Action.TIMEOUT);return null;});Thread.sleep(5100);
+        f.as(()->{var retry=dc(id,op);var claim=new com.pis.report.DeliveryContracts.Command(id,retry.artifactId(),retry.signatureId(),retry.revisionId(),retry.sha256(),retry.destination(),retry.expectedVersion(),null,retry.reason());deliveries.step(id,op,claim,"recover-next",com.pis.report.DeliveryContracts.Action.CLAIM);var fresh=dc(id,op);assertThat(fresh.attemptId()).isNotEqualTo(old.attemptId());var late=new com.pis.report.DeliveryContracts.Command(id,fresh.artifactId(),fresh.signatureId(),fresh.revisionId(),fresh.sha256(),fresh.destination(),fresh.expectedVersion(),old.attemptId(),"Synthetic stale worker");assertCode(()->deliveries.step(id,op,late,"late-old-ack",com.pis.report.DeliveryContracts.Action.ACK),"DELIVERY_STALE_ATTEMPT");deliveries.step(id,op,fresh,"recover-receive-again",com.pis.report.DeliveryContracts.Action.RECEIVE);deliveries.step(id,op,dc(id,op),"recover-ack",com.pis.report.DeliveryContracts.Action.ACK);assertThat(jdbc.queryForObject("SELECT count(*) FROM report_local_inbox WHERE delivery_id=?",Long.class,op)).isEqualTo(1);return null;});
+    }
+
 }

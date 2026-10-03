@@ -38,3 +38,5 @@
 [T19固定合成PDF与打印记录开发PRD](development-report-output-v1.md)已对照授权UI-024实际图片。仅固定合成产物及打印请求/用户自报，不含实体打印、报告发送、T20更正或临床签署；架构见[ADR 0009](../adr/0009-fixed-synthetic-report-artifacts.md)。
 
 [T20补充、更正与版本链开发PRD](development-report-amendments-v1.md)已对照授权UI-023实际图片。新草稿重新复核/模拟签署，原冻结报告/PDF保留，下游仅待替换；不含T21送达、ACK或真实临床签署。架构见[ADR 0010](../adr/0010-append-only-report-amendment-chain.md)。
+
+[T21本地合成投递开发PRD](development-delivery-v1.md)已查看UI-024实际原型；仅本地outbox/inbox、完整业务ACK与对账，CA无真实签署能力。见[ADR 0011](../adr/0011-local-synthetic-delivery.md)。
