@@ -1,0 +1,56 @@
+
+> pis-frontend@0.0.1 test:ui
+> playwright test --config playwright.ui.config.ts synthetic-result.spec.ts -g hide cancels pending toggle
+
+[WebServer] (node:366950) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:366963) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 1 test using 1 worker
+
+(node:366981) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:366981) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  1 ui-tests/synthetic-result.spec.ts:45:1 › hide cancels pending toggle pixels and show requires fresh metadata and bytes (8.0s)
+
+
+  1) ui-tests/synthetic-result.spec.ts:45:1 › hide cancels pending toggle pixels and show requires fresh metadata and bytes
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: getByRole('region', { name: '非诊断合成结果叠加' }).getByRole('status')
+    Expected substring: "叠加已隐藏并清空"
+    Received string:    "合成强度叠加已核验 · 非诊断；最多5秒重新核验已交付像素，变换和设置变化先隐藏再核验。"
+    Timeout: 5000ms
+
+    Call log:
+      - Expect "toContainText" with timeout 5000ms
+      - waiting for getByRole('region', { name: '非诊断合成结果叠加' }).getByRole('status')
+        9 × locator resolved to <p role="status">合成强度叠加已核验 · 非诊断；最多5秒重新核验已交付像素，变换和设置变化先隐藏再核验。</p>
+          - unexpected value "合成强度叠加已核验 · 非诊断；最多5秒重新核验已交付像素，变换和设置变化先隐藏再核验。"
+
+
+      47 |  await setup(page,state);const layer=page.getByLabel('实际合成强度图层',{exact:true}),panel=page.getByRole('region',{name:'非诊断合成结果叠加'});
+      48 |  await expect(layer).toBeVisible();const oldUrl=await layer.locator('image').getAttribute('href');
+    > 49 |  await page.getByRole('button',{name:'隐藏合成叠加',exact:true}).click();await expect(layer).toHaveCount(0);await expect(panel.getByRole('status')).toContainText('叠加已隐藏并清空');
+         |                                                                                                                                               ^
+      50 |  const metadata=gate(),metadataSeen=gate(),tile=gate(),tileSeen=gate();Object.assign(state,{delay:metadata.promise,captured:metadataSeen.resolve,tileDelay:tile.promise,tileCaptured:tileSeen.resolve});
+      51 |  await page.getByRole('button',{name:'显示合成叠加',exact:true}).click();await metadataSeen.promise;await expect(layer).toHaveCount(0);
+      52 |  metadata.resolve();await tileSeen.promise;await expect(layer).toHaveCount(0);
+        at /workspace/PIS/frontend/ui-tests/synthetic-result.spec.ts:49:143
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/synthetic-result-hide-canc-64ca3-es-fresh-metadata-and-bytes/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/synthetic-result-hide-canc-64ca3-es-fresh-metadata-and-bytes/error-context.md
+
+  1 failed
+    ui-tests/synthetic-result.spec.ts:45:1 › hide cancels pending toggle pixels and show requires fresh metadata and bytes
+npm notice
+npm notice New major version of npm available! 11.21.0 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice

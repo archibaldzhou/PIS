@@ -1,0 +1,160 @@
+# Page snapshot
+
+```yaml
+- main [ref=e3]:
+  - complementary [ref=e4]:
+    - strong [ref=e5]: 衡知病理 · PIS
+    - paragraph [ref=e6]: 申请登记 · 开发工作区
+    - navigation "申请登记页面" [ref=e7]:
+      - button "申请单查询" [ref=e8] [cursor=pointer]:
+        - generic [ref=e9]: 申请单查询
+      - button "病理申请录入" [ref=e10] [cursor=pointer]:
+        - generic [ref=e11]: 病理申请录入
+      - button "标本接收与异常" [ref=e12] [cursor=pointer]:
+        - generic [ref=e13]: 标本接收与异常
+      - button "标签打印与重打" [ref=e14] [cursor=pointer]:
+        - generic [ref=e15]: 标签打印与重打
+      - button "取材记录与取材盒" [ref=e16] [cursor=pointer]:
+        - generic [ref=e17]: 取材记录与取材盒
+      - button "技术任务与交接" [ref=e18] [cursor=pointer]:
+        - generic [ref=e19]: 技术任务与交接
+      - button "蜡块与玻片谱系" [ref=e20] [cursor=pointer]:
+        - generic [ref=e21]: 蜡块与玻片谱系
+      - button "技术QC与隔离" [ref=e22] [cursor=pointer]:
+        - generic [ref=e23]: 技术QC与隔离
+      - button "工作列表与追踪" [ref=e24] [cursor=pointer]:
+        - generic [ref=e25]: 工作列表与追踪
+      - button "诊断分配与领取" [ref=e26] [cursor=pointer]:
+        - generic [ref=e27]: 诊断分配与领取
+      - button "报告草稿" [ref=e28] [cursor=pointer]:
+        - generic [ref=e29]: 报告草稿
+      - button "复核与模拟签署" [ref=e30] [cursor=pointer]:
+        - generic [ref=e31]: 复核与模拟签署
+      - button "固定PDF与打印记录" [ref=e32] [cursor=pointer]:
+        - generic [ref=e33]: 固定PDF与打印记录
+      - button "报告补充与更正" [ref=e34] [cursor=pointer]:
+        - generic [ref=e35]: 报告补充与更正
+      - button "本地投递与回执" [ref=e36] [cursor=pointer]:
+        - generic [ref=e37]: 本地投递与回执
+      - button "术中冰冻工作站" [ref=e38] [cursor=pointer]:
+        - generic [ref=e39]: 术中冰冻工作站
+      - button "细胞学制备工作站" [ref=e40] [cursor=pointer]:
+        - generic [ref=e41]: 细胞学制备工作站
+      - button "特殊染色与IHC批次" [ref=e42] [cursor=pointer]:
+        - generic [ref=e43]: 特殊染色与IHC批次
+      - button "院内会诊与复阅" [ref=e44] [cursor=pointer]:
+        - generic [ref=e45]: 院内会诊与复阅
+      - button "归档借阅与盘点" [ref=e46] [cursor=pointer]:
+        - generic [ref=e47]: 归档借阅与盘点
+      - button "工作量TAT与QC统计" [ref=e48] [cursor=pointer]:
+        - generic [ref=e49]: 工作量TAT与QC统计
+      - button "原件版本与容量" [ref=e50] [cursor=pointer]:
+        - generic [ref=e51]: 原件版本与容量
+      - button "扫描任务与导入" [ref=e52] [cursor=pointer]:
+        - generic [ref=e53]: 扫描任务与导入
+      - button "数字扫描QC" [ref=e54] [cursor=pointer]:
+        - generic [ref=e55]: 数字扫描QC
+      - button "合成数字阅片器" [ref=e56] [cursor=pointer]:
+        - generic [ref=e57]: 合成数字阅片器
+      - button "AI模型与适用契约" [ref=e58] [cursor=pointer]:
+        - generic [ref=e59]: AI模型与适用契约
+      - button "合成契约任务" [ref=e60] [cursor=pointer]:
+        - generic [ref=e61]: 合成契约任务
+    - paragraph [ref=e62]:
+      - text: 仅合成数据开发
+      - text: 非临床使用
+  - generic [ref=e63]:
+    - generic [ref=e64]:
+      - heading "合成数字阅片器" [level=1] [ref=e65]
+      - generic [ref=e66]:
+        - button "返回工程验证" [ref=e68] [cursor=pointer]:
+          - generic [ref=e69]: 返回工程验证
+        - button "退出登录" [ref=e71] [cursor=pointer]:
+          - generic [ref=e72]: 退出登录
+    - alert [ref=e73]:
+      - img "exclamation-circle" [ref=e75]:
+        - img [ref=e76]
+      - generic [ref=e78]:
+        - generic [ref=e79]: 合成数据开发工作流 · 非临床使用
+        - generic [ref=e80]: 采用新编开发规格。申请功能需要服务端显式开启和独立授权。请勿输入真实患者资料。
+    - status [ref=e81]:
+      - generic [ref=e82]: 没有未保存的本地输入
+    - generic [ref=e83]:
+      - generic [ref=e84]: 授权工作范围
+      - generic [ref=e85] [cursor=pointer]:
+        - generic "合成院区 / 科室" [ref=e86]:
+          - text: 合成院区 / 科室
+          - combobox "授权工作范围" [ref=e87]
+        - img "down" [ref=e89]:
+          - img [ref=e90]
+    - button "此扫描合成任务队列" [ref=e92] [cursor=pointer]:
+      - generic [ref=e93]: 此扫描合成任务队列
+    - button "核对此扫描AI适用契约" [ref=e94] [cursor=pointer]:
+      - generic [ref=e95]: 核对此扫描AI适用契约
+    - region "合成数字阅片" [ref=e96]:
+      - alert [ref=e97]:
+        - generic [ref=e99]: 合成RGB几何图／非临床；真实WSI与厂商格式未支持；未知校准仅像素，合成校准不证明临床测量准确性。
+      - generic [ref=e100]:
+        - text: 选择精确扫描
+        - generic [ref=e101] [cursor=pointer]:
+          - generic "slide-a / 扫描 0" [ref=e102]:
+            - text: slide-a / 扫描 0
+            - combobox "选择精确扫描" [ref=e103]
+          - img "down" [ref=e105]:
+            - img [ref=e106]
+      - generic [ref=e108]:
+        - button "打开第二视图" [ref=e110] [cursor=pointer]:
+          - generic [ref=e111]: 打开第二视图
+        - button "显式开启像素恒等同步" [disabled] [ref=e113]:
+          - generic: 显式开启像素恒等同步
+      - paragraph [ref=e114]: 不同扫描或清单没有已验证映射，同步不可用；不作自动配准。
+      - region "主视图" [ref=e116]:
+        - generic [ref=e117]:
+          - paragraph [ref=e118]: 扫描 scan-qc / 发布版本 1 / 原件 object-a
+          - status [ref=e119]: 真实合成PNG已加载；不代表临床就绪
+          - generic [ref=e120]:
+            - button "停止加载图像" [ref=e122] [cursor=pointer]:
+              - generic [ref=e123]: 停止加载图像
+            - button "重新授权并加载" [ref=e125] [cursor=pointer]:
+              - generic [ref=e126]: 重新授权并加载
+            - button "放大图像" [ref=e128] [cursor=pointer]:
+              - generic [ref=e129]: 放大图像
+            - button "缩小图像" [ref=e131] [cursor=pointer]:
+              - generic [ref=e132]: 缩小图像
+            - button "适配窗口" [ref=e134] [cursor=pointer]:
+              - generic [ref=e135]: 适配窗口
+          - paragraph [ref=e136]: 图像相对缩放 0.69 / 导航坐标 0.500,0.375；键盘方向键平移，+/-缩放，Home适配。已交付像素的授权刷新间隔2秒。
+          - region "独立ROI授权历史" [ref=e137]:
+            - paragraph [ref=e138]: 仅显式授权历史，不恢复当前图像或编辑资格。
+            - textbox "历史ROI ID" [ref=e139]
+            - button "查询独立ROI历史" [ref=e140] [cursor=pointer]:
+              - generic [ref=e141]: 查询独立ROI历史
+            - button "关闭独立ROI历史" [ref=e142] [cursor=pointer]:
+              - generic [ref=e143]: 关闭独立ROI历史
+          - region "非诊断合成结果叠加" [ref=e144]:
+            - alert [ref=e145]:
+              - generic [ref=e147]: 仅已接受技术产物的合成视觉夹具；强度0–255不是疾病风险，不写入报告。
+            - textbox "精确合成结果ID" [ref=e148]: 99999999-9999-4999-8999-999999999999
+            - generic [ref=e149]:
+              - button "核验并加载合成叠加" [ref=e151] [cursor=pointer]:
+                - generic [ref=e152]: 核验并加载合成叠加
+              - button "取消合成叠加" [ref=e154] [cursor=pointer]:
+                - generic [ref=e155]: 取消合成叠加
+              - button "显示合成叠加" [active] [ref=e157] [cursor=pointer]:
+                - generic [ref=e158]: 显示合成叠加
+              - generic [ref=e160] [cursor=pointer]:
+                - generic "正常混合" [ref=e161]:
+                  - text: 正常混合
+                  - combobox "合成混合方式" [ref=e162]
+                - img "down" [ref=e164]:
+                  - img [ref=e165]
+            - generic [ref=e167]:
+              - text: 合成透明度
+              - slider "合成透明度" [ref=e171] [cursor=pointer]
+            - status [ref=e172]: 合成强度叠加已核验 · 非诊断；最多5秒重新核验已交付像素，变换和设置变化先隐藏再核验。
+            - group [ref=e173]:
+              - generic "精确合成来源和版本" [ref=e174]
+          - button "打开ROI编辑" [ref=e175] [cursor=pointer]:
+            - generic [ref=e176]: 打开ROI编辑
+          - generic "合成瓦片画布" [ref=e178]
+```

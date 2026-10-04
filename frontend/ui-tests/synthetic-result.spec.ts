@@ -5,9 +5,9 @@ import {render,manifest,pixels} from './viewer-fixture';
 import {resultFixture,resultId} from '../test-fixtures/result';
 const bytes=readFileSync(new URL('./fixtures/result.png',import.meta.url)),hash=createHash('sha256').update(bytes).digest('hex');
 function gate(){let resolve:()=>void=()=>{throw Error('Uninitialized');};const promise=new Promise<void>(r=>{resolve=r;});return{promise,resolve};}
-async function setup(page:Page,state:{revoked?:boolean;corrupt?:boolean;delay?:Promise<void>;captured?:()=>void;tileDelay?:Promise<void>;tileCaptured?:()=>void}={},base:{revoked?:boolean}={}){
+async function setup(page:Page,state:{revoked?:boolean;corrupt?:boolean;delay?:Promise<void>;captured?:()=>void;tileDelay?:Promise<void>;tileCaptured?:()=>void;reject?:401|409|500}={},base:{revoked?:boolean}={}){
  const data=resultFixture(manifest('scan-qc'),hash);
- await page.route('**/synthetic-results/**',async r=>{const tile=r.request().url().includes('/tiles/');if(state.revoked){await r.fulfill({status:409,json:{code:'AI_RESULT_INVALIDATED'}});return;}if(tile){state.tileCaptured?.();if(state.tileDelay)await state.tileDelay;const b=Buffer.from(bytes);if(state.corrupt)b[40]^=1;await r.fulfill({body:b,contentType:'image/png',headers:{'X-Content-SHA256':hash,'X-Result-Epoch':data.epoch,'Cache-Control':'private, no-store'}});return;}state.captured?.();if(state.delay)await state.delay;await r.fulfill({json:data});});
+ await page.route('**/synthetic-results/**',async r=>{const tile=r.request().url().includes('/tiles/');if(state.reject){await r.fulfill({status:state.reject,json:{code:state.reject===401?'UNAUTHENTICATED':'AI_RESULT_INVALIDATED'}});return;}if(state.revoked){await r.fulfill({status:409,json:{code:'AI_RESULT_INVALIDATED'}});return;}if(tile){state.tileCaptured?.();if(state.tileDelay)await state.tileDelay;const b=Buffer.from(bytes);if(state.corrupt)b[40]^=1;await r.fulfill({body:b,contentType:'image/png',headers:{'X-Content-SHA256':hash,'X-Result-Epoch':data.epoch,'Cache-Control':'private, no-store'}});return;}state.captured?.();if(state.delay)await state.delay;await r.fulfill({json:data});});
  await page.route('**/roi?*',r=>r.fulfill({json:{requestId:manifest('scan-qc').content.requestId,scanId:'scan-qc',manifestHash:'c'.repeat(64),version:-1,actorId:'actor',calibration:null,items:[],historyOnly:false}}));
  await render(page,base);await expect.poll(async()=>(await pixels(page)).pink).toBeGreaterThan(500);
  await page.getByLabel('精确合成结果ID',{exact:true}).fill(resultId);await page.getByRole('button',{name:'核验并加载合成叠加',exact:true}).click();
@@ -40,4 +40,27 @@ test('delayed metadata then PNG render only after both exact responses complete'
  tile.resolve();await expect(panel.getByRole('status')).toContainText('合成强度叠加已核验');await expect(layer).toBeVisible();
  expect(await actualColors(page)).toEqual({a:[0,255,64,255],b:[240,15,64,255],width:64,height:64});
  await page.getByLabel('合成瓦片画布',{exact:true}).scrollIntoViewIfNeeded();await page.screenshot({path:info.outputPath('delayed-result-verified-pixels.png'),fullPage:true});
+});
+
+test('hide cancels pending toggle pixels and show requires fresh metadata and bytes',async({page},info)=>{
+ const state:{delay?:Promise<void>;captured?:()=>void;tileDelay?:Promise<void>;tileCaptured?:()=>void}={};
+ await setup(page,state);const layer=page.getByLabel('实际合成强度图层',{exact:true}),panel=page.getByRole('region',{name:'非诊断合成结果叠加'});
+ await expect(layer).toBeVisible();const oldUrl=await layer.locator('image').getAttribute('href');
+ await page.getByRole('button',{name:'隐藏合成叠加',exact:true}).click();await expect(layer).toHaveCount(0);await expect(panel.getByRole('status')).toContainText('叠加已隐藏并清空');
+ const metadata=gate(),metadataSeen=gate(),tile=gate(),tileSeen=gate();Object.assign(state,{delay:metadata.promise,captured:metadataSeen.resolve,tileDelay:tile.promise,tileCaptured:tileSeen.resolve});
+ await page.getByRole('button',{name:'显示合成叠加',exact:true}).click();await metadataSeen.promise;await expect(layer).toHaveCount(0);
+ metadata.resolve();await tileSeen.promise;await expect(layer).toHaveCount(0);
+ await page.getByRole('button',{name:'隐藏合成叠加',exact:true}).click();await expect(panel.getByRole('status')).toContainText('叠加已隐藏并清空');tile.resolve();
+ await expect(layer).toHaveCount(0);
+ const next=gate();state.captured=next.resolve;await page.getByRole('button',{name:'显示合成叠加',exact:true}).click();await next.promise;
+ await expect(layer).toBeVisible();await expect(layer.locator('image')).not.toHaveAttribute('href',oldUrl??'');
+ expect(await actualColors(page)).toEqual({a:[0,255,64,255],b:[240,15,64,255],width:64,height:64});
+ await page.getByLabel('合成瓦片画布',{exact:true}).scrollIntoViewIfNeeded();await page.screenshot({path:info.outputPath('toggle-reverified-pixels.png'),fullPage:true});
+});
+for(const reject of [401,409,500] as const)test(`show refusal ${reject} never revives previously delivered pixels`,async({page})=>{
+ const state:{reject?:401|409|500}={};await setup(page,state);const layer=page.getByLabel('实际合成强度图层',{exact:true});await expect(layer).toBeVisible();
+ await page.getByRole('button',{name:'隐藏合成叠加',exact:true}).click();await expect(layer).toHaveCount(0);state.reject=reject;
+ await page.getByRole('button',{name:'显示合成叠加',exact:true}).click();
+ await expect(page.getByRole('region',{name:'非诊断合成结果叠加'}).getByRole('alert').filter({hasText:reject===401?'登录已失效':'合成结果资格或依据版本已失效'})).toBeVisible();await expect(layer).toHaveCount(0);
+ await page.getByRole('button',{name:'取消合成叠加',exact:true}).click();await expect(layer).toHaveCount(0);
 });

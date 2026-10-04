@@ -3,6 +3,13 @@ import { createHash } from 'node:crypto';
 import { test, forbidden } from './viewer-fixture';
 import {safeResultBody,safeTaskFacts,safeUiErrors} from './result-diagnostics';
 test('accepted synthetic task renders exact result pixels and model revocation clears consumption', async ({page,browser,source},info)=>{
+  // CI 37173320165 reached actual pixels but exhausted 30s during toggle.
+  // This scenario includes model/task/result creation and revocation; requests stay bounded.
+  test.setTimeout(60_000);
+  const started=Date.now();
+  let previous=started;
+  const phase=(name:string)=>{const now=Date.now();console.log('T36_RESULT_PHASE '+JSON.stringify({phase:name,elapsedMs:now-started,sincePreviousMs:now-previous}));previous=now;};
+  phase('model-contract-start');
   const {scope,rid,headers,scanPath,scanId,viewerPath}=source;
   // T34: registry is metadata only; exact current source qualification never permits execution.
   const aiPath=`${scanPath}/${scanId}/ai`,modelsPath=`/api/requests/ai/scopes/${scope}/models`;
@@ -28,6 +35,7 @@ test('accepted synthetic task renders exact result pixels and model revocation c
   expect(changed.status(),await changed.text()).toBe(409);expect(await changed.json()).toMatchObject({code:'IDEMPOTENCY_KEY_REUSED'});
   await page.getByRole('button',{name:'核对此扫描AI适用契约',exact:true}).click();await page.getByRole('button',{name:`选择模型 ${modelId}`,exact:true}).click();await page.getByRole('button',{name:'核对当前扫描适用资料',exact:true}).click();await page.getByLabel('AI操作原因',{exact:true}).fill('Synthetic browser assessment');await page.getByRole('button',{name:'判定合成适用性（不执行）',exact:true}).click();await expect(page.getByRole('region',{name:'AI模型契约管理'}).getByRole('status')).toContainText('VALIDATION_ONLY_APPLICABLE');
   await page.screenshot({path:info.outputPath('real-service-synthetic-ai-contract.png'),fullPage:true});
+  phase('model-contract-complete');
   // T35: real PostgreSQL task/outbox, bounded local fixture and immutable non-diagnostic artifact.
   await page.getByRole('button',{name:'进入合成契约任务（非临床）',exact:true}).click();
   await page.getByLabel('合成任务操作原因',{exact:true}).fill('Synthetic technical task');
@@ -43,6 +51,7 @@ test('accepted synthetic task renders exact result pixels and model revocation c
   const artifact=await page.request.post(`${taskPath}/artifact`,{headers:headers()});expect(artifact.status(),await artifact.text()).toBe(200);expect(await artifact.text()).toContain('NON_DIAGNOSTIC_SYNTHETIC_CONTRACT_ONLY');
   const again=await page.request.post(`${taskPath}/artifact`,{headers:headers()});expect(again.status()).toBe(200);expect(await again.body()).toEqual(await artifact.body());
   await page.screenshot({path:info.outputPath('real-service-synthetic-worker.png'),fullPage:true});
+  phase('accepted-task-complete');
   // T36: actual immutable package and PNG from the accepted T35 artifact, over real OSD.
   await page.getByLabel('合成任务操作原因',{exact:true}).fill('Synthetic non diagnostic visual fixture');
   const taskFacts=safeTaskFacts(JSON.parse(await page.getByLabel('任务精确版本',{exact:true}).innerText()) as unknown);
@@ -64,6 +73,7 @@ test('accepted synthetic task renders exact result pixels and model revocation c
     console.log('T36_RESULT_CREATE_DIAGNOSTIC '+JSON.stringify(diagnostic));
     await info.attach('synthetic-result-create-diagnostic',{body:JSON.stringify(diagnostic),contentType:'application/json'});
   }
+  phase('result-create-complete');
   const resultCode=page.getByLabel('已确认合成结果ID',{exact:true});await expect(resultCode).toBeVisible();const visualId=await resultCode.innerText();
   const visualPath=`/api/requests/${rid}/synthetic-results/${visualId}`;
   const metadata=await page.request.get(visualPath);expect(metadata.status(),await metadata.text()).toBe(200);
@@ -75,6 +85,7 @@ test('accepted synthetic task renders exact result pixels and model revocation c
   expect((await manifestResponse).status(),'returned viewer manifest').toBe(200);
   await expect(page.getByRole('status').filter({hasText:'真实合成PNG已加载'})).toBeVisible();
   await expect.poll(async()=>source.canvas.evaluate(node=>{const c=node as HTMLCanvasElement;const ctx=c.getContext('2d');if(!ctx)return 0;const p=ctx.getImageData(0,0,c.width,c.height).data;let pink=0;for(let i=0;i<p.length;i+=16)if(p[i]>140&&p[i+2]>120&&p[i]>p[i+1]+15)pink++;return pink;})).toBeGreaterThan(500);
+  phase('returned-viewer-ready');
   await page.getByLabel('精确合成结果ID',{exact:true}).fill(visualId);const browserMetadata=page.waitForResponse(r=>new URL(r.url()).pathname===visualPath,{timeout:10_000});
   const browserTile=page.waitForResponse(r=>new URL(r.url()).pathname===`${visualPath}/tiles/0`,{timeout:10_000});
   await page.getByRole('button',{name:'核验并加载合成叠加',exact:true}).click();
@@ -86,15 +97,41 @@ test('accepted synthetic task renders exact result pixels and model revocation c
   await expect(overlayPanel.getByRole('alert').filter({hasText:/损坏|失效|失败/})).toHaveCount(0);
   await expect(overlayPanel.getByRole('status')).toContainText('合成强度叠加已核验');
   const resultLayer=page.getByLabel('实际合成强度图层',{exact:true});await expect(resultLayer).toBeVisible();
-  const resultPixel=await resultLayer.locator('image').evaluate(async node=>{const image=new Image();image.src=(node as SVGImageElement).href.baseVal;await image.decode();const canvas=document.createElement('canvas');canvas.width=64;canvas.height=64;const context=canvas.getContext('2d');if(!context)throw Error('Missing canvas');context.drawImage(image,0,0);return Array.from(context.getImageData(8,8,1,1).data);});
-  expect(resultPixel).toEqual([visual.intensities[0],255-visual.intensities[0],64,255]);
+  const readResultPixel=()=>resultLayer.locator('image').evaluate(async node=>{const image=new Image();image.src=(node as SVGImageElement).href.baseVal;await image.decode();const canvas=document.createElement('canvas');canvas.width=64;canvas.height=64;const context=canvas.getContext('2d');if(!context)throw Error('Missing canvas');context.drawImage(image,0,0);return Array.from(context.getImageData(8,8,1,1).data);});
+  expect(await test.step('decode first accepted PNG pixels',readResultPixel,{timeout:5000})).toEqual([visual.intensities[0],255-visual.intensities[0],64,255]);
+  phase('first-real-pixels-complete');
   await page.getByLabel('合成瓦片画布',{exact:true}).scrollIntoViewIfNeeded();await page.screenshot({path:info.outputPath('real-service-synthetic-result-overlay.png'),fullPage:true});
-  await page.getByRole('button',{name:'隐藏合成叠加',exact:true}).click();await expect(resultLayer).toHaveCount(0);await page.getByRole('button',{name:'显示合成叠加',exact:true}).click();await expect(resultLayer).toBeVisible();
+  phase('toggle-start');
+  await page.getByRole('button',{name:'隐藏合成叠加',exact:true}).click();await expect(resultLayer).toHaveCount(0);
+  const shownMetadata=page.waitForResponse(r=>new URL(r.url()).pathname===visualPath,{timeout:10_000});
+  const shownTile=page.waitForResponse(r=>new URL(r.url()).pathname===`${visualPath}/tiles/0`,{timeout:10_000});
+  let metadataStatus:number|null=null,tileStatus:number|null=null;
+  try {
+    await page.getByRole('button',{name:'显示合成叠加',exact:true}).click();
+    await Promise.all([
+      shownMetadata.then(async r=>{metadataStatus=r.status();phase('toggle-metadata-response');expect(metadataStatus,JSON.stringify(safeResultBody(await r.body()))).toBe(200);expect(await r.json()).toEqual(visual);}),
+      shownTile.then(async r=>{tileStatus=r.status();phase('toggle-png-response');expect(tileStatus).toBe(200);expect(createHash('sha256').update(await r.body()).digest('hex')).toBe(visual.tileHash);}),
+    ]);
+    await expect(overlayPanel.getByRole('status')).toContainText('合成强度叠加已核验',{timeout:5000});
+    await expect(resultLayer).toBeVisible({timeout:5000});
+    expect(await test.step('decode newly authorized toggle PNG pixels',readResultPixel,{timeout:5000})).toEqual([visual.intensities[0],255-visual.intensities[0],64,255]);
+    phase('toggle-real-pixels-complete');
+  } finally {
+    console.log('T36_RESULT_TOGGLE_DIAGNOSTIC '+JSON.stringify({elapsedMs:Date.now()-started,metadataStatus,tileStatus,layerCount:await resultLayer.count(),ui:safeUiErrors(await overlayPanel.getByRole('alert').allTextContents())}));
+  }
+  phase('model-revocation-start');
   expect((await page.request.post(`${modelsPath}/${modelId}/state`,{headers:headers(),data:{expectedVersion:1,state:'DISABLED',reason:'Synthetic recall'}})).status()).toBe(200);
   await expect(page.getByRole('alert').filter({hasText:'合成结果资格或依据版本已失效'})).toBeVisible({timeout:7000});await expect(resultLayer).toHaveCount(0);
   expect((await page.request.get(visualPath)).status()).toBe(409);expect((await page.request.get(`${visualPath}/tiles/0?epoch=${visual.epoch}`)).status()).toBe(409);
   expect((await page.request.get(`${aiPath}/assess/${aiId}`)).status()).toBe(409);expect((await page.request.post(`${aiPath}/assess`,{headers:aiHeaders,data:aiInput})).status()).toBe(409);
   expect((await page.request.post(`${taskPath}/artifact`,{headers:headers()})).status()).toBe(409);
   await expect(page.getByLabel('合成瓦片画布',{exact:true}).locator('canvas').first()).toBeVisible();
+  phase('model-revocation-complete');
   await forbidden(browser,[visualPath,`${visualPath}/tiles/0?epoch=${visual.epoch}`,modelsPath]);
+  phase('cross-role-rejection-complete');
+  const anonymous=await browser.newContext({baseURL:'http://127.0.0.1:5173'});
+  try {
+    for(const path of [visualPath,`${visualPath}/tiles/0?epoch=${visual.epoch}`])expect((await anonymous.request.get(path,{timeout:10_000})).status()).toBe(401);
+  } finally {await anonymous.close();}
+  phase('anonymous-rejection-complete');
 });

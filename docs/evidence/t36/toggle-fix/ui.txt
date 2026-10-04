@@ -1,0 +1,31 @@
+
+> pis-frontend@0.0.1 test:ui
+> playwright test --config playwright.ui.config.ts synthetic-result.spec.ts
+
+[WebServer] (node:366037) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:366050) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 9 tests using 1 worker
+
+(node:366070) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:366070) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 ui-tests/synthetic-result.spec.ts:16:1 › actual result PNG overlays real OSD with opacity blend rotation flip crop and cancellation (4.0s)
+  ✓  2 ui-tests/synthetic-result.spec.ts:26:1 › result model revocation clears delivered layer and corrupted PNG never renders (8.8s)
+  ✓  3 ui-tests/synthetic-result.spec.ts:27:1 › late result response after image switch is aborted and never enters the second image (3.0s)
+  ✓  4 ui-tests/synthetic-result.spec.ts:29:1 › QC removal destroys result resources and retains exactly one authorized history panel (4.9s)
+  ✓  5 ui-tests/synthetic-result.spec.ts:32:1 › delayed metadata then PNG render only after both exact responses complete (2.9s)
+  ✓  6 ui-tests/synthetic-result.spec.ts:45:1 › hide cancels pending toggle pixels and show requires fresh metadata and bytes (3.8s)
+  ✓  7 ui-tests/synthetic-result.spec.ts:60:44 › show refusal 401 never revives previously delivered pixels (3.6s)
+  ✓  8 ui-tests/synthetic-result.spec.ts:60:44 › show refusal 409 never revives previously delivered pixels (3.3s)
+  ✓  9 ui-tests/synthetic-result.spec.ts:60:44 › show refusal 500 never revives previously delivered pixels (3.4s)
+
+  9 passed (39.9s)
+npm notice
+npm notice New major version of npm available! 11.21.0 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice
