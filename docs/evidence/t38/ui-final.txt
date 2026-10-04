@@ -1,0 +1,27 @@
+
+> pis-frontend@0.0.1 test:ui
+> playwright test --config playwright.ui.config.ts synthetic-impact.spec.ts
+
+[WebServer] (node:432202) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:432215) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 5 tests using 1 worker
+
+(node:432235) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:432235) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 ui-tests/synthetic-impact.spec.ts:17:1 › explicit impact acknowledgement preserves historical report and screenshot (3.5s)
+  ✓  2 ui-tests/synthetic-impact.spec.ts:18:1 › dirty refresh and back require explicit clearing; conflict preserves input (3.8s)
+  ✓  3 ui-tests/synthetic-impact.spec.ts:19:1 › uncertain review uses identical key and body with controlled delayed replay (3.3s)
+  ✓  4 ui-tests/synthetic-impact.spec.ts:20:1 › cancelled delayed impact cannot reopen old history after return (2.6s)
+  ✓  5 ui-tests/synthetic-impact.spec.ts:21:1 › cancelled write wait preserves exact intent and late response cannot clear new retry (3.1s)
+
+  5 passed (18.3s)
+npm notice
+npm notice New major version of npm available! 11.21.0 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice

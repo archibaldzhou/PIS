@@ -49,4 +49,29 @@ public class SyntheticDecisionService {
    }
   });
  }
+ public enum ReviewAction { ACKNOWLEDGE, DEFER }
+ public record ReviewCommand(@NotNull UUID confirmedCaseId,@NotNull UUID decisionId,@NotNull @Min(-1) Long expectedVersion,@NotBlank @Pattern(regexp="[a-f0-9]{64}") String snapshotHash,@NotNull ReviewAction action,@NotBlank @Size(max=500) String reason,@AssertTrue boolean confirmed){}
+ public record ImpactSnapshot(UUID decisionId,UUID resultId,String epoch,AiResultService.Validity validity,UUID currentRevisionId,long assignmentVersion,boolean reportFrozen,boolean reportReady){}
+ public record ImpactReview(UUID id,long version,String snapshotHash,ReviewAction action,String reason,UUID actorId,OffsetDateTime recordedAt){}
+ public record Impact(UUID caseId,Event decision,ImpactSnapshot snapshot,long version,boolean sourceValid,boolean consumable,boolean pendingReview,List<ImpactReview> history,boolean executionAllowed){}
+ private Event event(UUID id,UUID decision){var rows=jdbc.query("SELECT * FROM report_result_decision WHERE case_id=? AND id=?",this::map,id,decision);if(rows.isEmpty())throw new ApiException(HttpStatus.NOT_FOUND,"AI_DECISION_NOT_FOUND","Synthetic reference unavailable");return rows.getFirst();}
+ private long impactVersion(UUID decision){var rows=jdbc.queryForList("SELECT version FROM report_impact_head WHERE decision_id=?",Long.class,decision);return rows.isEmpty()?-1:rows.getFirst();}
+ private Impact impactNow(UUID id,UUID decision){var c=context(id);var e=event(id,decision);var validity=results.validity(c.requestId(),e.resultId());var target=reports.current(id);boolean signed=frozen(id);String epoch=com.pis.scan.ScanFormat.sha(json.writeValueAsString(List.of(e.id(),validity.epoch(),target==null?"NONE":target.id(),c.assignmentVersion(),signed,c.ready())).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+  var snapshot=new ImpactSnapshot(e.id(),e.resultId(),epoch,validity,target==null?null:target.id(),c.assignmentVersion(),signed,c.ready());
+  var history=jdbc.query("SELECT * FROM report_impact_review WHERE decision_id=? ORDER BY version DESC LIMIT 100",(r,i)->new ImpactReview(r.getObject("id",UUID.class),r.getLong("version"),r.getString("snapshot_hash"),ReviewAction.valueOf(r.getString("action")),r.getString("reason"),r.getObject("actor_id",UUID.class),r.getObject("recorded_at",OffsetDateTime.class)),decision);
+  boolean current=validity.reasons().isEmpty()&&validity.reference().invalidReason()==null;
+  boolean acknowledged=!history.isEmpty()&&history.getFirst().snapshotHash().equals(epoch)&&history.getFirst().action()==ReviewAction.ACKNOWLEDGE;
+  return new Impact(id,e,snapshot,impactVersion(decision),current,current&&c.ready()&&e.action()==Action.ACCEPT_REFERENCE&&target!=null&&target.id().equals(e.adoptedRevisionId()),!current&&!acknowledged,history,false);
+ }
+ public Impact impact(UUID id,UUID decision){return tx.execute(t->{var v=impactNow(id,decision);audit.append(context(id).hospitalId(),"AI_IMPACT_READ_V1","SYNTHETIC_REPORT_DECISION",decision,null,v.decision().version());return v;});}
+ /** Explicit current consumption: history responses are never a consumable reference. */
+ public Event consumeReference(UUID id,UUID decision){return tx.execute(t->{var v=impactNow(id,decision);if(!v.consumable())throw conflict("AI_REFERENCE_INVALIDATED");authorized(id,v.decision().resultId());audit.append(context(id).hospitalId(),"AI_REFERENCE_CONSUME_V1","SYNTHETIC_REPORT_DECISION",decision,null,v.decision().version());return v.decision();});}
+ public IdempotentCommands.Result reviewImpact(UUID id,UUID decision,ReviewCommand input,String key){var errors=validator.validate(input);if(!errors.isEmpty())throw new ConstraintViolationException(errors);if(!id.equals(input.confirmedCaseId())||!decision.equals(input.decisionId()))throw conflict("AI_DECISION_BINDING");var initial=context(id);
+  return commands.execute(initial.hospitalId(),"AI_IMPACT_REVIEW_V1",key,Map.of("case",id,"decision",decision,"command",input),new IdempotentCommands.Work(){
+   public void authorize(CurrentActor.Actor actor){context(id);event(id,decision);}
+   public void authorizeReplay(CurrentActor.Actor actor,CommandReceipt receipt){var v=impactNow(id,decision);if(!v.snapshot().epoch().equals(input.snapshotHash()))throw conflict("AI_IMPACT_CHANGED");if(jdbc.queryForObject("SELECT count(*) FROM report_impact_review WHERE id=? AND decision_id=?",Long.class,receipt.resourceId(),decision)!=1)throw conflict("AI_DECISION_BINDING");}
+   public IdempotentCommands.Mutation mutate(CurrentActor.Actor actor){var v=impactNow(id,decision);if(v.sourceValid()||!v.snapshot().epoch().equals(input.snapshotHash()))throw conflict("AI_IMPACT_CHANGED");jdbc.update("INSERT INTO report_impact_head(decision_id) VALUES(?) ON CONFLICT DO NOTHING",decision);if(jdbc.update("UPDATE report_impact_head SET version=version+1 WHERE decision_id=? AND version=? AND version<99",decision,input.expectedVersion())!=1)throw conflict("AI_IMPACT_CONFLICT");UUID eventId=UUID.randomUUID();long next=input.expectedVersion()+1;jdbc.update("INSERT INTO report_impact_review(id,decision_id,case_id,result_id,version,snapshot_hash,snapshot,action,reason,actor_id) VALUES(?,?,?,?,?,?,?::jsonb,?,?,?)",eventId,decision,id,v.decision().resultId(),next,input.snapshotHash(),json.writeValueAsString(v.snapshot()),input.action().name(),input.reason(),actor.id());return new IdempotentCommands.Mutation(new CommandReceipt(200,"SYNTHETIC_IMPACT_REVIEW",eventId,next),input.expectedVersion()<0?null:input.expectedVersion());}
+  });
+ }
+
 }

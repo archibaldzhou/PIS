@@ -194,6 +194,13 @@ public class DigitalQcService {
             audit.append(c.hospital(),"ROI_HISTORY_V1","SCAN_IMPORT",scan,null,j.version());
             return new ConsumerBinding(c.hospital(),request,scan,j.slideId(),j.objectId(),j.objectHash(),j.version(),head(scan).version(),actor.id(),actor.authVersion());});
     }
+    public record PublicationStatus(long scanHead,long qcVersion,String state,String reason,boolean current,String basis) {}
+    /** History facts, never permission to consume pixels. Request lock makes the facts coherent. */
+    public PublicationStatus publicationStatus(UUID request,UUID scan) {
+        return tx.execute(t->{var c=context(request,scan);var h=head(scan);return new PublicationStatus(
+            jdbc.queryForObject("SELECT head FROM scan_series WHERE slide_id=?",Long.class,c.job().slideId()),
+            h.version(),h.state(),publicationInvalid(c,h),h.state().equals("PUBLISHED")&&publicationInvalid(c,h).isEmpty(),scans.currentSourceBasis(request)+":"+c.job().version()+":"+c.job().invalidReason());});
+    }
     public StorageProvider.Slice consume(UUID request,UUID scan,long publicationVersion,String range) {
         var before=tx.execute(s->{var c=consumable(request,scan,publicationVersion);audit.append(c.hospital(),"DIGITAL_QC_CONSUME_ATTEMPT_V1","SCAN_IMPORT",scan,null,publicationVersion);return c.job();});
         var bytes=storage.bytes(request,before.objectId(),range,"DOWNLOAD");

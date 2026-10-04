@@ -1,0 +1,66 @@
+
+> pis-frontend@0.0.1 test:ui
+> playwright test --config playwright.ui.config.ts synthetic-impact.spec.ts
+
+[WebServer] (node:426398) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:426411) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 4 tests using 1 worker
+
+(node:426431) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:426431) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 ui-tests/synthetic-impact.spec.ts:17:1 › explicit impact acknowledgement preserves historical report and screenshot (3.7s)
+  ✘  2 ui-tests/synthetic-impact.spec.ts:18:1 › dirty refresh and back require explicit clearing; conflict preserves input (3.2s)
+(node:426613) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:426613) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  3 ui-tests/synthetic-impact.spec.ts:19:1 › uncertain review uses identical key and body with controlled delayed replay (3.0s)
+  ✓  4 ui-tests/synthetic-impact.spec.ts:20:1 › cancelled delayed impact cannot reopen old history after return (2.3s)
+
+
+  1) ui-tests/synthetic-impact.spec.ts:18:1 › dirty refresh and back require explicit clearing; conflict preserves input
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: getByRole('alert')
+    Expected substring: "Synthetic snapshot changed"
+    Error: strict mode violation: getByRole('alert') resolved to 5 elements:
+        1) <div role="alert" data-show="true" class="ant-alert ant-alert-warning ant-alert-outlined ant-alert-with-description css-var-_r_0_ css-dev-only-do-not-override-oc1rc0">…</div> aka getByRole('alert').filter({ hasText: '合成数据开发工作流 · 非临床使用采用新编开发规格。申请功能需要服务端显式开启和独立授权。请勿输入真实患者资料。' })
+        2) <div role="alert" data-show="true" class="ant-alert ant-alert-warning ant-alert-outlined ant-alert-with-description ant-alert-no-icon css-var-_r_0_ css-dev-only-do-not-override-oc1rc0">…</div> aka getByRole('alert').filter({ hasText: '合成报告草稿 · 仅当前已领取的合格医生可编辑人工输入，保存受病例归属和QC门禁约束；无复核、签署或发送。' })
+        3) <div role="alert" data-show="true" class="ant-alert ant-alert-warning ant-alert-outlined ant-alert-no-icon css-var-_r_0_ css-dev-only-do-not-override-oc1rc0">…</div> aka getByRole('alert').filter({ hasText: '仅人工输入合成草稿 · 无自动诊断、复核、签署或发送' })
+        4) <div role="alert" data-show="true" class="ant-alert ant-alert-warning ant-alert-outlined ant-alert-no-icon css-var-_r_0_ css-dev-only-do-not-override-oc1rc0">…</div> aka getByRole('alert').filter({ hasText: '历史仅供追溯；知悉不恢复失效结果，不修改或签署报告。' })
+        5) <div role="alert" data-show="true" class="ant-alert ant-alert-warning ant-alert-outlined ant-alert-no-icon css-var-_r_0_ css-dev-only-do-not-override-oc1rc0">…</div> aka getByRole('alert').filter({ hasText: '仅授权历史；不可作为当前有效引用消费' })
+
+    Call log:
+      - Expect "toContainText" with timeout 5000ms
+      - waiting for getByRole('alert')
+
+
+      16 | async function setup(page:Page){await base(page);await page.route('**/synthetic-decisions?*',r=>r.fulfill({json:{...view(),history:[entry]}}));await page.route('**/impact',r=>r.fulfill({json:impact()}));await page.getByRole('button',{name:'核验人工处理依据'}).click();await page.getByRole('button',{name:`查看失效影响 ${decision}`}).click();await expect(page.getByText('待人工复核',{exact:true})).toBeVisible();}
+      17 | test('explicit impact acknowledgement preserves historical report and screenshot',async({page},info)=>{await setup(page);let writes=0;await page.route('**/impact-reviews',r=>{writes++;return r.fulfill({json:{receipt:{status:200,resourceType:'SYNTHETIC_IMPACT_REVIEW',resourceId:'review',version:0},replayed:false}});});await page.getByLabel('影响复核动作').click();await page.getByRole('option',{name:'已知悉失效并保留历史',exact:true}).click();await page.getByLabel('影响复核理由').fill('Synthetic invalidation reviewed; keep original report');await page.getByRole('button',{name:'确认影响快照'}).click();await page.getByRole('button',{name:'保留并返回',exact:true}).click();expect(writes).toBe(0);await page.getByText('精确失效依赖与原目标版本').click();await page.screenshot({path:info.outputPath('synthetic-impact-history.png'),fullPage:true});await page.getByRole('button',{name:'确认影响快照'}).click();await page.getByRole('button',{name:'提交此快照复核'}).click();await expect.poll(()=>writes).toBe(1);await expect(page.getByLabel('影响复核理由')).toHaveValue('');await expect(page.getByText('仅授权历史；不可作为当前有效引用消费',{exact:true})).toBeVisible();});
+    > 18 | test('dirty refresh and back require explicit clearing; conflict preserves input',async({page})=>{await setup(page);await page.getByLabel('影响复核理由').fill('Synthetic unsaved reason');await page.getByRole('button',{name:'返回人工决定'}).click();await page.getByRole('button',{name:'保留复核表单'}).click();await expect(page.getByLabel('影响复核理由')).toHaveValue('Synthetic unsaved reason');await page.route('**/impact-reviews',r=>r.fulfill({status:409,json:{code:'AI_IMPACT_CHANGED',detail:'Synthetic snapshot changed'}}));await page.getByRole('button',{name:'确认影响快照'}).click();await page.getByRole('button',{name:'提交此快照复核'}).click();await expect(page.getByRole('alert')).toContainText('Synthetic snapshot changed');await expect(page.getByLabel('影响复核理由')).toHaveValue('Synthetic unsaved reason');await page.getByRole('button',{name:'重新核验失效影响'}).click();await page.getByRole('button',{name:'清除并继续'}).click();await expect(page.getByLabel('影响复核理由')).toHaveValue('');});
+         |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              ^
+      19 | test('uncertain review uses identical key and body with controlled delayed replay',async({page})=>{await setup(page);const calls:{key:string;body:unknown}[]=[];let release=()=>{};const gate=new Promise<void>(r=>{release=r;});await page.route('**/impact-reviews',async r=>{calls.push({key:r.request().headers()['idempotency-key'],body:r.request().postDataJSON() as unknown});if(calls.length===1)await r.abort('failed');else{await gate;await r.fulfill({json:{receipt:{status:200,resourceType:'SYNTHETIC_IMPACT_REVIEW',resourceId:'review',version:0},replayed:true}});}});await page.getByLabel('影响复核理由').fill('Synthetic defer');await page.getByRole('button',{name:'确认影响快照'}).click();await page.getByRole('button',{name:'提交此快照复核'}).click();await page.getByRole('button',{name:'原键确认影响复核'}).click();await expect.poll(()=>calls.length).toBe(2);expect(calls[1]).toEqual(calls[0]);await expect(page.getByRole('button',{name:'返回人工决定'})).toBeDisabled();release();await expect(page.getByLabel('影响复核理由')).toHaveValue('');expect(calls).toHaveLength(2);});
+      20 | test('cancelled delayed impact cannot reopen old history after return',async({page})=>{await setup(page);let captured=()=>{},release=()=>{},finished=()=>{};const seen=new Promise<void>(r=>{captured=r;}),gate=new Promise<void>(r=>{release=r;}),done=new Promise<void>(r=>{finished=r;});await page.route('**/impact',async r=>{captured();await gate;await r.fulfill({json:impact()});finished();});await page.getByRole('button',{name:'重新核验失效影响'}).click();await seen;await page.getByRole('button',{name:'取消等待影响'}).click();await page.getByRole('button',{name:'返回人工决定'}).click();await expect(page.getByLabel('人工处理结果ID',{exact:true})).toBeVisible();release();await done;await expect(page.getByLabel('合成引用失效复核',{exact:true})).toHaveCount(0);await expect(page.getByLabel('人工处理结果ID',{exact:true})).toBeVisible();});
+      21 |
+        at /workspace/PIS/frontend/ui-tests/synthetic-impact.spec.ts:18:654
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/synthetic-impact-dirty-ref-9e0fe-ng-conflict-preserves-input/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/synthetic-impact-dirty-ref-9e0fe-ng-conflict-preserves-input/error-context.md
+
+  1 failed
+    ui-tests/synthetic-impact.spec.ts:18:1 › dirty refresh and back require explicit clearing; conflict preserves input
+  3 passed (15.6s)
+npm notice
+npm notice New major version of npm available! 11.21.0 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice

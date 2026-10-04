@@ -102,6 +102,7 @@ public class ViewerService {
         });
     }
     public Manifest manifest(UUID request,UUID scan,long publication){var b=authorize(request,scan,publication,"VIEWER_MANIFEST");var content=stored(scan);bind(content,b);budget(b,0);unchanged(b,"VIEWER_MANIFEST");return new Manifest(content,publication,"SYNTHETIC_RGB_ONLY","UNAVAILABLE_NO_PHYSICAL_SCALE");}
+ public com.pis.digitalqc.DigitalQcService.PublicationStatus publicationStatus(UUID request,UUID scan){return qc.publicationStatus(request,scan);}
  public boolean publicationCurrent(UUID request,UUID scan,long version){var v=qc.view(request,scan);return v.currentScan()&&v.version()==version&&v.effectiveState().equals("PUBLISHED_SYNTHETIC_CONTRACT")&&v.invalidReason().isEmpty();}
     public Content annotationHistory(UUID request,UUID scan){var b=qc.authorizeAnnotationHistory(request,scan);var c=stored(scan);if(!c.hospitalId().equals(b.hospitalId())||!c.requestId().equals(b.requestId())||!c.scanId().equals(b.scanId())||!c.slideId().equals(b.slideId())||!c.objectId().equals(b.objectId())||!c.objectHash().equals(b.objectHash()))throw conflict("VIEWER_BINDING");return c;}
     public Binary tile(UUID request,UUID scan,long publication,int level,int x,int y,boolean thumbnail){

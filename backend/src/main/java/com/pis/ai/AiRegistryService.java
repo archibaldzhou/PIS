@@ -92,6 +92,21 @@ public class AiRegistryService {
   var cal=roi.view(request,scan,d.publicationVersion()).calibration();if(!Objects.equals(d.calibrationVersion(),cal==null?null:cal.version()))return false;
   return expected.equals(workerBinding(request,scan,assessment));
  });}
+ public record DependencyStatus(String epoch,List<String> reasons,long modelHead,long modelStateVersion,String modelState,long scanHead,long qcVersion,String qcState){}
+ /** Versioned facts for authorized impact history. Never grants execution or consumes revoked pixels. */
+ public DependencyStatus dependencyStatus(UUID request,UUID scan,WorkerBinding expected){return tx.execute(t->{
+  var image=viewer.annotationHistory(request,scan);var c=scope(requests.authorizedScope(request).id(),"ASSESS");var d=expected.decision();
+  if(!request.equals(d.requestId())||!scan.equals(d.scanId())||!c.id().equals(d.scopeId()))throw missing();
+  var q=viewer.publicationStatus(request,scan);var m=model(c.id(),d.modelVersionId());var p=profile(scan);var reasons=new ArrayList<String>();
+  if(!m.state().equals("VALIDATION_ONLY"))reasons.add("MODEL_DISABLED_OR_RETIRED");
+  if(m.stateVersion()!=d.stateVersion()||m.head()!=d.modelHead()||!m.metadata().digest().equals(d.modelDigest()))reasons.add("MODEL_VERSION_CHANGED");
+  if(q.scanHead()!=scans.detail(request,scan).ordinal())reasons.add("SCAN_RESCANNED");
+  if(!q.current()||q.qcVersion()!=d.publicationVersion())reasons.add("QC_OR_IDENTITY_CHANGED");
+  if(!image.manifestHash().equals(d.manifestHash())||p==null||p.version()!=d.profileVersion())reasons.add("INPUT_VERSION_CHANGED");
+  var calibration=roi.calibrationHistory(request,scan);if(!Objects.equals(d.calibrationVersion(),calibration==null?null:calibration.version()))reasons.add("CALIBRATION_CHANGED");
+  String epoch=com.pis.scan.ScanFormat.sha(json.writeValueAsString(List.of(expected,m,q,p==null?"MISSING":p,calibration==null?"UNKNOWN":calibration)).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+  return new DependencyStatus(epoch,List.copyOf(reasons),m.head(),m.stateVersion(),m.state(),q.scanHead(),q.qcVersion(),q.state());
+ });}
  public void authorizeTaskHistory(UUID request,UUID scan){tx.executeWithoutResult(t->{viewer.annotationHistory(request,scan);scope(requests.authorizedScope(request).id(),"ASSESS");});}
  private static IdempotentCommands.Mutation mutation(String type,UUID id,long version){return new IdempotentCommands.Mutation(new CommandReceipt(200,type,id,version),null);}
  private static ApiException missing(){return problem(HttpStatus.NOT_FOUND,"AI_NOT_FOUND");}

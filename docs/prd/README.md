@@ -72,3 +72,5 @@
 - T36：[合成结果与阅片叠加PRD](development-synthetic-result-v1.md)，用户授权合成开发，已查看UI-045实际原型；[ADR0025](../adr/0025-immutable-synthetic-result-overlay.md)、[接口及验证边界](../api/t36-synthetic-results.md)。只消费T35已接受技术产物，不执行模型、不自动写入报告。
 
 - T37：[医生人工处理合成结果与报告引用PRD](development-synthetic-decision-v1.md)，已查看UI-046实际像素；仅不可变非诊断引用及人工理由，无自动诊断/签署。
+
+- [T38 合成结果失效与人工复核](development-synthetic-impact-v1.md)：用户授权开发，非临床批准。

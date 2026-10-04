@@ -9,6 +9,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class PostgresMigrationTest {
+    @Test void versionThirtyFiveAddsOnlyEmptyExplicitHumanDecisionTables() throws Exception {
+        try(var database=new PostgresTestDatabase()) {
+            database.configuration("classpath:db/migration").target("34").load().migrate();
+            var latest=database.configuration("classpath:db/migration").target("35").load();
+            assertThat(latest.migrate().migrationsExecuted).isEqualTo(1);
+            assertThat(latest.info().current().getVersion().toString()).isEqualTo("35");
+            assertThat(latest.validateWithResult().validationSuccessful).isTrue();
+            assertThat(latest.migrate().migrationsExecuted).isZero();
+            try(var c=database.connection();var st=c.createStatement();var rows=st.executeQuery("SELECT (SELECT count(*) FROM report_impact_head)+(SELECT count(*) FROM report_impact_review)+(SELECT count(*) FROM ai_result)+(SELECT count(*) FROM report_revision)")){assertThat(rows.next()).isTrue();assertThat(rows.getLong(1)).isZero();}
+        }
+    }
     @Test void versionThirtyFourAddsOnlyEmptyExplicitHumanDecisionTables() throws Exception {
         try(var database=new PostgresTestDatabase()) {
             database.configuration("classpath:db/migration").target("33").load().migrate();
@@ -111,13 +122,13 @@ class PostgresMigrationTest {
     void initializesAnEmptySchemaAndIsRepeatableWithoutReapplyingMigrations() throws Exception {
         try (var database = new PostgresTestDatabase()) {
             var flyway = database.configuration("classpath:db/migration").load();
-            assertThat(flyway.migrate().migrationsExecuted).isEqualTo(34);
-            assertThat(flyway.info().current().getVersion().toString()).isEqualTo("34");
+            assertThat(flyway.migrate().migrationsExecuted).isEqualTo(35);
+            assertThat(flyway.info().current().getVersion().toString()).isEqualTo("35");
             // Explicit production baseline: a new migration requires deliberate contract review.
             assertThat(java.util.Arrays.stream(flyway.info().applied())
                 .filter(migration -> migration.getVersion() != null)
                 .map(migration -> migration.getVersion().toString()).toList())
-                .containsExactlyElementsOf(java.util.stream.IntStream.rangeClosed(1, 34)
+                .containsExactlyElementsOf(java.util.stream.IntStream.rangeClosed(1, 35)
                     .mapToObj(Integer::toString).toList());
             assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
             assertThat(flyway.migrate().migrationsExecuted).isZero();

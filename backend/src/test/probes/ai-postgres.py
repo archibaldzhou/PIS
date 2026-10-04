@@ -14,7 +14,7 @@ try:
   if 'PostgreSQL init process complete' in run(['docker','logs',name]).stdout and run(['docker','exec',name,'pg_isready','-U','postgres']).returncode==0:break
   time.sleep(.2)
  migrations=sorted((root/'backend/src/main/resources/db/migration').glob('V*__*.sql'),key=lambda p:int(p.name.split('__')[0][1:]))
- assert [int(p.name.split('__')[0][1:]) for p in migrations]==list(range(1,35))
+ assert [int(p.name.split('__')[0][1:]) for p in migrations]==list(range(1,36))
  for p in migrations:sql('BEGIN;'+p.read_text().replace('${flyway:defaultSchema}','public')+'COMMIT;')
  ids={k:str(uuid.uuid4()) for k in ['h','p','s','r','c','u','k','m','campus','dept','scope','scheme','b','o','output','control','pass','result','revoke','a','trace']}
  def fmt(s):return s.format(**ids)
@@ -181,6 +181,19 @@ try:
  sql(insert.replace("'"+adopted+"'","'"+original+"'"),False)
  sql(insert);sql("UPDATE report_result_decision SET reason='Changed'",False);sql('DELETE FROM report_result_decision',False)
  assert sql('SELECT count(*) FROM report_result_decision')=='1'
+ # V35: immutable, exact-decision impact reviews; current validity is application checked.
+ import json
+ review=str(uuid.uuid4());snapshot=json.dumps({'decisionId':event,'resultId':result_id,'epoch':'c'*64})
+ sql(f"INSERT INTO report_impact_head(decision_id) VALUES('{event}')")
+ cas=f"UPDATE report_impact_head SET version=version+1 WHERE decision_id='{event}' AND version=-1 RETURNING version"
+ with ThreadPoolExecutor(max_workers=2) as pool:winners=list(pool.map(lambda _:sql(cas),range(2)))
+ assert sorted('0' in x.splitlines() for x in winners)==[False,True]
+ statement=f"INSERT INTO report_impact_review(id,decision_id,case_id,result_id,version,snapshot_hash,snapshot,action,reason,actor_id) VALUES('{review}','{event}','{ids['k']}','{result_id}',0,repeat('c',64),'{snapshot}'::jsonb,'ACKNOWLEDGE','Synthetic known invalid','{ids['u']}')"
+ sql(statement.replace("repeat('c',64)","repeat('d',64)"),False)
+ sql('BEGIN;'+statement+';ROLLBACK;');assert sql('SELECT count(*) FROM report_impact_review')=='0'
+ sql(statement);sql(statement,False);sql("UPDATE report_impact_review SET reason='Changed'",False);sql('DELETE FROM report_impact_review',False)
+ assert sql('SELECT count(*) FROM report_result_decision')=='1'
+ print('PASS V35: impact snapshot binding, exclusive CAS, rollback, immutable review and untouched original decision')
  print('PASS V34: exact result/hash/manual-fields binding, exclusive head CAS, rollback, append-only decisions')
  print('PASS PG17 V1-V33: result accepted-source/version/purpose binding, unique identity, READY CAS, rollback and immutable history; prior task/storage/scan/QC/ROI/AI invariants. SQL-only, not application E2E.')
 finally:
