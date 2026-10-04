@@ -1,3 +1,4 @@
+import { SyntheticTasks } from './features/ai/SyntheticTasks';
 import { AiRegistry } from './features/ai/AiRegistry';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Alert, Button, Modal, Select, Space, Tag, Typography } from 'antd';
@@ -32,13 +33,14 @@ import { Grossing } from './features/grossing/Grossing';
 import { Labels } from './features/labels/Labels';
 import { Reception } from './features/specimen/Reception';
 
-const pages = { requests: '申请单查询', registration: '病理申请录入', reception: '标本接收与异常', labels: '标签打印与重打', grossing: '取材记录与取材盒', technical: '技术任务与交接', materials: '蜡块与玻片谱系', quality: '技术QC与隔离', worklist: '工作列表与追踪', diagnosis: '诊断分配与领取', report: '报告草稿', review: '复核与模拟签署', output: '固定PDF与打印记录', amendments: '报告补充与更正', delivery: '本地投递与回执', frozen: '术中冰冻工作站', cytology: '细胞学制备工作站', staining: '特殊染色与IHC批次', consultation: '院内会诊与复阅', archive: '归档借阅与盘点', statistics: '工作量TAT与QC统计', storage: '原件版本与容量', scan: '扫描任务与导入', digitalqc: '数字扫描QC', viewer: '合成数字阅片器', ai: 'AI模型与适用契约' };
+const pages = { requests: '申请单查询', registration: '病理申请录入', reception: '标本接收与异常', labels: '标签打印与重打', grossing: '取材记录与取材盒', technical: '技术任务与交接', materials: '蜡块与玻片谱系', quality: '技术QC与隔离', worklist: '工作列表与追踪', diagnosis: '诊断分配与领取', report: '报告草稿', review: '复核与模拟签署', output: '固定PDF与打印记录', amendments: '报告补充与更正', delivery: '本地投递与回执', frozen: '术中冰冻工作站', cytology: '细胞学制备工作站', staining: '特殊染色与IHC批次', consultation: '院内会诊与复阅', archive: '归档借阅与盘点', statistics: '工作量TAT与QC统计', storage: '原件版本与容量', scan: '扫描任务与导入', digitalqc: '数字扫描QC', viewer: '合成数字阅片器', ai: 'AI模型与适用契约', aitasks: '合成契约任务' };
 type Page = keyof typeof pages;
 export function WorkflowWorkspace({ onClose, onLogout, onExpired, api = accessionApi }: {
   onClose: () => void; onLogout: () => void; onExpired: () => void; api?: AccessionApi;
 }) {
   const [page, setPage] = useState<Page>('requests');
   const [qcScan, setQcScan] = useState('');
+  const [taskAssessment,setTaskAssessment]=useState('');
   const [scope, setScope] = useState('');
   const [record, setRecord] = useState<RequestSummary>();
   const [dirty, setDirty] = useState(false);
@@ -130,9 +132,12 @@ export function WorkflowWorkspace({ onClose, onLogout, onExpired, api = accessio
       {scope && page === 'quality' && (record ? <Quality key={record.id} requestId={record.id} onDirty={() => setDirty(true)} onClean={() => setDirty(false)} onPending={setUnresolved} onExpired={onExpired} /> : <Alert type="info" title="请从已接收申请详情进入技术QC" />)}
       {scope && page === 'frozen' && (record ? <Frozen key={record.id} requestId={record.id} onDirty={() => setDirty(true)} onClean={() => setDirty(false)} onPending={setUnresolved} onExpired={onExpired} /> : <Alert type="info" title="请从已接收申请详情进入术中冰冻" />)}
       {scope && page === 'cytology' && (record ? <ReadPanel state={detailState}>{data => <Cytology key={data.id} requestId={data.id} containers={data.containers} onDirty={() => setDirty(true)} onClean={() => setDirty(false)} onPending={setUnresolved} onExpired={onExpired} />}</ReadPanel> : <Alert type="info" title="请从已接收申请详情进入细胞学制备" />)}
+      {scope && page === 'viewer' && record && qcScan && <Button onClick={()=>{setTaskAssessment('');navigate('aitasks',record);}}>此扫描合成任务队列</Button>}
+      {scope && page === 'aitasks' && record && qcScan && <Button onClick={()=>navigate('ai',record)}>返回当前扫描AI契约</Button>}
       {scope && page === 'viewer' && record && qcScan && <Button onClick={() => navigate('ai', record)}>核对此扫描AI适用契约</Button>}
       {scope && page === 'ai' && record && qcScan && <Button onClick={() => navigate('viewer', record)}>返回当前扫描阅片</Button>}
-      {scope && page === 'ai' && <AiRegistry key={`${scope}:${record?.id}:${qcScan}`} scopeId={scope} requestId={record?.id} scanId={qcScan || undefined} onDirty={() => setDirty(true)} onClean={() => setDirty(false)} onPending={setUnresolved} onExpired={onExpired} />}
+      {scope && page === 'aitasks' && (record && qcScan ? <SyntheticTasks key={`${record.id}:${qcScan}`} requestId={record.id} scanId={qcScan} assessmentId={taskAssessment||undefined} onDirty={()=>setDirty(true)} onClean={()=>setDirty(false)} onPending={setUnresolved} onExpired={onExpired}/> : <Alert type="info" title="请从当前扫描适用判定进入合成任务"/>)}
+      {scope && page === 'ai' && <AiRegistry key={`${scope}:${record?.id}:${qcScan}`} scopeId={scope} requestId={record?.id} scanId={qcScan || undefined} onTasks={id=>{setTaskAssessment(id);navigate('aitasks',record);}} onDirty={() => setDirty(true)} onClean={() => setDirty(false)} onPending={setUnresolved} onExpired={onExpired} />}
       {scope && page === 'viewer' && (record && qcScan ? <TileViewer key={`${record.id}:${qcScan}`} requestId={record.id} scanId={qcScan} onExpired={onExpired} onDirty={() => setDirty(true)} onClean={() => setDirty(false)} onPending={setUnresolved} /> : <Alert type="info" title="请从当前已发布数字QC进入合成阅片" />)}
       {scope && page === 'digitalqc' && (record && qcScan ? <DigitalQc key={`${record.id}:${qcScan}`} requestId={record.id} scanId={qcScan} onViewer={() => leave(() => { setDirty(false); setPage('viewer'); })} onDirty={() => setDirty(true)} onClean={() => setDirty(false)} onPending={setUnresolved} onExpired={onExpired} /> : <Alert type="info" title="请从精确扫描任务进入数字QC" />)}
       {scope && page === 'scan' && (record ? <Scan key={record.id} requestId={record.id} onQc={id => leave(() => { setQcScan(id); setDirty(false); setPage('digitalqc'); })} onDirty={() => setDirty(true)} onClean={() => setDirty(false)} onPending={setUnresolved} onExpired={onExpired} /> : <Alert type="info" title="请从已接收申请详情进入扫描导入" />)}

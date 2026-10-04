@@ -1,0 +1,38 @@
+package com.pis.ai;
+import com.pis.PisApplication;
+import com.pis.accession.*;
+import com.pis.audit.*;
+import com.pis.security.*;
+import com.pis.api.TraceIdFilter;
+import com.pis.storage.StorageService;
+import com.pis.idempotency.IdempotentCommands;
+import java.time.*;
+import java.util.*;
+import org.springframework.boot.SpringApplication;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.mock.web.*;
+/** Test classpath only. A real application JVM over the parent's disposable schema. */
+public final class SyntheticWorkerProcess {
+ private SyntheticWorkerProcess(){}
+ public static void main(String[] args)throws Exception{
+  if(args.length!=7||!args[0].matches("pis_test_[a-f0-9]{32}"))throw new IllegalArgumentException("Owned test schema required");
+  String url=System.getenv().getOrDefault("PIS_TEST_DB_URL","jdbc:postgresql://127.0.0.1:5433/pis_test?connectTimeout=5&socketTimeout=10");
+  if(!url.matches("jdbc:postgresql://[^/]+/[^?]*_test(?:\\?.*)?"))throw new IllegalArgumentException("Disposable database required");
+  var app=new SpringApplication(PisApplication.class);
+  var props=new HashMap<String,Object>();props.put("spring.datasource.url",url);props.put("spring.datasource.username",System.getenv().getOrDefault("PIS_TEST_DB_USERNAME","pis_test"));props.put("spring.datasource.password",Objects.requireNonNull(System.getenv("PIS_TEST_DB_PASSWORD")));props.put("spring.datasource.hikari.schema",args[0]);props.put("spring.flyway.schemas",args[0]);props.put("spring.flyway.default-schema",args[0]);props.put("spring.profiles.active","test");props.put("server.address","127.0.0.1");props.put("server.port",0);props.put("pis.workflow.development-enabled",true);props.put("pis.ai.synthetic-worker-enabled",true);props.put("pis.storage.local-root",args[1]);app.setAdditionalProfiles("test");app.addInitializers(c->c.getEnvironment().getPropertySources().addFirst(new org.springframework.core.env.MapPropertySource("owned-synthetic-process",props)));
+  // Command-line overrides application.properties defaults; no credentials are passed or printed in argv.
+  try(var c=app.run("--pis.workflow.development-enabled=true","--pis.ai.synthetic-worker-enabled=true","--pis.storage.local-root="+args[1],"--server.port=0")){
+   var principal=new PisPrincipal(c.getBean(AccountRepository.class).findByUsername(args[2]).orElseThrow());principal.eraseCredentials();SecurityContextHolder.getContext().setAuthentication(UsernamePasswordAuthenticationToken.authenticated(principal,null,List.of()));
+   var engine=new AiTaskService(c.getBean(JdbcTemplate.class),c.getBean(WorkflowAccess.class),c.getBean(RequestService.class),c.getBean(AiRegistryService.class),c.getBean(StorageService.class),c.getBean(IdempotentCommands.class),c.getBean(AuditRecorder.class),c.getBean(jakarta.validation.Validator.class),c.getBean(SyntheticWorkerMode.class),c.getBean(PlatformTransactionManager.class),Clock.fixed(Instant.parse(args[5]),ZoneOffset.UTC));
+   UUID request=UUID.fromString(args[3]),id=UUID.fromString(args[4]);
+   new TraceIdFilter().doFilter(new MockHttpServletRequest(),new MockHttpServletResponse(),(req,res)->{
+    var j=engine.detail(request,id).job();engine.command(request,id,"CLAIM",new AiTaskContracts.Command(j.version(),j.generation(),j.leaseId(),"Synthetic process claim"),"process-claim:"+j.version());
+    if(args[6].equals("CRASH"))Runtime.getRuntime().halt(23);
+    var running=engine.detail(request,id).job();engine.run(request,id,new AiTaskContracts.Command(running.version(),running.generation(),running.leaseId(),"Synthetic restart completion"));
+   });SecurityContextHolder.clearContext();
+  }
+ }
+}

@@ -1,6 +1,6 @@
 from pathlib import Path
 import subprocess,uuid,time
-root=Path(__file__).resolve().parents[4];name='pis-t34-'+uuid.uuid4().hex[:8]
+root=Path(__file__).resolve().parents[4];name='pis-t35-'+uuid.uuid4().hex[:8]
 image='postgres@sha256:639ab7ceb90e13123085b741fb31ef493fba25463002f6da665352e7b534b652'
 def run(args,**kw):return subprocess.run(args,text=True,capture_output=True,**kw)
 def sql(s,ok=True):
@@ -14,7 +14,7 @@ try:
   if 'PostgreSQL init process complete' in run(['docker','logs',name]).stdout and run(['docker','exec',name,'pg_isready','-U','postgres']).returncode==0:break
   time.sleep(.2)
  migrations=sorted((root/'backend/src/main/resources/db/migration').glob('V*__*.sql'),key=lambda p:int(p.name.split('__')[0][1:]))
- assert [int(p.name.split('__')[0][1:]) for p in migrations]==list(range(1,32))
+ assert [int(p.name.split('__')[0][1:]) for p in migrations]==list(range(1,33))
  for p in migrations:sql('BEGIN;'+p.read_text().replace('${flyway:defaultSchema}','public')+'COMMIT;')
  ids={k:str(uuid.uuid4()) for k in ['h','p','s','r','c','u','k','m','campus','dept','scope','scheme','b','o','output','control','pass','result','revoke','a','trace']}
  def fmt(s):return s.format(**ids)
@@ -129,6 +129,20 @@ try:
  sql(fmt("INSERT INTO ai_assessment(id,scope_id,scan_id,profile_version,model_version_id,snapshot,reason,actor_id) VALUES(gen_random_uuid(),'{scope}','{scan}',0,'{modelversion}','{{}}','Synthetic','{u}')"),False)
  sql(fmt("INSERT INTO ai_assessment(id,scope_id,scan_id,profile_version,model_version_id,snapshot,reason,actor_id) VALUES(gen_random_uuid(),'{scope}','{scan}',0,'{modelversion}',jsonb_build_object('scanId','{scan}','scopeId','{scope}','modelVersionId','{modelversion}','profileVersion',0,'executionAllowed',false),'Synthetic','{u}')"))
  sql("UPDATE ai_assessment SET snapshot='{}'",False);sql("DELETE FROM ai_assessment",False)
- print('PASS PG17 V1-V31: prior storage/scan/QC/ROI constraints, AI model/state CAS races, retirement, exact snapshot binding, rollback and immutable versions')
+ assessment=sql("SELECT id FROM ai_assessment LIMIT 1")
+ task=str(uuid.uuid4());lease=str(uuid.uuid4())
+ sql(fmt("INSERT INTO ai_task(id,request_id,scope_id,hospital_id,scan_id,assessment_id,owner_id,owner_auth_version,binding,binding_hash,worker_schema,reason,state) VALUES('TASK','{r}','{scope}','{h}','{scan}','ASSESS','{u}',0,'{{}}',repeat('a',64),'SYN-CONTRACT-WORKER-1','Synthetic','QUEUED')").replace('TASK',task).replace('ASSESS',assessment))
+ sql(f"INSERT INTO ai_task_outbox(task_id,state) VALUES('{task}','PENDING')")
+ sql(f"UPDATE ai_task SET binding_hash=repeat('b',64),version=version+1 WHERE id='{task}'",False)
+ sql(f"BEGIN;UPDATE ai_task SET state='CANCELLED',version=version+1 WHERE id='{task}';UPDATE ai_task_outbox SET state='DONE' WHERE task_id='{task}';ROLLBACK;")
+ assert sql(f"SELECT state||':'||version FROM ai_task WHERE id='{task}'")=='QUEUED:0'
+ command=f"UPDATE ai_task SET state='RUNNING',version=version+1,generation=1,lease_id='{lease}',lease_actor='{ids['u']}',lease_until=statement_timestamp()+interval '30 second',deadline=statement_timestamp()+interval '120 second' WHERE id='{task}' AND version=0 RETURNING id;"
+ from concurrent.futures import ThreadPoolExecutor
+ with ThreadPoolExecutor(max_workers=2) as pool:results=list(pool.map(lambda _:sql(command),range(2)))
+ assert sorted(task in x.splitlines() for x in results)==[False,True]
+ sql(f"UPDATE ai_task SET state='CANCELLED',version=version+1 WHERE id='{task}'")
+ sql(f"UPDATE ai_task SET state='RUNNING',version=version+1 WHERE id='{task}'",False)
+ sql(f"DELETE FROM ai_task WHERE id='{task}'",False)
+ print('PASS PG17 V1-V32: task immutable binding, claim CAS, cancellation, transaction rollback; prior storage/scan/QC/ROI constraints, AI model/state CAS races, retirement, exact snapshot binding, rollback and immutable versions')
 finally:
  run(['docker','rm','-f',name])

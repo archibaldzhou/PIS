@@ -66,3 +66,5 @@
 - T33：[阅片可测量验证PRD](development-viewer-validation-v1.md)，用户授权合成开发验证，已查看UI-041及实际阅片截图；[兼容性矩阵、可复现命令与交付边界](../api/t33-viewer-validation.md)。无临床/厂商兼容批准。
 
 - T34：[AI注册与适用契约PRD](development-ai-registry-v1.md)，用户授权合成开发，已查看UI-043实际原型；[ADR0023](../adr/0023-synthetic-ai-registry-contract.md)、[接口和验证边界](../api/t34-ai-registry.md)。无模型安装/运行、临床或监管批准。
+
+- T35：[持久化合成契约任务PRD](development-synthetic-worker-v1.md)，用户授权合成开发，已查看UI-044实际原型；[ADR0024](../adr/0024-persistent-synthetic-contract-worker.md)、[接口/交付与验证边界](../api/t35-synthetic-tasks.md)。默认关闭，不授予临床执行许可，无模型推理。

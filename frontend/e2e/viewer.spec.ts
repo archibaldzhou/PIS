@@ -117,8 +117,25 @@ test('viewer renders actual authorized RGB pyramid and revocation rejects warmed
   expect(changed.status(),await changed.text()).toBe(409);expect(await changed.json()).toMatchObject({code:'IDEMPOTENCY_KEY_REUSED'});
   await page.getByRole('button',{name:'核对此扫描AI适用契约',exact:true}).click();await page.getByRole('button',{name:`选择模型 ${modelId}`,exact:true}).click();await page.getByRole('button',{name:'核对当前扫描适用资料',exact:true}).click();await page.getByLabel('AI操作原因',{exact:true}).fill('Synthetic browser assessment');await page.getByRole('button',{name:'判定合成适用性（不执行）',exact:true}).click();await expect(page.getByRole('region',{name:'AI模型契约管理'}).getByRole('status')).toContainText('VALIDATION_ONLY_APPLICABLE');
   await page.screenshot({path:info.outputPath('real-service-synthetic-ai-contract.png'),fullPage:true});
+  // T35: real PostgreSQL task/outbox, bounded local fixture and immutable non-diagnostic artifact.
+  await page.getByRole('button',{name:'进入合成契约任务（非临床）',exact:true}).click();
+  await page.getByLabel('合成任务操作原因',{exact:true}).fill('Synthetic technical task');
+  await page.getByRole('button',{name:'创建合成契约任务',exact:true}).click();
+  await expect(page.getByRole('region',{name:'合成契约任务'}).getByRole('status')).toContainText('QUEUED');
+  await expect(page.getByRole('button',{name:'原键确认任务操作',exact:true})).toBeDisabled();
+  await page.getByLabel('合成任务操作原因',{exact:true}).fill('Synthetic claim');await page.getByRole('button',{name:'领取合成任务',exact:true}).click();
+  await expect(page.getByRole('region',{name:'合成契约任务'}).getByRole('status')).toContainText('RUNNING');await expect(page.getByRole('button',{name:'原键确认任务操作',exact:true})).toBeDisabled();
+  await page.getByLabel('合成任务操作原因',{exact:true}).fill('Synthetic local fixture');await page.getByRole('button',{name:'运行有界非诊断夹具',exact:true}).click();
+  await expect(page.getByRole('region',{name:'合成契约任务'}).getByRole('status')).toContainText('SYNTHETIC_SUCCEEDED');await expect(page.getByRole('button',{name:'原键确认任务操作',exact:true})).toBeDisabled();
+  const taskState=JSON.parse(await page.getByLabel('任务精确版本',{exact:true}).innerText()) as {job:{id:string;artifactId:string};clinicalExecutionAllowed:boolean};expect(taskState.clinicalExecutionAllowed).toBe(false);
+  const taskPath=`/api/requests/${rid}/synthetic-tasks/${taskState.job.id}`;
+  const artifact=await page.request.post(`${taskPath}/artifact`,{headers:headers()});expect(artifact.status(),await artifact.text()).toBe(200);expect(await artifact.text()).toContain('NON_DIAGNOSTIC_SYNTHETIC_CONTRACT_ONLY');
+  const again=await page.request.post(`${taskPath}/artifact`,{headers:headers()});expect(again.status()).toBe(200);expect(await again.body()).toEqual(await artifact.body());
+  await page.screenshot({path:info.outputPath('real-service-synthetic-worker.png'),fullPage:true});
   expect((await page.request.post(`${modelsPath}/${modelId}/state`,{headers:headers(),data:{expectedVersion:1,state:'DISABLED',reason:'Synthetic recall'}})).status()).toBe(200);
   expect((await page.request.get(`${aiPath}/assess/${aiId}`)).status()).toBe(409);expect((await page.request.post(`${aiPath}/assess`,{headers:aiHeaders,data:aiInput})).status()).toBe(409);
+  expect((await page.request.post(`${taskPath}/artifact`,{headers:headers()})).status()).toBe(409);
+  await page.getByRole('button',{name:'返回当前扫描AI契约',exact:true}).click();
   await page.getByRole('button',{name:'返回当前扫描阅片',exact:true}).click();await expect(page.getByLabel('合成瓦片画布',{exact:true}).locator('canvas').first()).toBeVisible();
   expect((await page.request.post(`${qcPath}/REVOKE`, { headers: headers(), data: { expectedVersion: 2, assessmentVersion: 1, reason: 'Synthetic viewer revoke' } })).status()).toBe(200);
   expect((await page.request.get(`${aiPath}?publicationVersion=2`)).status()).toBe(409);

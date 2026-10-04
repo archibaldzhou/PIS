@@ -1,0 +1,26 @@
+
+> pis-frontend@0.0.1 test:ui
+> playwright test --config playwright.ui.config.ts synthetic-tasks.spec.ts
+
+[WebServer] (node:327334) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:327347) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 4 tests using 1 worker
+
+(node:327365) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:327365) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 ui-tests/synthetic-tasks.spec.ts:7:1 › synthetic queue has unknown progress, explicit dirty cancellation and independent task identity (4.4s)
+  ✓  2 ui-tests/synthetic-tasks.spec.ts:8:1 › delayed cancelled wait cannot write into another task; unresolved command retains exact retry key (3.4s)
+  ✓  3 ui-tests/synthetic-tasks.spec.ts:9:1 › revoked task and failed requests are errors, never empty success or zero progress (2.6s)
+  ✓  4 ui-tests/synthetic-tasks.spec.ts:10:1 › technical artifact is explicitly fetched and revoked reads clear previously shown content (3.0s)
+
+  4 passed (15.9s)
+npm notice
+npm notice New major version of npm available! 11.21.0 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice
