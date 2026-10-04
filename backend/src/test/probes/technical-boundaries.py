@@ -10,7 +10,7 @@ parser.add_argument('--revision', help='Read a local committed tree, without che
 parser.add_argument('--expect-cycle', action='store_true')
 args = parser.parse_args()
 domains = ['accession', 'grossing', 'processing', 'specimen', 'label', 'material',
-           'quality', 'worklist', 'diagnosis', 'report', 'integration', 'frozen', 'archive']
+           'quality', 'worklist', 'diagnosis', 'report', 'integration', 'frozen', 'archive', 'operations']
 pattern = re.compile(r'com\.pis\.(' + '|'.join(domains) + r')\.([A-Z][A-Za-z0-9]*|\*)')
 edges = {domain: set() for domain in domains}
 evidence = {}

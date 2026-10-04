@@ -17,6 +17,17 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class TraceIdFilterTest {
     private final TraceIdFilter filter = new TraceIdFilter();
 
+    @Test void operationalLogsContainOnlyFixedFieldsAndServerTrace() throws Exception {
+        var logger=(ch.qos.logback.classic.Logger)org.slf4j.LoggerFactory.getLogger(TraceIdFilter.class);
+        var captured=new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();captured.start();logger.addAppender(captured);
+        try {
+            var request=new MockHttpServletRequest("GET","/synthetic-private-path");request.setQueryString("secret=synthetic-secret");request.addHeader("Authorization","synthetic-secret");request.addParameter("patient","synthetic-private-name");
+            var response=new MockHttpServletResponse();filter.doFilter(request,response,(req,res)->response.setStatus(503));
+            assertThat(captured.list).hasSize(1);
+            assertThat(captured.list.getFirst().getFormattedMessage()).isEqualTo("event=HTTP_COMPLETE traceId="+response.getHeader(TraceIdFilter.HEADER)+" status=503").doesNotContain("synthetic-secret","synthetic-private");
+        } finally { logger.detachAppender(captured);captured.stop(); }
+    }
+
     @Test
     void replacesClientTraceAndSharesOneServerTraceWithRequestResponseAndMdc() throws Exception {
         var request = new MockHttpServletRequest();

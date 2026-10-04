@@ -1,0 +1,5 @@
+PASS viewer quota SQL: concurrent 239→240 admits one; paid bytes remain bounded at 33554432
+PASS V36: exact core/source identity, source-ID deduplication, exclusive outbox CAS, receipt digest and uniqueness, rollback, append-only history; SQL only
+PASS V35: impact snapshot binding, exclusive CAS, rollback, immutable review and untouched original decision
+PASS V34: exact result/hash/manual-fields binding, exclusive head CAS, rollback, append-only decisions
+PASS PG17 V1-V33: result accepted-source/version/purpose binding, unique identity, READY CAS, rollback and immutable history; prior task/storage/scan/QC/ROI/AI invariants. SQL-only, not application E2E.

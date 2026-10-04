@@ -21,6 +21,7 @@ final class SecurityStartupChecks implements ApplicationRunner {
         if (production && (development || test)) {
             throw new IllegalStateException("prod cannot be combined with dev or test");
         }
+        validateOperationalSettings(environment);
         if (!development && !test) {
             if (!environment.getProperty("server.servlet.session.cookie.secure", Boolean.class, true)) {
                 throw new IllegalStateException("Secure session cookies are required outside dev/test");
@@ -32,6 +33,19 @@ final class SecurityStartupChecks implements ApplicationRunner {
             if (count != null && count != 0) {
                 throw new IllegalStateException("Synthetic accounts cannot be used outside dev/test");
             }
+        }
+    }
+    static void validateOperationalSettings(Environment e) {
+        if (!"health".equals(e.getProperty("management.endpoints.web.exposure.include", "health"))
+            || !"*".equals(e.getProperty("management.endpoints.jmx.exposure.exclude", "*"))
+            || !"never".equals(e.getProperty("management.endpoint.health.show-details", "never"))
+            || !"never".equals(e.getProperty("management.endpoint.health.show-components", "never"))
+            || !e.getProperty("spring.flyway.clean-disabled", Boolean.class, true)
+            || !e.getProperty("spring.flyway.validate-on-migrate", Boolean.class, true)
+            || e.getProperty("spring.flyway.out-of-order", Boolean.class, false)
+            || e.getProperty("spring.flyway.baseline-on-migrate", Boolean.class, false)) {
+            // Never interpolate a rejected configuration value: it may contain secrets.
+            throw new IllegalStateException("Unsafe operations configuration");
         }
     }
 }

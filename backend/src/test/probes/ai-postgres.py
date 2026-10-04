@@ -14,7 +14,7 @@ try:
   if 'PostgreSQL init process complete' in run(['docker','logs',name]).stdout and run(['docker','exec',name,'pg_isready','-U','postgres']).returncode==0:break
   time.sleep(.2)
  migrations=sorted((root/'backend/src/main/resources/db/migration').glob('V*__*.sql'),key=lambda p:int(p.name.split('__')[0][1:]))
- assert [int(p.name.split('__')[0][1:]) for p in migrations]==list(range(1,37))
+ assert [int(p.name.split('__')[0][1:]) for p in migrations]==list(range(1,38))
  for p in migrations:sql('BEGIN;'+p.read_text().replace('${flyway:defaultSchema}','public')+'COMMIT;')
  ids={k:str(uuid.uuid4()) for k in ['h','p','s','r','c','u','k','m','campus','dept','scope','scheme','b','o','output','control','pass','result','revoke','a','trace']}
  def fmt(s):return s.format(**ids)

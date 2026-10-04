@@ -19,6 +19,7 @@ public final class TraceIdFilter extends OncePerRequestFilter {
     public static final String HEADER = "X-Trace-Id";
     public static final String MDC_KEY = "traceId";
     private static final String ATTRIBUTE = TraceIdFilter.class.getName() + ".traceId";
+    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(TraceIdFilter.class);
     private static final ThreadLocal<UUID> CURRENT = new ThreadLocal<>();
 
     public static UUID currentTraceId() {
@@ -55,6 +56,8 @@ public final class TraceIdFilter extends OncePerRequestFilter {
             response.setHeader(HEADER, traceId.toString());
             chain.doFilter(request, response);
         } finally {
+            // Fixed schema: no URL, query, headers, principal, payload or exception text.
+            LOG.info("event=HTTP_COMPLETE traceId={} status={}", traceId, response.getStatus());
             MDC.remove(MDC_KEY);
             CURRENT.remove();
         }

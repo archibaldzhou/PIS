@@ -76,3 +76,5 @@
 - [T38 合成结果失效与人工复核](development-synthetic-impact-v1.md)：用户授权开发，非临床批准。
 
 - [T39 本地合成医院接口合同](development-hospital-adapter-v1.md)：仅自定义合成开发，真实协议NOT_CONFIGURED。
+
+- [T40 受限运维与合成隔离恢复](T40-operations-recovery.md)：用户授权开发，已查看 UI-035/036 实际像素；无医院灾备、加密或合规批准。

@@ -60,6 +60,37 @@ class RequestWorkflowTest {
     static final Draft COMPLETE=new Draft("Synthetic history",Instant.parse("2026-01-01T08:00:00Z"),
         List.of(new ContainerInput("Synthetic site",Laterality.UNKNOWN,1,"Synthetic fixative",Instant.parse("2026-01-01T08:10:00Z"))));
 
+    @Autowired com.pis.operations.OperationsService operations;
+    @Test void operationsRequiresExplicitCurrentScopeAndAuditsWithoutExposingContent() throws Exception {
+        String password="Synthetic-ops-http-42!";var f=new Fixture(encoder.encode(password));var id=submitted(f);
+        f.as(()->{assertThatThrownBy(()->operations.read(id)).isInstanceOf(AccessDeniedException.class);return null;});
+        jdbc.update("INSERT INTO operations_grant(user_id,scope_id,qualification,valid_until) VALUES(?,?,'SYN-OPS-1',statement_timestamp()+interval '1 day')",f.user,f.scope);
+        f.as(()->{var snapshot=operations.read(id);assertThat(snapshot.requestId()).isEqualTo(id);assertThat(snapshot.pending()).isZero();assertThat(snapshot.failed()).isZero();assertThat(snapshot.recovery()).isEqualTo("NOT_VERIFIED");assertThat(snapshot.encryption()).isEqualTo("NOT_CONFIGURED");return null;});
+        var foreign=new Fixture();foreign.as(()->{assertCode(()->operations.read(id),"REQUEST_NOT_FOUND");return null;});
+        var browser=new Browser();String path="/api/requests/"+id+"/operations";
+        assertThat(browser.send("GET",path,null,null,false).statusCode()).isEqualTo(401);
+        assertThat(browser.send("POST","/api/auth/login","username="+f.principal.getUsername()+"&password="+java.net.URLEncoder.encode(password,java.nio.charset.StandardCharsets.UTF_8),browser.csrf(),true).statusCode()).isEqualTo(204);
+        var response=browser.send("GET",path,null,null,false);assertThat(response.statusCode()).isEqualTo(200);assertThat(response.headers().firstValue("cache-control")).contains("no-store");assertThat(response.body()).doesNotContain(password,"password_hash","clinicalHistory","patientLabel","local-root");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM audit_event WHERE resource_id=? AND operation_code='OPERATIONS_READ'",Long.class,id)).isEqualTo(2);
+        assertThat(browser.send("POST",path,"{}",browser.csrf(),false).statusCode()).isEqualTo(405);
+        jdbc.update("UPDATE operations_grant SET valid_until=statement_timestamp()-interval '1 second' WHERE user_id=?",f.user);
+        assertThat(browser.send("GET",path,null,null,false).statusCode()).isEqualTo(403);
+        jdbc.update("UPDATE operations_grant SET valid_until=statement_timestamp()+interval '1 day' WHERE user_id=?",f.user);
+        jdbc.update("UPDATE operations_grant SET revoked_at=statement_timestamp() WHERE user_id=?",f.user);
+        assertThat(browser.send("GET",path,null,null,false).statusCode()).isEqualTo(403);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM audit_event WHERE resource_id=? AND operation_code='OPERATIONS_READ'",Long.class,id)).isEqualTo(2);
+    }
+    @Test void operationsReadCannotSucceedWhenAuditFails() {
+        var f=new Fixture();var id=submitted(f);
+        jdbc.update("INSERT INTO operations_grant(user_id,scope_id,qualification,valid_until) VALUES(?,?,'SYN-OPS-1',statement_timestamp()+interval '1 day')",f.user,f.scope);
+        jdbc.execute("CREATE FUNCTION reject_ops_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.operation_code='OPERATIONS_READ' THEN RAISE EXCEPTION 'Synthetic audit failure';END IF;RETURN NEW;END $$");
+        jdbc.execute("CREATE TRIGGER reject_ops_audit BEFORE INSERT ON audit_event FOR EACH ROW EXECUTE FUNCTION reject_ops_audit()");
+        try{f.as(()->{assertThatThrownBy(()->operations.read(id)).isInstanceOf(org.springframework.dao.DataAccessException.class);return null;});}
+        finally{jdbc.execute("DROP TRIGGER reject_ops_audit ON audit_event");jdbc.execute("DROP FUNCTION reject_ops_audit()");}
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM audit_event WHERE resource_id=? AND operation_code='OPERATIONS_READ'",Long.class,id)).isZero();
+        f.as(()->{assertThat(operations.read(id).requestId()).isEqualTo(id);return null;});
+    }
+
     @Test void registersEditsSubmitsAndReplaysWithoutRepeatingHistoryOrContainers() {
         var f=new Fixture();
         f.as(()->{

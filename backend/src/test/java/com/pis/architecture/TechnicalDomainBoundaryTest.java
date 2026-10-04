@@ -14,7 +14,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /** Source-reference guard for workflow domains; not a full bytecode architecture analyzer. */
 class TechnicalDomainBoundaryTest {
-    private static final List<String> DOMAINS=List.of("accession","grossing","processing","specimen","label","material","quality","worklist","diagnosis","report","integration","frozen","archive");
+    private static final List<String> DOMAINS=List.of("accession","grossing","processing","specimen","label","material","quality","worklist","diagnosis","report","integration","frozen","archive","operations");
     // Include wildcard imports: a domain cannot conceal an edge by shortening its imports.
     private static final Pattern REFERENCES=Pattern.compile("com\\.pis\\.("+String.join("|",DOMAINS)+")\\.([A-Z][A-Za-z0-9]*|\\*)");
     @Test void technicalDomainUsesPublicBoundariesAndAddsNoWorkflowDomainCycle() throws Exception {

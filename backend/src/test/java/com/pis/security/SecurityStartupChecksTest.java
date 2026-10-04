@@ -7,6 +7,18 @@ import org.springframework.mock.env.MockEnvironment;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class SecurityStartupChecksTest {
+    @Test void operationalOverridesFailClosedWithoutEchoingSubmittedValues() {
+        var unsafe=java.util.Map.of("management.endpoints.web.exposure.include","health,env",
+            "management.endpoints.jmx.exposure.exclude","", "management.endpoint.health.show-details","always",
+            "management.endpoint.health.show-components","always", "spring.flyway.clean-disabled","false",
+            "spring.flyway.validate-on-migrate","false", "spring.flyway.out-of-order","true",
+            "spring.flyway.baseline-on-migrate","true");
+        for(var entry:unsafe.entrySet()) {
+            assertThatThrownBy(()->SecurityStartupChecks.validateOperationalSettings(new MockEnvironment().withProperty(entry.getKey(),entry.getValue())))
+                .isInstanceOf(IllegalStateException.class).hasMessage("Unsafe operations configuration");
+        }
+        SecurityStartupChecks.validateOperationalSettings(new MockEnvironment());
+    }
     @Test void rejectsMixedProductionAndDevelopmentProfiles() {
         var environment = new MockEnvironment(); environment.setActiveProfiles("prod", "dev");
         assertThatThrownBy(() -> new SecurityStartupChecks(environment, new JdbcTemplate()).run(new DefaultApplicationArguments()))
