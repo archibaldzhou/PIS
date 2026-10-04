@@ -13,14 +13,14 @@ class IdentityAccessMigrationTest {
     void emptySchemaGetsNineAccessTablesAndOnlyThreeRoleTemplatesWithoutAccountsOrClinicalSeeds() throws Exception {
         try (var f = new AccessPolicyTestFixture()) {
             var flyway = f.database.configuration("classpath:db/migration").load();
-            assertThat(flyway.info().current().getVersion().toString()).isEqualTo("35");
+            assertThat(flyway.info().current().getVersion().toString()).isEqualTo("36");
             assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
             assertThat(flyway.migrate().migrationsExecuted).isZero();
             var tables = f.jdbc.queryForList("SELECT tablename FROM pg_tables WHERE schemaname = current_schema()", String.class);
             assertThat(tables).contains("campus", "department_campus", "app_user", "security_role", "security_role_permission",
                 "user_role_scope", "case_access_scope", "case_assignment", "user_operation_qualification",
                 "workflow_scope", "workflow_grant", "request_workflow", "request_container_detail");
-            for (var table : List.of("app_user", "hospital", "campus", "department_campus", "patient", "pathology_case",
+            for (var table : List.of("adapter_grant","adapter_message","adapter_outbox","adapter_receiver","adapter_inbox","adapter_local_record","adapter_event","app_user", "hospital", "campus", "department_campus", "patient", "pathology_case",
                     "user_role_scope", "case_access_scope", "case_assignment", "user_operation_qualification",
                     "workflow_scope", "workflow_grant", "request_workflow", "request_container_detail",
                     "ai_task_grant", "ai_task", "ai_task_outbox", "ai_task_attempt", "ai_task_callback", "ai_task_event", "ai_registry_grant", "ai_model_series", "ai_model_version", "ai_model_state", "ai_model_event", "ai_scan_profile", "ai_assessment", "statistics_grant", "statistics_resource_grant", "statistics_snapshot", "statistics_fact", "storage_grant", "storage_case_grant", "storage_quota", "storage_asset", "storage_version", "storage_finalize", "storage_event", "storage_read_budget", "roi_head", "roi_calibration", "roi_revision", "viewer_manifest", "viewer_read_budget", "digital_qc_grant", "digital_qc_head", "digital_qc_assessment", "digital_qc_event", "scan_grant", "scan_series", "scan_import", "scan_event")) {

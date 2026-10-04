@@ -14,7 +14,7 @@ try:
   if 'PostgreSQL init process complete' in run(['docker','logs',name]).stdout and run(['docker','exec',name,'pg_isready','-U','postgres']).returncode==0:break
   time.sleep(.2)
  migrations=sorted((root/'backend/src/main/resources/db/migration').glob('V*__*.sql'),key=lambda p:int(p.name.split('__')[0][1:]))
- assert [int(p.name.split('__')[0][1:]) for p in migrations]==list(range(1,36))
+ assert [int(p.name.split('__')[0][1:]) for p in migrations]==list(range(1,37))
  for p in migrations:sql('BEGIN;'+p.read_text().replace('${flyway:defaultSchema}','public')+'COMMIT;')
  ids={k:str(uuid.uuid4()) for k in ['h','p','s','r','c','u','k','m','campus','dept','scope','scheme','b','o','output','control','pass','result','revoke','a','trace']}
  def fmt(s):return s.format(**ids)
@@ -193,6 +193,20 @@ try:
  sql('BEGIN;'+statement+';ROLLBACK;');assert sql('SELECT count(*) FROM report_impact_review')=='0'
  sql(statement);sql(statement,False);sql("UPDATE report_impact_review SET reason='Changed'",False);sql('DELETE FROM report_impact_review',False)
  assert sql('SELECT count(*) FROM report_result_decision')=='1'
+ # V36 synthetic adapter source binding, receipt uniqueness, CAS and rollback.
+ message=str(uuid.uuid4());external='SYN-PROBE'
+ insert=fmt("INSERT INTO adapter_message(id,request_id,case_id,patient_id,hospital_id,scope_id,source_id,adapter,external_id,sequence,schema_code,payload,payload_hash,actor_id) VALUES('MESSAGE','{r}','{k}','{p}','{h}','{scope}','{s}','HIS','SYN-PROBE',1,'SYN-HOSPITAL-1','{{}}',repeat('a',64),'{u}')").replace('MESSAGE',message)
+ sql(insert);sql(insert.replace(message,str(uuid.uuid4())),False)
+ sql(insert.replace(message,str(uuid.uuid4())).replace('SYN-PROBE','SYN-WRONG').replace(ids['p'],str(uuid.uuid4())),False)
+ sql(f"INSERT INTO adapter_outbox(message_id) VALUES('{message}')")
+ cas=f"UPDATE adapter_outbox SET version=version+1,state='ATTEMPTING',attempts=1,attempt_id=gen_random_uuid(),lease_until=statement_timestamp()+interval '30 seconds' WHERE message_id='{message}' AND version=0 RETURNING version"
+ with ThreadPoolExecutor(max_workers=2) as pool:winners=list(pool.map(lambda _:sql(cas),range(2)))
+ assert sorted('1' in x.splitlines() for x in winners)==[False,True]
+ inbox=f"INSERT INTO adapter_inbox(message_id,payload_hash) VALUES('{message}',repeat('a',64))"
+ sql(inbox.replace("repeat('a',64)","repeat('b',64)"),False)
+ sql('BEGIN;'+inbox+';ROLLBACK;');assert sql('SELECT count(*) FROM adapter_inbox')=='0'
+ sql(inbox);sql(inbox,False);sql("UPDATE adapter_message SET sequence=2",False);sql('DELETE FROM adapter_inbox',False)
+ print('PASS V36: exact core/source identity, source-ID deduplication, exclusive outbox CAS, receipt digest and uniqueness, rollback, append-only history; SQL only')
  print('PASS V35: impact snapshot binding, exclusive CAS, rollback, immutable review and untouched original decision')
  print('PASS V34: exact result/hash/manual-fields binding, exclusive head CAS, rollback, append-only decisions')
  print('PASS PG17 V1-V33: result accepted-source/version/purpose binding, unique identity, READY CAS, rollback and immutable history; prior task/storage/scan/QC/ROI/AI invariants. SQL-only, not application E2E.')

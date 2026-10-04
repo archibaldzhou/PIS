@@ -66,6 +66,9 @@ public class RequestService {
     @Transactional(timeout=10)
     public WorkflowAccess.Scope authorizedScope(UUID requestId) { return requireResource(requestId,false); }
 
+    public record CaseIdentity(UUID hospitalId,UUID scopeId,UUID sourceId,UUID requestId,UUID caseId,UUID patientId){}
+    @Transactional(timeout=10) public CaseIdentity caseIdentity(UUID id){var scope=requireResource(id,false);var rows=jdbc.query("SELECT c.id,r.patient_id FROM pathology_case c JOIN pathology_request r ON r.id=c.request_id WHERE r.id=?",(r,i)->new CaseIdentity(scope.hospitalId(),scope.id(),scope.sourceId(),id,r.getObject(1,UUID.class),r.getObject(2,UUID.class)),id);if(rows.size()!=1)throw new ApiException(HttpStatus.NOT_FOUND,"ADAPTER_NOT_FOUND","Synthetic adapter resource unavailable");return rows.getFirst();}
+
     @Transactional(timeout=10)
     public Detail detail(UUID id) {
         requireResource(id,false);

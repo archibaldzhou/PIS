@@ -47,6 +47,7 @@ export async function request(path: string, options: RequestInit = {}): Promise<
     throw new ApiError(403, 'FORBIDDEN', '请求被拒绝，请重试或联系管理员');
   }
   const workflowErrors: Record<string, string> = {
+    ADAPTER_LIMIT: '此申请合成接口消息达到上限。', ADAPTER_NOT_FOUND: '接口资源或当前资格不可用。', ADAPTER_VERSION: '消息版本已变化，请刷新核对。', ADAPTER_NOT_READY: '状态、顺序或退避时间不允许操作。', ADAPTER_IDENTITY: '来源或病例身份、摘要不匹配。', ADAPTER_SCHEMA: '字段与适配器路径不匹配。', ADAPTER_SIZE: '合成消息超过大小上限。', ADAPTER_DUPLICATE_CONFLICT: '来源关联ID已有不同输入。', ADAPTER_ACK_MISMATCH: '缺少匹配的接收证据，不能确认ACK。', ADAPTER_STALE_ATTEMPT: '尝试已过期、取消或被替换。', ADAPTER_PAGE: '接口查询页超出范围。',
     AI_IMPACT_CHANGED: '失效影响快照已变化，请保留理由并重新核验。', AI_IMPACT_CONFLICT: '复核版本已变化，请重新核对原操作。', AI_REFERENCE_INVALIDATED: '此引用已失效或不是当前报告修订，只能授权追溯。',
     AI_DECISION_NOT_FOUND: '人工决定或当前权限不可用。', AI_DECISION_BINDING: '人工决定与病例或结果不匹配。', AI_DECISION_CONFLICT: '人工决定或目标报告版本已变化，请重新核验。', AI_DECISION_ALREADY_ACCEPTED: '此结果已有明确采纳记录，请查看原记录。', AI_DECISION_PAGE: '人工历史页码超出范围。',
     AI_RESULT_INVALIDATED: '合成结果资格或依据版本已失效，叠加不可用。', AI_RESULT_NOT_FOUND: '合成结果或当前权限不可用。', AI_RESULT_NOT_READY: '合成结果尚未完成不可变存储，不可显示。', AI_RESULT_EXISTS: '该任务已有结果，请使用原幂等请求或已知结果ID。', AI_RESULT_CORRUPT: '合成结果包损坏，禁止显示。', AI_RESULT_BINDING: '合成结果来源不匹配。', AI_RESULT_CONFLICT: '结果版本冲突，请原键核对。', AI_RESULT_TILE: '合成瓦片坐标无效。', AI_RESULT_GENERATOR_CHANGED: '运行时或生成器已改变，不能重新生成旧版。',

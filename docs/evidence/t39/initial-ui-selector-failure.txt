@@ -1,0 +1,5 @@
+Local initial targeted UI run: 2 passed, 1 failed (13.6s).
+Observed failure excerpt (from tool output, not a successful run):
+getByLabel('接口操作') resolved to 2 elements: select[aria-label="接口操作"] and textarea labelled 接口操作原因.
+Correction: exact label match; retained required visibility, dirty confirmation, path-field reset and screenshot checks.
+Final targeted rerun evidence: ui-adapters-final.txt.

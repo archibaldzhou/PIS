@@ -74,3 +74,5 @@
 - T37：[医生人工处理合成结果与报告引用PRD](development-synthetic-decision-v1.md)，已查看UI-046实际像素；仅不可变非诊断引用及人工理由，无自动诊断/签署。
 
 - [T38 合成结果失效与人工复核](development-synthetic-impact-v1.md)：用户授权开发，非临床批准。
+
+- [T39 本地合成医院接口合同](development-hospital-adapter-v1.md)：仅自定义合成开发，真实协议NOT_CONFIGURED。

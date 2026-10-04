@@ -28,6 +28,16 @@ public final class SyntheticWorkerProcess {
   try(var c=app.run("--pis.workflow.development-enabled=true","--pis.ai.synthetic-worker-enabled=true","--pis.storage.local-root="+args[1],"--server.port=0")){
    System.err.println("SYN_WORKER_STAGE_AUTHENTICATE");
    var principal=new PisPrincipal(c.getBean(AccountRepository.class).findByUsername(args[2]).orElseThrow());principal.eraseCredentials();SecurityContextHolder.getContext().setAuthentication(UsernamePasswordAuthenticationToken.authenticated(principal,null,List.of()));
+   if(args[6].startsWith("ADAPTER_")) {
+    var adapter=c.getBean(com.pis.integration.HospitalAdapterService.class);UUID request=UUID.fromString(args[3]),id=UUID.fromString(args[4]);
+    new TraceIdFilter().doFilter(new MockHttpServletRequest(),new MockHttpServletResponse(),(req,res)->{
+     for(String operation:args[6].equals("ADAPTER_CRASH")?List.of("CLAIM","RECEIVE"):List.of("CLAIM","RECEIVE","ACK","RECONCILE")) {
+      var item=adapter.view(request,1).items().stream().filter(i->i.id().equals(id)).findFirst().orElseThrow();var action=com.pis.integration.HospitalAdapterContracts.Action.valueOf(operation);
+      adapter.step(request,id,action,new com.pis.integration.HospitalAdapterContracts.Command(item.caseId(),item.sourceId(),item.payloadHash(),item.version(),action==com.pis.integration.HospitalAdapterContracts.Action.CLAIM?null:item.attemptId(),"Synthetic process recovery",true),"adapter-process-"+item.version());
+     }
+     if(args[6].equals("ADAPTER_CRASH")){System.err.println("SYN_WORKER_STAGE_DURABLE_ADAPTER_RECEIVE_CRASH");Runtime.getRuntime().halt(23);}
+    });return;
+   }
    var engine=new AiTaskService(c.getBean(JdbcTemplate.class),c.getBean(WorkflowAccess.class),c.getBean(RequestService.class),c.getBean(AiRegistryService.class),c.getBean(StorageService.class),c.getBean(IdempotentCommands.class),c.getBean(AuditRecorder.class),c.getBean(jakarta.validation.Validator.class),c.getBean(SyntheticWorkerMode.class),c.getBean(PlatformTransactionManager.class),Clock.fixed(Instant.parse(args[5]),ZoneOffset.UTC));
    UUID request=UUID.fromString(args[3]),id=UUID.fromString(args[4]);
    new TraceIdFilter().doFilter(new MockHttpServletRequest(),new MockHttpServletResponse(),(req,res)->{

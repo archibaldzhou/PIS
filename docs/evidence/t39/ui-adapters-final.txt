@@ -1,0 +1,26 @@
+
+> pis-frontend@0.0.1 test:ui
+> playwright test --config playwright.ui.config.ts adapters.spec.ts
+
+[WebServer] (node:456106) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:456119) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 4 tests using 1 worker
+
+(node:456137) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:456137) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 ui-tests/adapters.spec.ts:26:1 › adapter cancelled wait keeps exact retry key and prevents dirty switching until receipt settles (4.3s)
+  ✓  2 ui-tests/adapters.spec.ts:32:1 › adapter path changes discard inapplicable fields and explicit dirty confirmation preserves safe navigation (4.2s)
+  ✓  3 ui-tests/adapters.spec.ts:35:1 › adapter explicit stale conflict remains an error and does not mark local acknowledgement (2.9s)
+  ✓  4 ui-tests/adapters.spec.ts:38:1 › late queue response cannot restore an interface after navigation away (2.3s)
+
+  4 passed (15.7s)
+npm notice
+npm notice New major version of npm available! 11.21.0 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice
