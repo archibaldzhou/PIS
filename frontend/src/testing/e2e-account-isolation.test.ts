@@ -5,7 +5,7 @@ import { workflowAccountName } from '../../e2e/workflow-account-name';
 const e2e = new URL('../../e2e/', import.meta.url);
 const files = readdirSync(e2e).filter(file => file.endsWith('.spec.ts'));
 const source = (file: string) => readFileSync(new URL(file, e2e), 'utf8');
-const workflows = files.filter(file => source(file).includes('signInWorkflow'));
+const workflows = files.filter(file => source(file).includes('signInWorkflow') || source(file).includes("from './viewer-fixture'"));
 const seed = readFileSync(new URL('../../../backend/src/test/java/com/pis/security/testfixture/E2eFixtureConfiguration.java', import.meta.url), 'utf8');
 
 describe('disposable E2E account isolation', () => {
@@ -18,6 +18,11 @@ describe('disposable E2E account isolation', () => {
       expect(source(file)).not.toContain("PIS_E2E_HANDOFF_USERNAME");
       expect(source(file)).not.toContain("'synthetic.technician'");
     }
+  });
+  it('isolates RGB and synthetic results from each others per-user resource budgets', () => {
+    expect(workflows).toContain('viewer.spec.ts');expect(workflows).toContain('results.spec.ts');
+    expect(workflowAccountName('viewer.spec.ts','synthetic.workflow')).not.toBe(workflowAccountName('results.spec.ts','synthetic.workflow'));
+    expect(seed).toContain('java.util.Set.of("viewer","results").contains(scenario)');
   });
   it('uses stable names across platforms, supports prefixes and rejects ambiguous names', () => {
     expect(workflowAccountName('/runner/e2e/archive.spec.ts', 'synthetic.workflow')).toBe('synthetic.workflow.archive');

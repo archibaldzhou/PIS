@@ -81,3 +81,29 @@ test('delayed cancelled wait cannot write into another task; unresolved command 
 });
 test('revoked task and failed requests are errors, never empty success or zero progress',async({page})=>{await start(page);await page.route('**/synthetic-tasks/task-b',r=>r.fulfill({status:404,json:{code:'AI_TASK_NOT_FOUND'}}));await page.getByRole('button',{name:'核验任务 task-b',exact:true}).click();await expect(page.getByRole('alert').filter({hasText:'合成任务或当前资格不可用'})).toBeVisible();await expect(page.getByLabel('任务精确版本',{exact:true})).toHaveCount(0);});
 test('technical artifact is explicitly fetched and revoked reads clear previously shown content',async({page})=>{await start(page);await page.route('**/synthetic-tasks/task-b',r=>r.fulfill({json:{...detail,job:{...job,id:'task-b',state:'SYNTHETIC_SUCCEEDED',version:2,generation:1,progress:100,leaseId:'lease',artifactId:'artifact'},effectiveState:'SYNTHETIC_SUCCEEDED'}}));await page.getByRole('button',{name:'核验任务 task-b',exact:true}).click();await page.route('**/synthetic-tasks/task-b/artifact',r=>r.fulfill({contentType:'application/octet-stream',body:'PIS-SYNTHETIC-STORAGE-V1\nNON_DIAGNOSTIC_SYNTHETIC_CONTRACT_ONLY\nSYN-CONTRACT-WORKER-1\n'}));await expect(page.getByLabel('合成技术产物',{exact:true})).toHaveCount(0);await page.getByRole('button',{name:'读取非诊断技术产物',exact:true}).click();await expect(page.getByLabel('合成技术产物',{exact:true})).toContainText('NON_DIAGNOSTIC');await page.route('**/synthetic-tasks/task-b/artifact',r=>r.fulfill({status:409,json:{code:'AI_CONFLICT'}}));await page.getByRole('button',{name:'读取非诊断技术产物',exact:true}).click();await expect(page.getByRole('alert').filter({hasText:'AI依据版本已变化'})).toBeVisible();await expect(page.getByLabel('合成技术产物',{exact:true})).toHaveCount(0);});
+
+test('result generation rate error is visible and exact pending intent survives explicit retry',async({page})=>{
+ await start(page);
+ await page.route('**/synthetic-tasks/task-a',r=>r.fulfill({json:{...detail,effectiveState:'SYNTHETIC_SUCCEEDED',job:{...job,state:'SYNTHETIC_SUCCEEDED',version:2,generation:1,progress:100,artifactId:'synthetic-artifact'}}}));
+ await page.getByRole('button',{name:'核验任务 task-a',exact:true}).click();await expect(page.getByRole('region',{name:'合成契约任务'}).getByRole('status')).toContainText('SYNTHETIC_SUCCEEDED');
+ const first=signal(),seen=signal(),second=signal(),secondSeen=signal();
+ const requests:{key:string|undefined;body:unknown}[]=[];
+ const result='99999999-9999-4999-8999-999999999999';
+ await page.route('**/synthetic-results',async r=>{
+  requests.push({key:r.request().headers()['idempotency-key'],body:r.request().postDataJSON() as unknown});
+  if(requests.length===1){seen.resolve();await first.promise;await r.fulfill({status:429,json:{code:'VIEWER_RATE'}});}
+  else {secondSeen.resolve();await second.promise;await r.fulfill({json:{receipt:{status:200,resourceType:'SYNTHETIC_AI_RESULT',resourceId:result,version:0},replayed:true}});}
+ });
+ await page.getByLabel('合成任务操作原因',{exact:true}).fill('Synthetic non diagnostic visual fixture');
+ await page.getByRole('button',{name:'生成非诊断合成视觉结果',exact:true}).click();await seen.promise;
+ await expect(page.getByLabel('已确认合成结果ID',{exact:true})).toHaveCount(0);await expect(page.getByRole('button',{name:'生成非诊断合成视觉结果',exact:true})).toBeDisabled();
+ first.resolve();await expect(page.getByRole('alert').filter({hasText:'阅片请求达到有界配额。'})).toBeVisible();
+ await expect(page.getByRole('button',{name:'原键确认任务操作',exact:true})).toBeEnabled();
+ await expect(page.getByLabel('已确认合成结果ID',{exact:true})).toHaveCount(0);
+ await page.getByRole('button',{name:'原键确认任务操作',exact:true}).click();await secondSeen.promise;
+ expect(requests).toHaveLength(2);expect(requests[0].key).toBeTruthy();expect(requests[1]).toEqual(requests[0]);
+ expect(requests[0].body).toEqual({taskId:'task-a',expectedTaskVersion:2,reason:'Synthetic non diagnostic visual fixture'});
+ await expect(page.getByLabel('已确认合成结果ID',{exact:true})).toHaveCount(0);
+ second.resolve();await expect(page.getByLabel('已确认合成结果ID',{exact:true})).toHaveText(result);
+ await expect(page.getByRole('button',{name:'原键确认任务操作',exact:true})).toBeDisabled();expect(requests).toHaveLength(2);
+});
