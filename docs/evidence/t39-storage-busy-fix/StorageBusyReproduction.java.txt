@@ -1,0 +1,11 @@
+import com.pis.storage.*;import java.nio.file.*;import java.io.*;import java.security.*;import java.util.*;import java.util.concurrent.*;
+class StorageBusyReproduction {
+ public static void main(String[] args)throws Exception{
+  byte[] bytes=new byte[65536];System.arraycopy(StoragePolicy.MARKER,0,bytes,0,StoragePolicy.MARKER.length);String hash=HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));int busy=0,readBusy=0,success=0;
+  for(int n=0;n<200;n++){var root=Files.createTempDirectory("pis-busy-repro-").resolve("owned");UUID id=UUID.randomUUID();try(var p=new LocalStorageProvider(root);var pool=Executors.newVirtualThreadPerTaskExecutor()){
+   p.stage(id,new ByteArrayInputStream(bytes),bytes.length,hash);Callable<Boolean> work=()->{try{p.publish(id,bytes.length,hash);return true;}catch(IOException e){return false;}};var a=pool.submit(work);var b=pool.submit(work);boolean first=a.get(5,TimeUnit.SECONDS),second=b.get(5,TimeUnit.SECONDS);if(!first&&!second)throw new AssertionError("No publisher succeeded");
+   try{p.publish(id,bytes.length,hash);}catch(StorageProvider.Failure f){if(!f.code.equals("STORAGE_BUSY"))throw f;busy++;continue;}
+   try{if(!Arrays.equals(p.read(id,bytes.length,hash,null).bytes(),bytes))throw new AssertionError();success++;}catch(StorageProvider.Failure f){if(!f.code.equals("STORAGE_BUSY"))throw f;readBusy++;}
+  }}System.out.println("Original contract reproduction rounds=200 replayPublishBusy="+busy+" replayReadBusy="+readBusy+" exactSuccess="+success);
+ }
+}

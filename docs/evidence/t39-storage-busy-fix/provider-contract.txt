@@ -1,0 +1,1 @@
+PASS real provider: 100 barrier races, immutable bytes/SHA/replay, different payload rejected; two-worker saturation BUSY without files, bounded exhaustion, stream/owner release and exact retry; non-BUSY never retried. Not Spring/HTTP E2E.

@@ -1,0 +1,1 @@
+PASS actual provider: 2MiB streaming, SHA, Range, capacity, restart/replay, corrupt/partial fail closed, symlink protection, exclusive root, concurrent publish, child JVM abrupt halt and lock recovery

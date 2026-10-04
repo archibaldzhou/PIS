@@ -1,0 +1,15 @@
+PASS: workflow source graph is acyclic, including wildcard imports
+accession ->
+grossing -> accession
+processing -> accession, grossing, quality
+specimen -> accession
+label -> accession
+material -> accession, label, processing, quality, specimen
+quality -> accession
+worklist -> accession, processing
+diagnosis -> accession, quality
+report -> accession, diagnosis
+integration -> accession, material, report
+frozen -> accession, diagnosis, quality, report
+archive -> accession, material, report, specimen
+Source check only; full type compilation, Spring wiring and HTTP require CI
