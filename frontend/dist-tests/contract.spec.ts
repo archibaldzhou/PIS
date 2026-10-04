@@ -4,6 +4,8 @@ test('built assets render a real deep-link login and reload without a Vite serve
  await page.route('**/api/auth/csrf',r=>r.fulfill({json:{headerName:'X-CSRF-TOKEN',token:'synthetic-only'}}));
  const assets:string[]=[];page.on('response',r=>{if(r.url().endsWith('.js'))assets.push(r.url());});
  await page.goto('/engineering/deep/link');await expect(page.getByRole('heading',{name:'登录 PIS',exact:true})).toBeVisible();await page.reload();await expect(page.getByLabel('用户名',{exact:true})).toBeVisible();expect(assets.some(p=>p.includes('/assets/index-'))).toBe(true);expect(assets.some(p=>p.includes('@vite')||p.includes('/src/'))).toBe(false);
+ await expect(page.getByText('仅供合成数据开发演练；无临床 AI，不可用于诊疗或生产',{exact:true})).toBeVisible();
+ await expect(page.getByText('仅用于工程连通性验证，尚未实现病理业务或临床 AI',{exact:true})).toHaveCount(0);
  await page.screenshot({path:'../docs/evidence/t41/dist-login.png',fullPage:true});
 });
 test('built app keeps unknown backend failure as an error, never success or empty data',async({page})=>{

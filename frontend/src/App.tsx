@@ -81,7 +81,7 @@ export default function App() {
           <Button onClick={() => setWorkspaceUser(state.user.id)}>申请登记工作区</Button>
         </>}
         <Typography.Text type="secondary">
-          仅用于工程连通性验证，尚未实现病理业务或临床 AI
+          仅供合成数据开发演练；无临床 AI，不可用于诊疗或生产
         </Typography.Text>
       </Space>
     </Card>
