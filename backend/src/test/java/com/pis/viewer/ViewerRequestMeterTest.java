@@ -25,6 +25,17 @@ class ViewerRequestMeterTest {
         assertThat(meter.snapshot().requestUnits()).isZero();
         meter.charge(actor,minute,0,(at,n,size)->assertThat(n).isEqualTo(1));
     }
+    @Test void rolledBackUnitsAreRepaidButCommittedUnitsSurviveLaterByteRollback(){
+        var meter=new ViewerRequestMeter();var actor=UUID.randomUUID();
+        meter.charge(actor,minute,64,(at,n,size)->{});
+        meter.charge(actor,minute,32,(at,n,size)->{});
+        meter.rollback(actor,1,64);meter.rollback(actor,0,32);
+        assertThat(meter.snapshot()).isEqualTo(new ViewerRequestMeter.Snapshot(2,0,0));
+        meter.charge(actor,minute,0,(at,n,size)->assertThat(n).isEqualTo(1));
+        meter.charge(actor,minute,16,(at,n,size)->assertThat(n).isZero());meter.rollback(actor,0,16);
+        meter.charge(actor,minute,0,(at,n,size)->{throw new AssertionError("Committed frequency must not be paid twice");});
+        assertThat(meter.snapshot()).isEqualTo(new ViewerRequestMeter.Snapshot(5,1,0));
+    }
     @Test void concurrentInternalChecksHaveOneCommittedCharge()throws Exception{
         var meter=new ViewerRequestMeter();var actor=UUID.randomUUID();var units=new AtomicInteger();
         try(var pool=Executors.newVirtualThreadPerTaskExecutor()){

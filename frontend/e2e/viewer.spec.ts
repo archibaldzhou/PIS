@@ -1,11 +1,14 @@
 import { expect } from '@playwright/test';
 import { createHash } from 'node:crypto';
+import {safeResultBody} from './result-diagnostics';
 import { test, forbidden } from './viewer-fixture';
 test('viewer RGB pixels ROI and QC revocation protect warmed resources', async ({page,browser,source},info)=>{
   const {headers,scanPath,scanId,qcPath,viewerPath}=source;
   const original = await page.getByText(/图像相对缩放/).textContent(); await page.getByRole('button', { name: '放大图像' }).click(); await expect(page.getByText(/图像相对缩放/)).not.toHaveText(original ?? '');
   await page.getByRole('button', { name: '适配窗口' }).click(); await page.screenshot({ path: info.outputPath('real-service-synthetic-viewer.png'), fullPage: true });
+  const roiResponse=page.waitForResponse(r=>r.url().includes(`${scanPath}/${scanId}/roi?publicationVersion=2`)&&r.request().method()==='GET',{timeout:10_000});
   await page.getByRole('button', { name: '打开ROI编辑', exact: true }).click();
+  const roiOpened=await roiResponse;console.log('T36_ROI_HTTP '+JSON.stringify({status:roiOpened.status(),body:safeResultBody(await roiOpened.body())}));expect(roiOpened.status()).toBe(200);
   await expect(page.getByText(/集合版本 -1/)).toBeVisible();
   await page.getByRole('button', { name: '新建ROI并点击画布' }).click();
   const layer = page.getByLabel('ROI图像叠加层', { exact: true });

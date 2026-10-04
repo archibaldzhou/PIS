@@ -13,7 +13,7 @@ test('accepted synthetic task renders exact result pixels and model revocation c
   const {scope,rid,headers,scanPath,scanId,viewerPath}=source;
   // T34: registry is metadata only; exact current source qualification never permits execution.
   const aiPath=`${scanPath}/${scanId}/ai`,modelsPath=`/api/requests/ai/scopes/${scope}/models`;
-  const aiScanResponse=await page.request.get(`${aiPath}?publicationVersion=2`);expect(aiScanResponse.status()).toBe(200);
+  const aiScanResponse=await page.request.get(`${aiPath}?publicationVersion=2`);console.log("T36_QUALIFICATION_HTTP "+JSON.stringify({status:aiScanResponse.status(),body:safeResultBody(await aiScanResponse.body())}));expect(aiScanResponse.status()).toBe(200);
   const aiScan=await aiScanResponse.json() as {manifestHash:string;calibrationVersion:number|null};
   const modelMetadata={digest:'a'.repeat(64),preprocessing:'SYN-PRE-1',configSchema:'SYN-AI-CONFIG-1',maxTiles:16,inputContract:'SYN-RGB-PYRAMID-1',pathology:'SYN-PATH',stain:'SYN-STAIN',scannerCode:'SYN-DEVICE',scannerVersion:'SYN-V1',quality:'ALL_DIGITAL_QC_PASS',calibration:'PIXEL_ONLY',approvalScope:'SYNTHETIC_CONTRACT_ONLY',evidence:'DECLARED_SYNTHETIC',evidenceRef:'SYN-REFERENCE',limitations:'Synthetic contract fixture; no diagnostic performance evidence'};
   const modelResponse=await page.request.post(modelsPath,{headers:headers(),data:{modelId:crypto.randomUUID(),expectedHead:-1,code:'SYN-E2E',metadata:modelMetadata,reason:'Synthetic registry'}});expect(modelResponse.status()).toBe(200);

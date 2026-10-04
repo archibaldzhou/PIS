@@ -23,6 +23,15 @@ public final class SecurityE2eApplication {
         application.setRegisterShutdownHook(false);
         try {
             var context = application.run(arguments.toArray(String[]::new));
+            // Playwright suppresses server stdout. Forward ONLY the bounded API diagnostic to stderr.
+            var apiLogger=(ch.qos.logback.classic.Logger)org.slf4j.LoggerFactory.getLogger(com.pis.api.ApiExceptionAdvice.class);
+            var safeErrors=new ch.qos.logback.core.AppenderBase<ch.qos.logback.classic.spi.ILoggingEvent>() {
+                @Override protected void append(ch.qos.logback.classic.spi.ILoggingEvent event) {
+                    if(event.getLevel()==ch.qos.logback.classic.Level.ERROR && event.getMessage().equals("api_error code=INTERNAL_ERROR traceId={} failureStructure={}"))
+                        System.err.println("SYNTHETIC_E2E_SAFE_SERVER "+event.getFormattedMessage());
+                }
+            };
+            safeErrors.setContext(apiLogger.getLoggerContext());safeErrors.start();apiLogger.addAppender(safeErrors);
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                 try { context.close(); }
                 finally {

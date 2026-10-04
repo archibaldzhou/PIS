@@ -76,8 +76,8 @@ public final class ApiExceptionAdvice extends ResponseEntityExceptionHandler {
             if (cause instanceof AccessDeniedException denied) { throw denied; }
             if (cause.getCause() == cause) { break; }
         }
-        LOG.error("api_error code=INTERNAL_ERROR traceId={} exceptionType={}",
-            TraceIdFilter.traceId(request), exception.getClass().getName());
+        LOG.error("api_error code=INTERNAL_ERROR traceId={} failureStructure={}",
+            TraceIdFilter.traceId(request), SafeFailure.describe(exception));
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
             .header(HttpHeaders.CACHE_CONTROL, "no-store")
             .contentType(MediaType.APPLICATION_PROBLEM_JSON)

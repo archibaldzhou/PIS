@@ -19,13 +19,19 @@ public final class ViewerRequestMeter {
         var minute = paid.get(actor);
         int units = minute == null ? 1 : 0;
         if (units != 0 || size != 0) {
-            // Caller commits this accounting transaction before returning. Failure never marks it paid.
+            // Caller either commits or registers rollback compensation before returning. Failure never marks it paid.
             charge.persist(minute == null ? now : minute, units, size);
             paid.putIfAbsent(actor, now);
             requestUnits += units;
             bytes += size;
         }
         return snapshot();
+    }
+    /** Invoked only by the owning transaction completion; no authorization decision is restored. */
+    public synchronized void rollback(UUID actor,int units,int size) {
+        if(units==1)paid.remove(actor);
+        requestUnits-=units;
+        bytes-=size;
     }
     public synchronized Snapshot snapshot() { return new Snapshot(checks, requestUnits, bytes); }
 }

@@ -2350,7 +2350,7 @@ class RequestWorkflowTest {
     @Test void viewerHttpRequiresAuthAndEachTileUsesPrivateHeaders()throws Exception{var f=new Fixture();var d=viewerSource(f);var id=publishedViewer(f,d);f.as(()->tileViewer.prepare(d.request(),id,1,"http"));String path="/api/requests/"+d.request()+"/scans/"+id+"/viewer";var b=new Browser();assertThat(b.send("GET",path+"?publicationVersion=1",null,null,false).statusCode()).isEqualTo(401);String password="Synthetic-viewer-42!";jdbc.update("UPDATE app_user SET password_hash=? WHERE id=?",encoder.encode(password),f.user);assertThat(b.send("POST","/api/auth/login","username="+f.principal.getUsername()+"&password="+java.net.URLEncoder.encode(password,java.nio.charset.StandardCharsets.UTF_8),b.csrf(),true).statusCode()).isEqualTo(204);assertThat(b.send("GET",path+"?publicationVersion=1",null,null,false).statusCode()).isEqualTo(200);assertHttpError(b.send("POST",path,"{\"publicationVersion\":1}",null,false),403,"CSRF_INVALID");var response=b.send("GET",path+"/tiles/9/0/0?publicationVersion=1",null,null,false);assertThat(response.statusCode()).isEqualTo(200);assertThat(response.headers().firstValue("Content-Type")).contains("image/png");assertThat(response.headers().firstValue("Cache-Control")).contains("private, no-store");assertThat(b.send("GET",path+"/tiles/10/0/0?publicationVersion=1",null,null,false).statusCode()).isEqualTo(400);assertThat(b.send("GET",path+"/tiles/http/0/0?publicationVersion=1",null,null,false).statusCode()).isEqualTo(400);jdbc.update("UPDATE digital_qc_grant SET revoked_at=statement_timestamp() WHERE user_id=?",f.user);assertThat(b.send("GET",path+"/tiles/9/0/0?publicationVersion=1",null,null,false).statusCode()).isEqualTo(404);}
 
     @Test void viewerReadBudgetIsSharedAcrossManifestAndTilesAndCannotOverflow(){var f=new Fixture();var d=viewerSource(f);var id=publishedViewer(f,d);f.as(()->tileViewer.prepare(d.request(),id,1,"budget"));jdbc.update("INSERT INTO viewer_read_budget(user_id,minute,requests,bytes) SELECT ?,date_trunc('minute',statement_timestamp())+n*interval '1 minute',240,33554432 FROM generate_series(0,1) AS n ON CONFLICT(user_id,minute) DO UPDATE SET requests=240,bytes=33554432",f.user);f.as(()->{assertCode(()->tileViewer.manifest(d.request(),id,1),"VIEWER_RATE");assertCode(()->tileViewer.tile(d.request(),id,1,9,0,0,false),"VIEWER_RATE");return null;});assertThat(jdbc.queryForObject("SELECT max(requests) FROM viewer_read_budget WHERE user_id=?",Integer.class,f.user)).isEqualTo(240);}
-    @Test void viewerHttpAccountingSurvivesBusinessRollbackButNeverCachesQcAuthorization(){
+    @Test void viewerHttpAccountingRollsBackWithBusinessAndNeverCachesQcAuthorization(){
         var f=new Fixture();var d=viewerSource(f);var scan=publishedViewer(f,d);f.as(()->tileViewer.prepare(d.request(),scan,1,"meter-rollback"));
         long before=jdbc.queryForObject("SELECT coalesce(sum(requests),0) FROM viewer_read_budget WHERE user_id=?",Long.class,f.user);
         long audits=jdbc.queryForObject("SELECT count(*) FROM audit_event WHERE resource_id=? AND operation_code='VIEWER_MANIFEST_V1'",Long.class,scan);
@@ -2360,7 +2360,7 @@ class RequestWorkflowTest {
             f.as(()->{var transaction=new org.springframework.transaction.support.TransactionTemplate(transactionManager);
                 assertThatThrownBy(()->transaction.executeWithoutResult(t->{tileViewer.manifest(d.request(),scan,1);throw new IllegalStateException("Synthetic business rollback");})).isInstanceOf(IllegalStateException.class);
                 return null;});
-            assertThat(jdbc.queryForObject("SELECT coalesce(sum(requests),0) FROM viewer_read_budget WHERE user_id=?",Long.class,f.user)).isEqualTo(before+1);
+            assertThat(jdbc.queryForObject("SELECT coalesce(sum(requests),0) FROM viewer_read_budget WHERE user_id=?",Long.class,f.user)).isEqualTo(before);
             assertThat(jdbc.queryForObject("SELECT count(*) FROM audit_event WHERE resource_id=? AND operation_code='VIEWER_MANIFEST_V1'",Long.class,scan)).isEqualTo(audits);
             f.as(()->{tileViewer.manifest(d.request(),scan,1);digitalQc.command(d.request(),scan,"REVOKE",digitalCommand(1,0),"meter-revoke");assertCode(()->tileViewer.manifest(d.request(),scan,1),"DIGITAL_QC_NOT_READY");return null;});
             assertThat(jdbc.queryForObject("SELECT coalesce(sum(requests),0) FROM viewer_read_budget WHERE user_id=?",Long.class,f.user)).isEqualTo(before+1);
@@ -2521,6 +2521,44 @@ class RequestWorkflowTest {
 
     @Test void syntheticResultCorruptStoredPackageAndRevokedGrantFailClosed()throws Exception{var f=new Fixture();var d=taskFixture(f);var j=acceptedTask(f,d);var m=f.as(()->results.metadata(j.requestId(),results.create(j.requestId(),resultInput(j),"corrupt-visual").receipt().resourceId()));var path=STORAGE_ROOT.resolve(m.result().artifactId()+".blob");var original=java.nio.file.Files.readAllBytes(path);var bad=original.clone();bad[bad.length-2]^=1;try{java.nio.file.Files.write(path,bad);f.as(()->{assertCode(()->results.metadata(j.requestId(),m.result().id()),"STORAGE_INTEGRITY");assertCode(()->results.tile(j.requestId(),m.result().id(),0,m.epoch()),"STORAGE_INTEGRITY");return null;});}finally{java.nio.file.Files.write(path,original);}jdbc.update("UPDATE ai_task_grant SET revoked_at=statement_timestamp() WHERE user_id=?",f.user);f.as(()->{assertCode(()->results.metadata(j.requestId(),m.result().id()),"AI_TASK_NOT_FOUND");assertCode(()->results.create(j.requestId(),resultInput(j),"corrupt-visual"),"AI_TASK_NOT_FOUND");return null;});assertThat(java.nio.file.Files.readAllBytes(path)).isEqualTo(original);}
     @Test void syntheticResultCannotConsumeQueuedOrCancelledTaskOrAcceptLateWork(){var f=new Fixture();var d=taskFixture(f);f.as(()->{var id=tasks.submit(d.source().request(),d.scan(),taskInput(d),"queued-result").receipt().resourceId();var j=tasks.detail(d.source().request(),id).job();assertCode(()->results.prepare(j.requestId(),resultInput(j),"result-queued"),"AI_RESULT_INVALIDATED");tasks.command(j.requestId(),id,"CANCEL",taskCommand(j),"cancel-result-source");assertCode(()->results.create(j.requestId(),resultInput(j),"result-queued"),"AI_RESULT_INVALIDATED");assertCode(()->tasks.run(j.requestId(),id,taskCommand(j)),"AI_TASK_CONFLICT");assertThat(jdbc.queryForObject("SELECT count(*) FROM ai_result WHERE task_id=?",Integer.class,id)).isZero();return null;});}
+    @Test void viewerReadOnlyContextFailsClosedWithoutQuotaOrAuditCommit(){
+        var f=new Fixture();var d=viewerSource(f);var scan=publishedViewer(f,d);f.as(()->tileViewer.prepare(d.request(),scan,1,"read-only-prepare"));
+        long before=jdbc.queryForObject("SELECT coalesce(sum(requests),0) FROM viewer_read_budget WHERE user_id=?",Long.class,f.user);
+        long audits=jdbc.queryForObject("SELECT count(*) FROM audit_event WHERE resource_id=?",Long.class,scan);
+        var attributes=new org.springframework.web.context.request.ServletRequestAttributes(new MockHttpServletRequest(),new MockHttpServletResponse());
+        org.springframework.web.context.request.RequestContextHolder.setRequestAttributes(attributes);
+        try{f.as(()->{var readOnly=new org.springframework.transaction.support.TransactionTemplate(transactionManager);readOnly.setReadOnly(true);
+            assertThatThrownBy(()->readOnly.execute(t->tileViewer.manifest(d.request(),scan,1))).isInstanceOf(org.springframework.dao.DataAccessException.class);return null;});
+        }finally{org.springframework.web.context.request.RequestContextHolder.resetRequestAttributes();}
+        assertThat(jdbc.queryForObject("SELECT coalesce(sum(requests),0) FROM viewer_read_budget WHERE user_id=?",Long.class,f.user)).isEqualTo(before);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM audit_event WHERE resource_id=?",Long.class,scan)).isEqualTo(audits);
+    }
+
+    @Test void qualificationAndRoiHttpNeedOnlyOneConnectionAndRejectRevokedAccess()throws Exception {
+        var f=new Fixture();var d=taskFixture(f);var json=tools.jackson.databind.json.JsonMapper.builder().build();
+        String password="Synthetic-quota-http-42!";jdbc.update("UPDATE app_user SET password_hash=? WHERE id=?",encoder.encode(password),f.user);
+        var b=new Browser();assertThat(b.send("POST","/api/auth/login","username="+f.principal.getUsername()+"&password="+java.net.URLEncoder.encode(password,java.nio.charset.StandardCharsets.UTF_8),b.csrf(),true).statusCode()).isEqualTo(204);
+        String root="/api/requests/"+d.source().request()+"/scans/"+d.scan();
+        var dataSource=jdbc.getDataSource();assertThat(dataSource).isNotNull();
+        assertThat(dataSource.unwrap(com.zaxxer.hikari.HikariDataSource.class).getMaximumPoolSize()).isEqualTo(5);
+        long count=jdbc.queryForObject("SELECT coalesce(sum(requests),0) FROM viewer_read_budget WHERE user_id=?",Long.class,f.user);
+        // Deterministically hold the other four slots. No sleep, pool expansion or mocked controller.
+        try(var c1=dataSource.getConnection();var c2=dataSource.getConnection();var c3=dataSource.getConnection();var c4=dataSource.getConnection()) {
+            for(String endpoint:List.of("/ai","/roi")) {
+                var response=b.send("GET",root+endpoint+"?publicationVersion=1",null,null,false);
+                assertThat(response.statusCode()).as("Synthetic %s status; safe code=%s",endpoint,json.readTree(response.body()).path("code").asText()).isEqualTo(200);
+                assertThat(response.headers().firstValue("X-Viewer-Quota-Units")).contains("1");
+                if(endpoint.equals("/roi"))assertThat(json.readTree(response.body()).path("version").asLong()).isEqualTo(-1);
+                else assertThat(json.readTree(response.body()).path("publicationVersion").asLong()).isEqualTo(1);
+            }
+        }
+        assertThat(jdbc.queryForObject("SELECT coalesce(sum(requests),0) FROM viewer_read_budget WHERE user_id=?",Long.class,f.user)).isEqualTo(count+2);
+        for(String endpoint:List.of("/ai","/roi"))assertHttpError(b.send("GET",root+endpoint+"?publicationVersion=0",null,null,false),409,"DIGITAL_QC_NOT_READY");
+        jdbc.update("UPDATE digital_qc_grant SET revoked_at=statement_timestamp() WHERE user_id=?",f.user);
+        for(String endpoint:List.of("/ai","/roi"))assertHttpError(b.send("GET",root+endpoint+"?publicationVersion=1",null,null,false),404,"DIGITAL_QC_NOT_FOUND");
+        assertThat(jdbc.queryForObject("SELECT coalesce(sum(requests),0) FROM viewer_read_budget WHERE user_id=?",Long.class,f.user)).isEqualTo(count+2);
+    }
+
     @Test void syntheticResultAuthenticatedHttpAcceptsCurrentTaskAndKeepsExactReplay()throws Exception {
         var f=new Fixture();var d=taskFixture(f);var json=tools.jackson.databind.json.JsonMapper.builder().build();
         // Set the test password before creating the task: owner_auth_version must match the login.

@@ -29,13 +29,12 @@ public class ViewerService {
     private final JdbcTemplate jdbc;
     private final IdempotentCommands commands;
     private final TransactionTemplate tx;
-    private final TransactionTemplate quotaTx;
     private final JsonMapper json=JsonMapper.builder().build();
     private final Semaphore generators=new Semaphore(2);
     // Private decoded/encoded image cache. Authorization is never stored as a reusable decision.
     private final LinkedHashMap<ConsumerBinding,Cached> cache=new LinkedHashMap<>(16,.75f,true);
     private long cacheBytes;
-    public ViewerService(DigitalQcService qc,JdbcTemplate jdbc,IdempotentCommands commands,PlatformTransactionManager manager){this.qc=qc;this.jdbc=jdbc;this.commands=commands;tx=new TransactionTemplate(manager);tx.setTimeout(10);quotaTx=new TransactionTemplate(manager);quotaTx.setTimeout(5);quotaTx.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);}
+    public ViewerService(DigitalQcService qc,JdbcTemplate jdbc,IdempotentCommands commands,PlatformTransactionManager manager){this.qc=qc;this.jdbc=jdbc;this.commands=commands;tx=new TransactionTemplate(manager);tx.setTimeout(10);}
     private synchronized Cached cached(ConsumerBinding key){return cache.get(key);}
     private synchronized void save(ConsumerBinding key,Cached value){
         var old=cache.remove(key);if(old!=null)cacheBytes-=old.pyramid().byteSize();
@@ -60,7 +59,7 @@ public class ViewerService {
     private Content stored(UUID scan){var rows=jdbc.queryForList("SELECT manifest::text FROM viewer_manifest WHERE scan_id=?",String.class,scan);if(rows.isEmpty())throw conflict("VIEWER_NOT_PREPARED");return json.readValue(rows.getFirst(),Content.class);}
     private void bind(Content content,ConsumerBinding b){if(!content.hospitalId().equals(b.hospitalId())||!content.requestId().equals(b.requestId())||!content.scanId().equals(b.scanId())||!content.slideId().equals(b.slideId())||!content.objectId().equals(b.objectId())||!content.objectHash().equals(b.objectHash())||content.scanVersion()!=b.scanVersion()||!content.provider().equals(SyntheticPyramid.VERSION))throw conflict("VIEWER_BINDING");}
     private void persistBudget(TransactionTemplate transaction,ConsumerBinding b,OffsetDateTime minute,int units,int size){
-        // HTTP uses quotaTx for this counter only; business writes/audits and non-HTTP callers retain their transactions.
+        // Join the current business transaction: never reserve a second pool connection while holding its locks.
         transaction.executeWithoutResult(s->{
             jdbc.update("INSERT INTO viewer_read_budget(user_id,minute,requests,bytes) VALUES(?,?,0,0) ON CONFLICT DO NOTHING",b.actorId(),minute);
             if(jdbc.update("UPDATE viewer_read_budget SET requests=requests+?,bytes=bytes+? WHERE user_id=? AND minute=? AND requests+?<=240 AND bytes+?<=33554432",units,size,b.actorId(),minute,units,size)!=1)throw problem(HttpStatus.TOO_MANY_REQUESTS,"VIEWER_RATE");
@@ -79,7 +78,16 @@ public class ViewerService {
             if(request.getAttribute(key) instanceof ViewerRequestMeter existing)meter=existing;
             else {meter=new ViewerRequestMeter();request.setAttribute(key,meter);}
         }
-        try {meter.charge(b.actorId(),minute,size,(at,units,bytes)->persistBudget(quotaTx,b,at,units,bytes));}
+        try {meter.charge(b.actorId(),minute,size,(at,units,bytes)->{
+            boolean participating=org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive();
+            persistBudget(tx,b,at,units,bytes);
+            if(participating)org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                new org.springframework.transaction.support.TransactionSynchronization(){
+                    @Override public void afterCompletion(int status){
+                        if(status!=STATUS_COMMITTED)meter.rollback(b.actorId(),units,bytes);
+                    }
+                });
+        });}
         finally {var response=web.getResponse();if(response!=null&&!response.isCommitted()){
             var count=meter.snapshot();response.setHeader("X-Viewer-Quota-Checks",Integer.toString(count.checks()));
             response.setHeader("X-Viewer-Quota-Units",Integer.toString(count.requestUnits()));
