@@ -13,3 +13,11 @@ HIS 只登记精确核心患者/申请/病例与来源身份的观察关联；BI
 接收事务原子写 inbox/本地台账/接收序号/outbox/event/audit。`ATTEMPTING` 不是送达；单独 ACK 要有本地持久化证据，单独 RECONCILE 才表示本地账一致。人工操作固定当前 attempt UUID 和版本，租约30秒；尝试上限3、退避5/20秒复用 T21 DeliveryPolicy。超时只表示 ACK 未知；重启后新的尝试从 inbox 认出已落盘的同一消息，不重复写业务。乱序 NACK 保留不可变输入，仅顺序条件恢复后可带原因 REPAIR，仍受原尝试预算限制。取消不抹除已经落盘的本地记录；旧尝试不能复活取消状态。没有自动工作线程、自动诊断、真实支付或外呼。
 
 新增真实应用子进程故障测试沿用已有一次性测试启动器与脱敏诊断：接收事务提交后 halt(23)，父测试显式注入租约/退避到期，第二个真实应用进程恢复并完成 ACK/对账。它使用测试 classpath/一次性库，不创建生产持续访问；本地未执行不能声称重启通过。真实服务/HTTP/子进程证据由完整 CI 提供。
+
+## T39 CI 架构修复：报告拥有能力端口
+
+CI发现模块环 `report → integration → report`：DeliveryService 直接调用集成域 CA 工厂，而 HospitalAdapterService 复用报告重试策略、LocalEmrAdapterController 调用报告投递服务。后者是合法上层适配方向，前者将报告用例耦合到具体集成实现。
+
+报告域新增只读 `SignatureCapability` 出站端口（仅 NOT_CONFIGURED/UNVERIFIED，不提供签署操作），DeliveryService 通过构造器接收。集成域 `LocalSignatureCapability` 实现该端口，并以现有不可用 CA provider 返回能力状态，Spring 在组合时注入。不是搬包避开扫描，也没有改变报告授权、查询审计、队列或事务。集成域仍单向依赖报告公共边界。原 CaAdapter 契约和 unavailable(true) 的 UNVERIFIED 语义保留。
+
+架构门禁仍检查全部原有13个工作流域及 processing 公共白名单，新增 wildcard import 边、显式方向断言和完整环路径诊断。旧提交复现和当前源码图见 t39-boundary-fix 证据。HTTP回归对比EMR别名与原投递接口完全相同的队列/CA状态，并保留同键重放、唯一业务记录和撤权拒绝断言。

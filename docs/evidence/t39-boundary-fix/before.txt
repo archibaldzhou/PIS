@@ -1,0 +1,5 @@
+CYCLE: report -> integration -> report
+  report -> integration: backend/src/main/java/com/pis/report/DeliveryService.java: com.pis.integration.CaAdapter
+  integration -> report: backend/src/main/java/com/pis/integration/HospitalAdapterService.java: com.pis.report.DeliveryPolicy
+  integration -> report: backend/src/main/java/com/pis/integration/LocalEmrAdapterController.java: com.pis.report.*
+Source check only; full type compilation, Spring wiring and HTTP require CI
