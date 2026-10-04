@@ -5,9 +5,32 @@
   "attestation": "父会话通过已授权GitHub连接核验完整CI成功；本任务未查询Actions API，没有自行下载该run原始日志。",
   "result": "SUCCESS_REPORTED_BY_PARENT",
   "mainPushVerified": "5be3b823a68dbddb2d8962b53492afe618f82f82",
-  "mainCi": "PENDING_PARENT_VERIFICATION",
-  "t42Ci": "PENDING",
-  "scope": "T41及全部祖先运行时代码；T42文档/索引检查另验。",
+  "mainCi": {
+    "revision": "5be3b823a68dbddb2d8962b53492afe618f82f82",
+    "ciUrl": "https://github.com/archibaldzhou/PIS/actions/runs/37198121358",
+    "result": "SUCCESS_REPORTED_BY_PARENT"
+  },
+  "t42Ci": {
+    "revision": "5e51683122a51660eff42ef55a6390d79227662f",
+    "ciUrl": "https://github.com/archibaldzhou/PIS/actions/runs/37198859288",
+    "result": "SUCCESS_REPORTED_BY_PARENT",
+    "applicableStages": [
+      "backend verify含真实PG/HTTP/并发/迁移/打包隔离",
+      "有界实际PNG provider",
+      "真实PG17隔离dump/restore",
+      "前端单测/lint/build",
+      "release/proxy生命周期",
+      "正式JAR冷启动/失败候选/重启/同构建双实例回切",
+      "真实服务E2E",
+      "真正dist+真实服务浏览器",
+      "真正dist+mock身份UI",
+      "全量mock UI",
+      "frontend-dependencies审计",
+      "Development acceptance traceability"
+    ],
+    "counts": "本次未读取原始日志，不推定或新增测试数量"
+  },
+  "scope": "T41历史基线摘要保留；T42及两文件修复另由t42Ci记录覆盖；本轮新文档提交CI尚待核验。",
   "runtimeTreeFiles": 561,
   "runtimeTreeSha256": "0224874f2dcb900095988736fc5427ff1241b57f0260cc087636e64ab4b77a6d",
   "runtimePrefixes": [
@@ -253,13 +276,16 @@
       "baselineSha256": "d0df48bd92e1e0d659fd2bb678429be76ed7c75e28b4f1ca602cae86cbf6e2c8",
       "currentSha256": "3c643a963e84a9822fad41ecf43756844953a990cfaf47b90949476193d639d1",
       "reason": "T42实际dist QA发现过时首页说明；仅修正文案并增加实际dist安全提示断言。",
-      "verification": "本地单测/lint/build/dist UI单独执行；完整T42 CI待父会话，不纳入旧基线通过结论。"
+      "verification": "历史本地单测/lint/build/dist UI单独执行；现由父会话核验T42 5e51683122a51660eff42ef55a6390d79227662f 完整CI 37198859288成功，不追溯伪造本地后端执行。"
     },
     "frontend/dist-tests/contract.spec.ts": {
       "baselineSha256": "9b685a8bc88d6ff21c9f199050e28fc582b4fa467ef9ac29264bfae3709f3a56",
       "currentSha256": "198287bcd50cf311efcccdcd0d5c10675762c0a732699f99851ecf92050821a4",
       "reason": "T42实际dist QA发现过时首页说明；仅修正文案并增加实际dist安全提示断言。",
-      "verification": "本地单测/lint/build/dist UI单独执行；完整T42 CI待父会话，不纳入旧基线通过结论。"
+      "verification": "历史本地单测/lint/build/dist UI单独执行；现由父会话核验T42 5e51683122a51660eff42ef55a6390d79227662f 完整CI 37198859288成功，不追溯伪造本地后端执行。"
     }
-  }
+  },
+  "t42MainPushVerified": "5e51683122a51660eff42ef55a6390d79227662f",
+  "t42MainCi": "PENDING_PARENT_VERIFICATION",
+  "documentationFollowupCi": "PENDING_NEW_DOCUMENTATION_COMMIT"
 }

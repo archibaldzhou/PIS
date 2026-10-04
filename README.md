@@ -1,6 +1,6 @@
 # PIS · 合成开发系统
 
-当前统一入口：[T42验收报告](docs/acceptance/report.md)、[42项要求/实现/测试矩阵](docs/acceptance/matrix.md)、[中文运行与演示指南](docs/runbooks/t42-synthetic-demo.md)。T41精确基线 `5be3b823a68dbddb2d8962b53492afe618f82f82` 的完整CI已由父会话核验成功；T42自身CI另验。以下分任务“本地未验证/待CI”保留其历史时点，不代表当前基线仍未验证。仅合成开发，不是临床/生产批准。
+当前统一入口：[T42验收报告](docs/acceptance/report.md)、[42项要求/实现/测试矩阵](docs/acceptance/matrix.md)、[中文运行与演示指南](docs/runbooks/t42-synthetic-demo.md)。T41精确基线 `5be3b823a68dbddb2d8962b53492afe618f82f82` 的完整CI已由父会话核验成功；T42 `5e51683122a51660eff42ef55a6390d79227662f` 的[完整CI 37198859288](https://github.com/archibaldzhou/PIS/actions/runs/37198859288)已由父会话核验成功并保留历史整合main；本轮新文档提交CI另验。以下分任务“本地未验证/待CI”保留其历史时点，不代表当前基线仍未验证。仅合成开发，不是临床/生产批准。
 
 开发前请阅读根级 [AGENTS.md](AGENTS.md)、[工程基线 ADR](docs/adr/0001-engineering-baseline.md)、[真实门禁与缺口](docs/engineering-gates.md)及[需求来源登记](docs/prd/README.md)。这些文件落实 T01 工程约束，不代表临床批准或全部未来功能已实现。
 

@@ -1746,7 +1746,7 @@
     {
       "id": "T42",
       "requirement": "全任务开发验收、矩阵及中文运行指南",
-      "status": "开发验收待本提交CI",
+      "status": "T42精确SHA 5e51683122a51660eff42ef55a6390d79227662f 完整CI 37198859288已验证；本轮新文档提交另验",
       "prd": "docs/prd/T42-development-acceptance.md",
       "implementation": [
         "docs/acceptance/matrix.json",
@@ -1767,7 +1767,7 @@
         "docs/evidence/t42/checks.txt",
         "docs/api/t42-notice-fix.md"
       ],
-      "limitations": "本提交完整CI待父会话；无原始招标正文逐条验收，无医院UAT/生产批准。 本次独立修正首页过时说明，完整CI另验。",
+      "limitations": "无原始招标正文逐条验收，无医院UAT/生产批准；UI029/030未实现、UI033/034部分实现，42项任务映射不等于所有原型完成。首页修复随上述T42 CI通过；新文档提交等待父会话CI。",
       "testMethods": []
     }
   ]

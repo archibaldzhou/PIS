@@ -504,7 +504,7 @@
 
 ## T42 全任务开发验收、矩阵及中文运行指南
 
-- 状态：开发验收待本提交CI
+- 状态：T42精确SHA 5e51683122a51660eff42ef55a6390d79227662f 完整CI 37198859288已验证；本轮新文档提交另验
 - 开发依据：[docs/prd/T42-development-acceptance.md](../../docs/prd/T42-development-acceptance.md)
 - 实现：[docs/acceptance/matrix.json](../../docs/acceptance/matrix.json)、[docs/acceptance/report.md](../../docs/acceptance/report.md)、[docs/runbooks/t42-synthetic-demo.md](../../docs/runbooks/t42-synthetic-demo.md)、[scripts/acceptance.py](../../scripts/acceptance.py)、[frontend/src/App.tsx](../../frontend/src/App.tsx)
 - 迁移：无新增；保留既有基线
@@ -512,4 +512,4 @@
 - 回归入口：[scripts/acceptance.py](../../scripts/acceptance.py)、[frontend/dist-tests/contract.spec.ts](../../frontend/dist-tests/contract.spec.ts)
 - 后端断言定位：见上述专用检查入口
 - 证据：[docs/evidence/t42/checks.txt](../../docs/evidence/t42/checks.txt)、[docs/api/t42-notice-fix.md](../../docs/api/t42-notice-fix.md)
-- 限制：本提交完整CI待父会话；无原始招标正文逐条验收，无医院UAT/生产批准。 本次独立修正首页过时说明，完整CI另验。
+- 限制：无原始招标正文逐条验收，无医院UAT/生产批准；UI029/030未实现、UI033/034部分实现，42项任务映射不等于所有原型完成。首页修复随上述T42 CI通过；新文档提交等待父会话CI。
