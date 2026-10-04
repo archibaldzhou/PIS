@@ -1,0 +1,5 @@
+PASS PyYAML 6.0.3 BaseLoader syntax/structure parse (on preserved as string)
+PASS exact semantic delta: jobs.verify.timeout-minutes 20 -> 30 only
+PASS all 13 verify steps and UI gate retained, other jobs/triggers/permissions/uses/env identical
+PASS Playwright configs and Maven configuration byte-identical to parent
+actionlint unavailable locally; GitHub workflow execution remains pending

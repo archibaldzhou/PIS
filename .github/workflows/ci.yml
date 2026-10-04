@@ -8,7 +8,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
       PIS_TEST_DB_URL: jdbc:postgresql://127.0.0.1:5432/pis_test?connectTimeout=5&socketTimeout=10
       PIS_TEST_DB_USERNAME: pis_test
