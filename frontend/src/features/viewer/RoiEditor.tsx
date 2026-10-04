@@ -5,7 +5,7 @@ import OpenSeadragon from 'openseadragon';
 import { ApiError } from '../../api';
 import type { Manifest } from './api';
 import * as api from './roi-api';
-import { inverse, project, validate, vertices, measure, type Kind, type Matrix, type Point } from './roi-geometry';
+import { inverse, project, mirrorMatrix, validate, vertices, measure, type Kind, type Matrix, type Point } from './roi-geometry';
 type Intent = { key: string; body: api.Save } | { key: string; calibration: { x: number; y: number; reason: string; version: number } };
 export function RoiEditor({ manifest, viewer, host, onState, onFatal }: { manifest: Manifest; viewer: OpenSeadragon.Viewer; host: HTMLElement; onState: (dirty: boolean, pending: boolean) => void; onFatal: (e: unknown) => void }) {
  const clipId = useId();
@@ -13,7 +13,7 @@ export function RoiEditor({ manifest, viewer, host, onState, onFatal }: { manife
  const active = useRef<AbortController | undefined>(undefined), intent = useRef<Intent | undefined>(undefined), locked = useRef(false); const alive = useRef(true); const notify = useRef(onState), fatal = useRef(onFatal); notify.current = onState; fatal.current = onFatal;
  useEffect(() => { notify.current(dirty, pending); }, [dirty, pending]);
  useEffect(() => { alive.current = true; const c = new AbortController(); active.current = c; void api.load(manifest, c.signal).then(v => { if (!c.signal.aborted) setView(v); }).catch(e => { if (!c.signal.aborted) setError(e instanceof Error ? e.message : 'ROI读取失败'); }); return () => { alive.current = false; c.abort(); active.current?.abort(); notify.current(false, false); }; }, [manifest]);
- useEffect(() => { const update = () => { const item = viewer.world.getItemAt(0); if (!item) return; const a = item.imageToViewerElementCoordinates(new OpenSeadragon.Point(0, 0)), b = item.imageToViewerElementCoordinates(new OpenSeadragon.Point(1, 0)), c = item.imageToViewerElementCoordinates(new OpenSeadragon.Point(0, 1)); setMatrix([b.x - a.x, b.y - a.y, c.x - a.x, c.y - a.y, a.x, a.y]); }; update(); const events = ['animation', 'viewport-change', 'resize', 'rotate', 'flip'] as const; events.forEach(e => viewer.addHandler(e, update)); return () => events.forEach(e => viewer.removeHandler(e, update)); }, [viewer, host]);
+ useEffect(() => { const update = () => { const item = viewer.world.getItemAt(0); if (!item) return; const a = item.imageToViewerElementCoordinates(new OpenSeadragon.Point(0, 0)), b = item.imageToViewerElementCoordinates(new OpenSeadragon.Point(1, 0)), c = item.imageToViewerElementCoordinates(new OpenSeadragon.Point(0, 1)); const m: Matrix = [b.x - a.x, b.y - a.y, c.x - a.x, c.y - a.y, a.x, a.y]; setMatrix(viewer.viewport.getFlip() ? mirrorMatrix(m, host.clientWidth) : m); }; update(); const events = ['animation', 'viewport-change', 'resize', 'rotate', 'flip'] as const; events.forEach(e => viewer.addHandler(e, update)); return () => events.forEach(e => viewer.removeHandler(e, update)); }, [viewer, host]);
  function reset() { setPoints([]); setSelected(undefined); setHistory(undefined); setUndo([]); setReason(''); setMode(false); setDirty(false); setMppX(null); setMppY(null); }
  function guard(work: () => void) { if (pending || busy) return; if (dirty) setConfirm(() => work); else work(); }
  function edit(next: Point[]) { if (pending || busy) return; setUndo(u => [...u.slice(-19), points]); setPoints(next); setDirty(true); }

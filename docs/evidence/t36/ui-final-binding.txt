@@ -1,0 +1,35 @@
+
+> pis-frontend@0.0.1 test:ui
+> playwright test --config playwright.ui.config.ts roi.spec.ts synthetic-result.spec.ts
+
+[2m[WebServer] [22m(node:349903) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[2m[WebServer] [22m(Use `node --trace-warnings ...` to show where the warning was created)
+[2m[WebServer] [22m(node:349916) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[2m[WebServer] [22m(Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 9 tests using 2 workers
+
+(node:349935) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:349934) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:349934) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:349935) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  2 ui-tests/synthetic-result.spec.ts:16:1 › actual result PNG overlays real OSD with opacity blend rotation flip crop and cancellation (5.6s)
+  ✓  1 ui-tests/roi.spec.ts:12:1 › ROI rectangle polygon and point persist canonical pixels with real rotated overlay and screenshot (6.7s)
+  ✓  4 ui-tests/roi.spec.ts:13:1 › ROI failed save freezes original key, cancellation preserves uncertain request and explicit retry succeeds (4.0s)
+  ✓  3 ui-tests/synthetic-result.spec.ts:26:1 › result model revocation clears delivered layer and corrupted PNG never renders (9.2s)
+  ✓  5 ui-tests/roi.spec.ts:14:1 › ROI dirty switching is cancellable and dual images only synchronize identical manifests (6.6s)
+  ✓  6 ui-tests/synthetic-result.spec.ts:27:1 › late result response after image switch is aborted and never enters the second image (3.6s)
+  ✓  8 ui-tests/synthetic-result.spec.ts:29:1 › QC removal destroys result resources and retains exactly one authorized history panel (3.1s)
+  ✓  7 ui-tests/roi.spec.ts:15:1 › ROI calibration edits and soft deletion preserve exact revision history while QC clears overlays (7.4s)
+  ✓  9 ui-tests/roi.spec.ts:17:1 › ROI cancelled late save cannot restore A after explicit abandonment and switching to B (5.0s)
+
+  9 passed (32.0s)
+npm notice
+npm notice New major version of npm available! 11.21.0 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice

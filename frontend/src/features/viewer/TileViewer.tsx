@@ -4,6 +4,7 @@ import OpenSeadragon from 'openseadragon';
 import { ApiError } from '../../api';
 import * as api from './api';
 import { RoiEditor } from './RoiEditor';
+import { ResultOverlay } from './ResultOverlay';
 import { RoiHistory } from './RoiHistory';
 import { viewerTransport } from './tile-queue';
 
@@ -58,6 +59,7 @@ function ImageView({ requestId, scanId, onExpired, onState, onReady, onViewport 
   <p>图像相对缩放 {zoom || '—'} / 导航坐标 {position || '—'}；键盘方向键平移，+/-缩放，Home适配。已交付像素的授权刷新间隔2秒。</p>
   {historicalManifest && <RoiHistory key={historicalManifest.content.manifestHash} manifest={historicalManifest} />}
   {manifest && osd && overlay.current && roi && <RoiEditor manifest={manifest} viewer={osd} host={overlay.current} onState={(d,p) => { setRoiLocked(d || p); onState(d,p); }} onFatal={e => fatal.current(e)} />}
+  {manifest && osd && overlay.current && <ResultOverlay key={`result:${manifest.content.manifestHash}`} manifest={manifest} viewer={osd} host={overlay.current} />}
   <Button disabled={!manifest || !osd} onClick={() => setRoi(true)}>打开ROI编辑</Button>
   <div style={{ position: 'relative', marginTop: 'auto', flexShrink: 0 }}><div ref={element} aria-label="合成瓦片画布" tabIndex={0} onKeyDown={e => { if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', '+', '-', 'Home'].includes(e.key)) { e.preventDefault(); move(e.key === 'Home' ? 'home' : e.key); } }} style={{ height: 520, width: '100%', background: '#152638', position: 'relative' }} /><div ref={overlay} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} /></div>
  </div>;

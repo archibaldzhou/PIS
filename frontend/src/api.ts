@@ -47,6 +47,7 @@ export async function request(path: string, options: RequestInit = {}): Promise<
     throw new ApiError(403, 'FORBIDDEN', '请求被拒绝，请重试或联系管理员');
   }
   const workflowErrors: Record<string, string> = {
+    AI_RESULT_INVALIDATED: '合成结果资格或依据版本已失效，叠加不可用。', AI_RESULT_NOT_FOUND: '合成结果或当前权限不可用。', AI_RESULT_NOT_READY: '合成结果尚未完成不可变存储，不可显示。', AI_RESULT_EXISTS: '该任务已有结果，请使用原幂等请求或已知结果ID。', AI_RESULT_CORRUPT: '合成结果包损坏，禁止显示。', AI_RESULT_BINDING: '合成结果来源不匹配。', AI_RESULT_CONFLICT: '结果版本冲突，请原键核对。', AI_RESULT_TILE: '合成瓦片坐标无效。', AI_RESULT_GENERATOR_CHANGED: '运行时或生成器已改变，不能重新生成旧版。',
     AI_WORKER_DISABLED: '合成契约worker未启用；临床执行仍被禁止。', AI_TASK_NOT_FOUND: '合成任务或当前资格不可用。', AI_TASK_CONFLICT: '任务版本、租约或状态已变化，请保留原请求并重新核对。', AI_WORKER_CAPACITY: '合成worker有效租约已达开发并发上限。', AI_CALLBACK_SCHEMA: '回调来源或schema不符合合成契约。', AI_ARTIFACT_NOT_READY: '技术产物未就绪，请核对失败或超时状态。', AI_TASK_ACTION: '不支持该任务操作。', AI_TASK_PAGE: '任务查询页超出开发上限。',
     AI_NOT_FOUND: 'AI契约或当前资格不可用。', AI_CONFLICT: 'AI依据版本已变化，请重新核对；旧判定不是执行许可。', AI_SCHEMA: '模型字段不符合合成契约schema。', AI_STATE: '不支持该状态，不能临床批准。', AI_PROFILE_REQUIRED: '缺少当前扫描适用资料。', AI_PAGE: 'AI查询范围越界。',
     ROI_CONFLICT: 'ROI集合或修订已变化，请保留输入并重新核对。', ROI_BINDING: 'ROI不属于当前精确图像清单。', ROI_NOT_FOUND: 'ROI资源或作者权限不可用。', ROI_CALIBRATION: '校准版本无效或已变化，不能沿用旧测量。', ROI_GEOMETRY: 'ROI数量、有限值、边界或自交校验失败。', ROI_LIMIT: 'ROI数量或修订达到开发上限。',

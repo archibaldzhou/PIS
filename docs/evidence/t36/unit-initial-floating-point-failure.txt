@@ -1,0 +1,44 @@
+
+> pis-frontend@0.0.1 test
+> vitest run
+
+
+ RUN  v4.1.11 /workspace/PIS/frontend
+
+ ❯ src/features/viewer/roi-geometry.test.ts (6 tests | 1 failed) 48ms
+   × mirrors actual viewport screen X after rotation and round trips canonical pixels 6ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/features/viewer/roi-geometry.test.ts > mirrors actual viewport screen X after rotation and round trips canonical pixels
+AssertionError: expected [ Array(6) ] to deeply equal [ Array(6) ]
+
+- Expected
++ Received
+
+  [
+    -3.6739403974420594e-16,
+    -2,
+    2,
+    -3.6739403974420594e-16,
+-   -312.9999999999999,
++   -313,
+    541.0000000000001,
+  ]
+
+ ❯ src/features/viewer/roi-geometry.test.ts:22:525
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 31 passed (32)
+      Tests  1 failed | 180 passed (181)
+   Start at  01:57:25
+   Duration  1.76s (transform 718ms, setup 0ms, import 1.12s, tests 555ms, environment 3ms)
+
+npm notice
+npm notice New major version of npm available! 11.21.0 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice

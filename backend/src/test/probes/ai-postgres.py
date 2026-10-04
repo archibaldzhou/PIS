@@ -1,6 +1,6 @@
 from pathlib import Path
 import subprocess,uuid,time
-root=Path(__file__).resolve().parents[4];name='pis-t35-'+uuid.uuid4().hex[:8]
+root=Path(__file__).resolve().parents[4];name='pis-t36-'+uuid.uuid4().hex[:8]
 image='postgres@sha256:639ab7ceb90e13123085b741fb31ef493fba25463002f6da665352e7b534b652'
 def run(args,**kw):return subprocess.run(args,text=True,capture_output=True,**kw)
 def sql(s,ok=True):
@@ -14,7 +14,7 @@ try:
   if 'PostgreSQL init process complete' in run(['docker','logs',name]).stdout and run(['docker','exec',name,'pg_isready','-U','postgres']).returncode==0:break
   time.sleep(.2)
  migrations=sorted((root/'backend/src/main/resources/db/migration').glob('V*__*.sql'),key=lambda p:int(p.name.split('__')[0][1:]))
- assert [int(p.name.split('__')[0][1:]) for p in migrations]==list(range(1,33))
+ assert [int(p.name.split('__')[0][1:]) for p in migrations]==list(range(1,34))
  for p in migrations:sql('BEGIN;'+p.read_text().replace('${flyway:defaultSchema}','public')+'COMMIT;')
  ids={k:str(uuid.uuid4()) for k in ['h','p','s','r','c','u','k','m','campus','dept','scope','scheme','b','o','output','control','pass','result','revoke','a','trace']}
  def fmt(s):return s.format(**ids)
@@ -143,6 +143,24 @@ try:
  sql(f"UPDATE ai_task SET state='CANCELLED',version=version+1 WHERE id='{task}'")
  sql(f"UPDATE ai_task SET state='RUNNING',version=version+1 WHERE id='{task}'",False)
  sql(f"DELETE FROM ai_task WHERE id='{task}'",False)
- print('PASS PG17 V1-V32: task immutable binding, claim CAS, cancellation, transaction rollback; prior storage/scan/QC/ROI constraints, AI model/state CAS races, retirement, exact snapshot binding, rollback and immutable versions')
+ # SQL-only V33 invariants. Synthetic rows are not application/worker execution evidence.
+ result_id=str(uuid.uuid4());artifact=str(uuid.uuid4());worker=str(uuid.uuid4());accepted=str(uuid.uuid4())
+ for ordinal,object_id,purpose in [(1,worker,'SYNTHETIC_WORKER_ARTIFACT'),(2,artifact,'SYNTHETIC_RESULT_ARTIFACT')]:
+  sql(fmt("INSERT INTO storage_version(id,asset_id,hospital_id,request_id,case_id,scope_id,ordinal,root_id,purpose,media_type,byte_size,sha256,actor_id,state) VALUES('OBJECT','{asset}','{h}','{r}','{k}','{scope}',ORDINAL,'{rootid}','PURPOSE','application/octet-stream',256,repeat('a',64),'{u}','READY')").replace('OBJECT',object_id).replace('ORDINAL',str(ordinal)).replace('PURPOSE',purpose))
+ sql(fmt("INSERT INTO ai_task(id,request_id,scope_id,hospital_id,scan_id,assessment_id,owner_id,owner_auth_version,binding,binding_hash,worker_schema,reason,state,artifact_id,version) VALUES('ACCEPTED','{r}','{scope}','{h}','{scan}','ASSESS','{u}',0,'{{}}',repeat('a',64),'SYN-CONTRACT-WORKER-1','Synthetic','SYNTHETIC_SUCCEEDED','WORKER',2)").replace('ACCEPTED',accepted).replace('ASSESS',assessment).replace("'WORKER'","'"+worker+"'"))
+ def insert_result(id,source,version=2):return fmt("INSERT INTO ai_result(id,task_id,request_id,scope_id,hospital_id,scan_id,owner_id,task_version,source_hash,binding,generator,artifact_hash,artifact_size) VALUES('RESULT','SOURCE','{r}','{scope}','{h}','{scan}','{u}',VERSION,repeat('a',64),'{{}}','SYN-OVERLAY-1',repeat('a',64),256)").replace('RESULT',id).replace('SOURCE',source).replace('VERSION',str(version))
+ sql(insert_result(str(uuid.uuid4()),task),False)
+ sql(insert_result(str(uuid.uuid4()),accepted,1),False)
+ sql(insert_result(result_id,accepted))
+ sql(insert_result(str(uuid.uuid4()),accepted),False)
+ sql(f"BEGIN;UPDATE ai_result SET state='READY',version=1,artifact_id='{artifact}' WHERE id='{result_id}';ROLLBACK;")
+ assert sql(f"SELECT state FROM ai_result WHERE id='{result_id}'")=='BUILDING'
+ sql(f"UPDATE ai_result SET state='READY',version=1,artifact_id='{worker}' WHERE id='{result_id}'",False)
+ command=f"UPDATE ai_result SET state='READY',version=1,artifact_id='{artifact}' WHERE id='{result_id}' AND version=0 RETURNING id"
+ with ThreadPoolExecutor(max_workers=2) as pool:outcomes=list(pool.map(lambda _:sql(command),range(2)))
+ assert sorted(result_id in x.splitlines() for x in outcomes)==[False,True]
+ sql(f"UPDATE ai_result SET artifact_hash=repeat('b',64) WHERE id='{result_id}'",False)
+ sql(f"DELETE FROM ai_result WHERE id='{result_id}'",False)
+ print('PASS PG17 V1-V33: result accepted-source/version/purpose binding, unique identity, READY CAS, rollback and immutable history; prior task/storage/scan/QC/ROI/AI invariants. SQL-only, not application E2E.')
 finally:
  run(['docker','rm','-f',name])

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { inverse, project, transform, validate, measure } from './roi-geometry';
+import { inverse, project, mirrorMatrix, transform, validate, measure } from './roi-geometry';
 describe('canonical image pixel coordinates', () => {
  it('round trips rotation flip pan zoom and crop over deterministic samples', () => { for (const rotation of [0, 30, 90, 180, 270, 359]) for (const flip of [false, true]) for (const zoom of [.01, .3, 1, 10]) for (let i = 0; i < 20; i++) { const m = transform(rotation, flip, zoom, { x: 723, y: -341 }, { x: 60, y: 35, width: 220, height: 180 }), p = { x: i * 23.1, y: i * 15.7 }, back = project(project(p, m), inverse(m)); expect(back.x).toBeCloseTo(p.x, 7); expect(back.y).toBeCloseTo(p.y, 7); } });
  it('rejects singular, invalid and non-finite transforms', () => { expect(() => inverse([0, 0, 0, 0, 0, 0])).toThrow(); expect(() => transform(0, false, 0, { x: 0, y: 0 }, { x: 0, y: 0, width: 1, height: 1 })).toThrow(); expect(() => inverse([NaN, 0, 0, 1, 0, 0])).toThrow(); });
@@ -18,3 +18,5 @@ it('measures a fixed anisotropic triangle independently of winding and repeated 
   expect(measure('POLYGON', q, { version: 3, mppX: .25, mppY: 2 }).area).toBeCloseTo(24, 7);
  }
 });
+
+it('mirrors actual viewport screen X after rotation and round trips canonical pixels',()=>{for(const r of [0,90,180,270]){const m=transform(r,false,2,{x:71,y:29},{x:0,y:0,width:512,height:384});const flipped=mirrorMatrix(m,800);for(const p of [{x:0,y:0},{x:27,y:81},{x:512,y:384}]){const a=project(p,m),b=project(p,flipped);expect(b.x).toBeCloseTo(800-a.x);expect(b.y).toBeCloseTo(a.y);const back=project(b,inverse(flipped));expect(back.x).toBeCloseTo(p.x);expect(back.y).toBeCloseTo(p.y);}mirrorMatrix(flipped,800).forEach((v,i)=>expect(v).toBeCloseTo(m[i],10));}});

@@ -1,0 +1,1 @@
+Java syntax parse only: PASS (not type checking, build or tests)

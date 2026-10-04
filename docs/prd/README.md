@@ -68,3 +68,5 @@
 - T34：[AI注册与适用契约PRD](development-ai-registry-v1.md)，用户授权合成开发，已查看UI-043实际原型；[ADR0023](../adr/0023-synthetic-ai-registry-contract.md)、[接口和验证边界](../api/t34-ai-registry.md)。无模型安装/运行、临床或监管批准。
 
 - T35：[持久化合成契约任务PRD](development-synthetic-worker-v1.md)，用户授权合成开发，已查看UI-044实际原型；[ADR0024](../adr/0024-persistent-synthetic-contract-worker.md)、[接口/交付与验证边界](../api/t35-synthetic-tasks.md)。默认关闭，不授予临床执行许可，无模型推理。
+
+- T36：[合成结果与阅片叠加PRD](development-synthetic-result-v1.md)，用户授权合成开发，已查看UI-045实际原型；[ADR0025](../adr/0025-immutable-synthetic-result-overlay.md)、[接口及验证边界](../api/t36-synthetic-results.md)。只消费T35已接受技术产物，不执行模型、不自动写入报告。

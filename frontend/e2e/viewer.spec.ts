@@ -132,11 +132,28 @@ test('viewer renders actual authorized RGB pyramid and revocation rejects warmed
   const artifact=await page.request.post(`${taskPath}/artifact`,{headers:headers()});expect(artifact.status(),await artifact.text()).toBe(200);expect(await artifact.text()).toContain('NON_DIAGNOSTIC_SYNTHETIC_CONTRACT_ONLY');
   const again=await page.request.post(`${taskPath}/artifact`,{headers:headers()});expect(again.status()).toBe(200);expect(await again.body()).toEqual(await artifact.body());
   await page.screenshot({path:info.outputPath('real-service-synthetic-worker.png'),fullPage:true});
+  // T36: actual immutable package and PNG from the accepted T35 artifact, over real OSD.
+  await page.getByLabel('合成任务操作原因',{exact:true}).fill('Synthetic non diagnostic visual fixture');
+  await page.getByRole('button',{name:'生成非诊断合成视觉结果',exact:true}).click();
+  const resultCode=page.getByLabel('已确认合成结果ID',{exact:true});await expect(resultCode).toBeVisible();const visualId=await resultCode.innerText();
+  const visualPath=`/api/requests/${rid}/synthetic-results/${visualId}`;
+  const metadata=await page.request.get(visualPath);expect(metadata.status(),await metadata.text()).toBe(200);
+  const visual=await metadata.json() as {epoch:string;tileHash:string;intensities:number[];result:{id:string;taskId:string;binding:{input:{decision:{modelDigest:string;manifestHash:string}}}};executionAllowed:boolean};
+  expect(visual.executionAllowed).toBe(false);expect(visual.result.id).toBe(visualId);expect(visual.result.taskId).toBe(taskState.job.id);expect(visual.result.binding.input.decision.manifestHash).toBe(aiScan.manifestHash);
+  const binary=await page.request.get(`${visualPath}/tiles/0?epoch=${visual.epoch}`);expect(binary.status()).toBe(200);expect(binary.headers()['cache-control']).toContain('private');expect(createHash('sha256').update(await binary.body()).digest('hex')).toBe(visual.tileHash);expect((await binary.body()).subarray(0,8)).toEqual(Buffer.from([137,80,78,71,13,10,26,10]));
+  await page.getByRole('button',{name:'返回当前扫描AI契约',exact:true}).click();await page.getByRole('button',{name:'返回当前扫描阅片',exact:true}).click();
+  await page.getByLabel('精确合成结果ID',{exact:true}).fill(visualId);await page.getByRole('button',{name:'核验并加载合成叠加',exact:true}).click();
+  const resultLayer=page.getByLabel('实际合成强度图层',{exact:true});await expect(resultLayer).toBeVisible();
+  const resultPixel=await resultLayer.locator('image').evaluate(async node=>{const image=new Image();image.src=(node as SVGImageElement).href.baseVal;await image.decode();const canvas=document.createElement('canvas');canvas.width=64;canvas.height=64;const context=canvas.getContext('2d');if(!context)throw Error('Missing canvas');context.drawImage(image,0,0);return Array.from(context.getImageData(8,8,1,1).data);});
+  expect(resultPixel).toEqual([visual.intensities[0],255-visual.intensities[0],64,255]);
+  await page.getByLabel('合成瓦片画布',{exact:true}).scrollIntoViewIfNeeded();await page.screenshot({path:info.outputPath('real-service-synthetic-result-overlay.png'),fullPage:true});
+  await page.getByRole('button',{name:'隐藏合成叠加',exact:true}).click();await expect(resultLayer).toHaveCount(0);await page.getByRole('button',{name:'显示合成叠加',exact:true}).click();await expect(resultLayer).toBeVisible();
   expect((await page.request.post(`${modelsPath}/${modelId}/state`,{headers:headers(),data:{expectedVersion:1,state:'DISABLED',reason:'Synthetic recall'}})).status()).toBe(200);
+  await expect(page.getByRole('alert').filter({hasText:'合成结果资格或依据版本已失效'})).toBeVisible({timeout:7000});await expect(resultLayer).toHaveCount(0);
+  expect((await page.request.get(visualPath)).status()).toBe(409);expect((await page.request.get(`${visualPath}/tiles/0?epoch=${visual.epoch}`)).status()).toBe(409);
   expect((await page.request.get(`${aiPath}/assess/${aiId}`)).status()).toBe(409);expect((await page.request.post(`${aiPath}/assess`,{headers:aiHeaders,data:aiInput})).status()).toBe(409);
   expect((await page.request.post(`${taskPath}/artifact`,{headers:headers()})).status()).toBe(409);
-  await page.getByRole('button',{name:'返回当前扫描AI契约',exact:true}).click();
-  await page.getByRole('button',{name:'返回当前扫描阅片',exact:true}).click();await expect(page.getByLabel('合成瓦片画布',{exact:true}).locator('canvas').first()).toBeVisible();
+  await expect(page.getByLabel('合成瓦片画布',{exact:true}).locator('canvas').first()).toBeVisible();
   expect((await page.request.post(`${qcPath}/REVOKE`, { headers: headers(), data: { expectedVersion: 2, assessmentVersion: 1, reason: 'Synthetic viewer revoke' } })).status()).toBe(200);
   expect((await page.request.get(`${aiPath}?publicationVersion=2`)).status()).toBe(409);
   for (const resource of [tilePath, `${viewerPath}?publicationVersion=2`, `${viewerPath}/thumbnail?publicationVersion=2`]) expect((await page.request.get(resource)).status()).toBe(409);
@@ -145,5 +162,5 @@ test('viewer renders actual authorized RGB pyramid and revocation rejects warmed
   expect((await page.request.get(`${roiPath}/${roiView.items[0].roiId}/history`)).status()).toBe(200);
   await expect(page.getByLabel('ROI图像叠加层', { exact: true })).toHaveCount(0);
   const other = await browser.newContext({ baseURL: 'http://127.0.0.1:5173' });
-  try { const receiver = await other.newPage(); await receiver.goto('/'); await receiver.getByLabel('用户名', { exact: true }).fill(handoffUsername()); await receiver.getByLabel('密码', { exact: true }).fill(process.env.PIS_E2E_HANDOFF_PASSWORD ?? 'Synthetic-handoff-only-42!'); const accepted = receiver.waitForResponse(r => new URL(r.url()).pathname === '/api/auth/login'); await receiver.getByRole('button', { name: '登录', exact: true }).click(); expect((await accepted).status()).toBe(204); expect((await receiver.request.get(qcPath)).status()).toBe(404); expect((await receiver.request.get(modelsPath)).status()).toBe(404); expect((await receiver.request.get(`${roiPath}/${roiView.items[0].roiId}/history`)).status()).toBe(404); expect((await receiver.request.get(tilePath)).status()).toBe(404); expect((await receiver.request.get(`${qcPath}/bytes?publicationVersion=2`)).status()).toBe(404); } finally { await other.close(); }
+  try { const receiver = await other.newPage(); await receiver.goto('/'); await receiver.getByLabel('用户名', { exact: true }).fill(handoffUsername()); await receiver.getByLabel('密码', { exact: true }).fill(process.env.PIS_E2E_HANDOFF_PASSWORD ?? 'Synthetic-handoff-only-42!'); const accepted = receiver.waitForResponse(r => new URL(r.url()).pathname === '/api/auth/login'); await receiver.getByRole('button', { name: '登录', exact: true }).click(); expect((await accepted).status()).toBe(204); expect((await receiver.request.get(visualPath)).status()).toBe(404); expect((await receiver.request.get(`${visualPath}/tiles/0?epoch=${visual.epoch}`)).status()).toBe(404); expect((await receiver.request.get(qcPath)).status()).toBe(404); expect((await receiver.request.get(modelsPath)).status()).toBe(404); expect((await receiver.request.get(`${roiPath}/${roiView.items[0].roiId}/history`)).status()).toBe(404); expect((await receiver.request.get(tilePath)).status()).toBe(404); expect((await receiver.request.get(`${qcPath}/bytes?publicationVersion=2`)).status()).toBe(404); } finally { await other.close(); }
 });

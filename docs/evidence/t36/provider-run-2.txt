@@ -1,0 +1,5 @@
+FIXTURE variant=0 source_sha256=4d9b08ed450a97f85d6b4349712afb5c62f56661bbbd3cf996cc80978fe9ae5f manifest=b30b5babffebe45f6316ca5e39a22e2091c09a38f129ef35a8d634f88e21a969 bytes=15846 exact_pixels=262145
+FIXTURE variant=1 source_sha256=1e02699982e15fd4681c7b74b942d44844c1b874ce6c5bd4f42a038a724bb2f6 manifest=b5702fd70e402609fcd783a4acab66b7e49bbf97ca52bb5df67bc91da781413e bytes=15846 exact_pixels=262145
+PASS rejected truncated, oversized, unknown magic and header-only; 257x129 edge tile 1x1
+LOAD jobs=32 threads=2 duration_ms=383 max_heap_bytes=134217728 sum_pool_peak_heap_bytes=91247352 java=21.0.12.1 os=Linux arch=amd64
+PASS provider-only bounded concurrency, exact RGB, levels, cancellation; ICC/real WSI/GPU/full application restart NOT VERIFIED
