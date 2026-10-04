@@ -70,3 +70,5 @@
 - T35：[持久化合成契约任务PRD](development-synthetic-worker-v1.md)，用户授权合成开发，已查看UI-044实际原型；[ADR0024](../adr/0024-persistent-synthetic-contract-worker.md)、[接口/交付与验证边界](../api/t35-synthetic-tasks.md)。默认关闭，不授予临床执行许可，无模型推理。
 
 - T36：[合成结果与阅片叠加PRD](development-synthetic-result-v1.md)，用户授权合成开发，已查看UI-045实际原型；[ADR0025](../adr/0025-immutable-synthetic-result-overlay.md)、[接口及验证边界](../api/t36-synthetic-results.md)。只消费T35已接受技术产物，不执行模型、不自动写入报告。
+
+- T37：[医生人工处理合成结果与报告引用PRD](development-synthetic-decision-v1.md)，已查看UI-046实际像素；仅不可变非诊断引用及人工理由，无自动诊断/签署。

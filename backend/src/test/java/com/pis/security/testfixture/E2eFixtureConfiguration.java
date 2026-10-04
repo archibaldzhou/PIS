@@ -26,9 +26,9 @@ public class E2eFixtureConfiguration {
             }
         };
     }
-    static final java.util.List<String> WORKFLOW_SCENARIOS=java.util.List.of("accession","amendment","archive","consultation","cytology","delivery","diagnosis","digitalqc","frozen","grossing","labels","materials","output","quality","reception","report","results","review","scan","staining","statistics","storage","technical","viewer","worklist");
+    static final java.util.List<String> WORKFLOW_SCENARIOS=java.util.List.of("accession","amendment","archive","consultation","cytology","decisions","delivery","diagnosis","digitalqc","frozen","grossing","labels","materials","output","quality","reception","report","results","review","scan","staining","statistics","storage","technical","viewer","worklist");
     private static void workflow(JdbcTemplate jdbc, String username, String receiver, String scenario) {
-        boolean viewerScenario=java.util.Set.of("viewer","results").contains(scenario);
+        boolean viewerScenario=java.util.Set.of("viewer","results","decisions").contains(scenario);
         var hospital=java.util.UUID.randomUUID(); var campus=java.util.UUID.randomUUID();
         var department=java.util.UUID.randomUUID(); var source=java.util.UUID.randomUUID();
         var scope=java.util.UUID.randomUUID(); var patient=java.util.UUID.randomUUID();

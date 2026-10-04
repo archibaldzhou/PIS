@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Alert, Button, Card, Form, Input, InputNumber, Modal, Select, Space, Table } from 'antd';
+import { SyntheticDecision } from './SyntheticDecision';
 import { ApiError } from '../../api';
 import { ReadController } from '../../shared/workflow';
 import { ReadPanel } from '../../shared/WorkflowElements';
@@ -7,13 +8,18 @@ import { CommandIntent } from '../../shared/command';
 import { load, history, send, type Detail, type Command } from './api';
 type Props = { id: string; onDirty: () => void; onClean: () => void; onPending: (v: boolean) => void; onExpired: () => void; onSaved: () => void };
 export function ReportEditor({ id, ...callbacks }: Props) {
+  const [mode,setMode]=useState(false),[dirty,setDirty]=useState(false),[pending,setPending]=useState(false),[switchPrompt,setSwitchPrompt]=useState(false);
+  const guarded={...callbacks,onDirty:()=>{setDirty(true);callbacks.onDirty();},onClean:()=>{setDirty(false);callbacks.onClean();},onPending:(v:boolean)=>{setPending(v);callbacks.onPending(v);}};
+  function switchMode(){setMode(v=>!v);setSwitchPrompt(false);setDirty(false);callbacks.onClean();void reader.run(id);}
   const [reader] = useState(() => new ReadController(async (id: string, signal: AbortSignal) => { try { return { status: 'ready' as const, data: await load(id, signal) }; } catch (e) { if (e instanceof ApiError && e.status === 401) callbacks.onExpired(); if (e instanceof ApiError && [403, 404].includes(e.status)) return { status: 'forbidden' as const, message: '仅当前已领取的合格医生可访问报告草稿。' }; throw e; } }));
   const state = useSyncExternalStore(reader.subscribe, reader.getSnapshot); useEffect(() => { void reader.run(id); return reader.stop; }, [reader, id]);
   return <ReadPanel state={state}>{d => <>
     <section className="identity-strip" aria-label="报告草稿身份"><strong>{d.context.number}</strong><span>病例 {id}</span><span>患者 {d.context.patientId}</span><span>申请 {d.context.requestId}</span><span>分配版本 {d.context.assignmentVersion}</span><span>草稿版本 {d.current?.version ?? -1}</span></section>
     <Alert type="warning" title="仅人工输入合成草稿 · 无自动诊断、复核、签署或发送" />
     {!d.context.ready && <Alert type="error" title="QC或身份门禁未就绪，禁止保存草稿" />}
-    <DraftForm detail={d} {...callbacks} />
+    <Button disabled={pending} onClick={()=>{if(dirty)setSwitchPrompt(true);else switchMode();}}>{mode?'返回报告草稿':'医生人工处理合成结果'}</Button>
+    {mode?<SyntheticDecision key={id} id={id} {...guarded}/>:<DraftForm key={d.current?.id??id} detail={d} {...guarded} />}
+    <Modal open={switchPrompt} title="清除未提交表单并切换？" okText="清除并切换面板" cancelText="保留表单" onCancel={()=>setSwitchPrompt(false)} onOk={switchMode}><p>未提交内容将清除，服务端历史不变。</p></Modal>
     <History id={id} onExpired={callbacks.onExpired} />
   </>}</ReadPanel>;
 }

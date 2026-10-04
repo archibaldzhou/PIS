@@ -1,0 +1,18 @@
+
+> pis-frontend@0.0.1 test
+> vitest run
+
+
+ RUN  v4.1.11 /workspace/PIS/frontend
+
+
+ Test Files  34 passed (34)
+      Tests  196 passed (196)
+   Start at  05:58:41
+   Duration  2.12s (transform 957ms, setup 0ms, import 1.50s, tests 692ms, environment 3ms)
+
+npm notice
+npm notice New major version of npm available! 11.21.0 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice

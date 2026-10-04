@@ -14,7 +14,7 @@ try:
   if 'PostgreSQL init process complete' in run(['docker','logs',name]).stdout and run(['docker','exec',name,'pg_isready','-U','postgres']).returncode==0:break
   time.sleep(.2)
  migrations=sorted((root/'backend/src/main/resources/db/migration').glob('V*__*.sql'),key=lambda p:int(p.name.split('__')[0][1:]))
- assert [int(p.name.split('__')[0][1:]) for p in migrations]==list(range(1,34))
+ assert [int(p.name.split('__')[0][1:]) for p in migrations]==list(range(1,35))
  for p in migrations:sql('BEGIN;'+p.read_text().replace('${flyway:defaultSchema}','public')+'COMMIT;')
  ids={k:str(uuid.uuid4()) for k in ['h','p','s','r','c','u','k','m','campus','dept','scope','scheme','b','o','output','control','pass','result','revoke','a','trace']}
  def fmt(s):return s.format(**ids)
@@ -166,6 +166,22 @@ try:
  assert sorted(result_id in x.splitlines() for x in outcomes)==[False,True]
  sql(f"UPDATE ai_result SET artifact_hash=repeat('b',64) WHERE id='{result_id}'",False)
  sql(f"DELETE FROM ai_result WHERE id='{result_id}'",False)
+ # V34: exact manual-field reference, CAS and atomic rollback; no clinical text generation.
+ original=str(uuid.uuid4());adopted=str(uuid.uuid4());event=str(uuid.uuid4())
+ sql("INSERT INTO report_template(code,version,title,schema_code) VALUES('SYN-REFERENCE',1,'Synthetic','SYN-TEXT-1')")
+ for rev,ver in [(original,0),(adopted,1)]:
+  sql(fmt("INSERT INTO report_revision(id,case_id,version,template_code,template_version,fields,assignment_version,author_id,reason) VALUES('REV','{k}',VER,'SYN-REFERENCE',1,'{{}}',0,'{u}','Synthetic unchanged')").replace('REV',rev).replace('VER',str(ver)))
+ sql(fmt("INSERT INTO report_result_head(case_id,result_id) VALUES('{k}','RESULT')").replace('RESULT',result_id))
+ advance=fmt("UPDATE report_result_head SET version=version+1 WHERE case_id='{k}' AND result_id='RESULT' AND version=-1 RETURNING version").replace('RESULT',result_id)
+ with ThreadPoolExecutor(max_workers=2) as pool:winners=list(pool.map(lambda _:sql(advance),range(2)))
+ assert sorted('0' in x.splitlines() for x in winners)==[False,True]
+ insert=fmt("INSERT INTO report_result_decision(id,case_id,result_id,version,target_revision_id,target_version,assignment_version,action,reason,actor_id,binding,artifact_hash,adopted_revision_id) VALUES('EVENT','{k}','RESULT',0,'ORIGINAL',0,0,'ACCEPT_REFERENCE','Synthetic explicit','{u}','{{}}',repeat('a',64),'ADOPTED')").replace('EVENT',event).replace('RESULT',result_id).replace('ORIGINAL',original).replace('ADOPTED',adopted)
+ sql('BEGIN;'+insert+';ROLLBACK;');assert sql('SELECT count(*) FROM report_result_decision')=='0'
+ sql(insert.replace("repeat('a',64)","repeat('b',64)"),False)
+ sql(insert.replace("'"+adopted+"'","'"+original+"'"),False)
+ sql(insert);sql("UPDATE report_result_decision SET reason='Changed'",False);sql('DELETE FROM report_result_decision',False)
+ assert sql('SELECT count(*) FROM report_result_decision')=='1'
+ print('PASS V34: exact result/hash/manual-fields binding, exclusive head CAS, rollback, append-only decisions')
  print('PASS PG17 V1-V33: result accepted-source/version/purpose binding, unique identity, READY CAS, rollback and immutable history; prior task/storage/scan/QC/ROI/AI invariants. SQL-only, not application E2E.')
 finally:
  run(['docker','rm','-f',name])

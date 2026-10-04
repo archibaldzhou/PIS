@@ -1,0 +1,19 @@
+
+> pis-frontend@0.0.1 test:e2e
+> playwright test --list
+
+Error: Set PIS_TEST_DB_PASSWORD before running Playwright
+    at file:///workspace/PIS/frontend/playwright.config.ts:11:9
+    at ModuleJob.run (node:internal/modules/esm/module_job:343:25)
+    at onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:681:26)
+    at requireOrImport (/workspace/PIS/frontend/node_modules/playwright/lib/transform/transform.js:223:12)
+    at loadUserConfig (/workspace/PIS/frontend/node_modules/playwright/lib/common/configLoader.js:107:46)
+    at loadConfig (/workspace/PIS/frontend/node_modules/playwright/lib/common/configLoader.js:119:22)
+    at loadConfigFromFile (/workspace/PIS/frontend/node_modules/playwright/lib/common/configLoader.js:331:10)
+    at runTests (/workspace/PIS/frontend/node_modules/playwright/lib/program.js:197:18)
+    at i.<anonymous> (/workspace/PIS/frontend/node_modules/playwright/lib/program.js:70:7)
+npm notice
+npm notice New major version of npm available! 11.21.0 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice

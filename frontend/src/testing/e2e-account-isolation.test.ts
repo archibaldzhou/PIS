@@ -19,10 +19,11 @@ describe('disposable E2E account isolation', () => {
       expect(source(file)).not.toContain("'synthetic.technician'");
     }
   });
-  it('isolates RGB and synthetic results from each others per-user resource budgets', () => {
-    expect(workflows).toContain('viewer.spec.ts');expect(workflows).toContain('results.spec.ts');
+  it('isolates RGB, results and human decisions from each others per-user resource budgets', () => {
+    for(const name of ['viewer','results','decisions'])expect(workflows).toContain(`${name}.spec.ts`);
+    expect(new Set(['viewer','results','decisions'].map(name=>workflowAccountName(`${name}.spec.ts`,'synthetic.workflow'))).size).toBe(3);
     expect(workflowAccountName('viewer.spec.ts','synthetic.workflow')).not.toBe(workflowAccountName('results.spec.ts','synthetic.workflow'));
-    expect(seed).toContain('java.util.Set.of("viewer","results").contains(scenario)');
+    expect(seed).toContain('java.util.Set.of("viewer","results","decisions").contains(scenario)');
   });
   it('uses stable names across platforms, supports prefixes and rejects ambiguous names', () => {
     expect(workflowAccountName('/runner/e2e/archive.spec.ts', 'synthetic.workflow')).toBe('synthetic.workflow.archive');

@@ -42,6 +42,7 @@ class RequestWorkflowTest {
     @AfterAll static void close() throws Exception { DB.close(); }
     @Autowired JdbcTemplate jdbc;
     @Autowired RequestService service;
+    @Autowired com.pis.report.SyntheticDecisionService syntheticDecisions;
     @Autowired com.pis.specimen.ReceptionService reception;
     @Autowired com.pis.label.LabelService labels;
     @Autowired com.pis.grossing.GrossService gross;
@@ -1580,7 +1581,8 @@ class RequestWorkflowTest {
     final class Fixture {
         final UUID hospital=UUID.randomUUID(),campus=UUID.randomUUID(),department=UUID.randomUUID(),source=UUID.randomUUID(),scope=UUID.randomUUID(),user=UUID.randomUUID(),patient=UUID.randomUUID(),encounter=UUID.randomUUID();
         final PisPrincipal principal;
-        Fixture() {
+        Fixture() {this("unused-synthetic");}
+        Fixture(String passwordHash) {
             jdbc.update("INSERT INTO hospital(id,code,name) VALUES(?,?,'Synthetic')",hospital,hospital.toString());
             jdbc.update("INSERT INTO campus(id,hospital_id,code,name) VALUES(?,?,'synthetic','Synthetic')",campus,hospital);
             jdbc.update("INSERT INTO department(id,hospital_id,code,name) VALUES(?,?,'synthetic','Synthetic')",department,hospital);
@@ -1588,7 +1590,7 @@ class RequestWorkflowTest {
             jdbc.update("INSERT INTO source_system(id,hospital_id,code,name) VALUES(?,?,'synthetic','Synthetic')",source,hospital);
             jdbc.update("INSERT INTO workflow_scope(id,hospital_id,campus_id,department_id,source_system_id,name,enabled) VALUES(?,?,?,?,?,'Synthetic',true)",scope,hospital,campus,department,source);
             String username="synthetic-"+user;
-            jdbc.update("INSERT INTO app_user(id,username,display_name,password_hash,enabled) VALUES(?,?,'Synthetic','unused-synthetic',true)",user,username);
+            jdbc.update("INSERT INTO app_user(id,username,display_name,password_hash,enabled) VALUES(?,?,'Synthetic',?,true)",user,username,passwordHash);
             jdbc.update("INSERT INTO workflow_grant(user_id,scope_id,can_read,can_write) VALUES(?,?,true,true)",user,scope);
             jdbc.update("INSERT INTO patient(id,hospital_id,display_name) VALUES(?,?,'Synthetic patient')",patient,hospital);
             jdbc.update("INSERT INTO encounter(id,hospital_id,patient_id,source_system_id,encounter_number,department_id) VALUES(?,?,?,?,'synthetic-001',?)",encounter,hospital,patient,source,department);
@@ -2557,6 +2559,63 @@ class RequestWorkflowTest {
         jdbc.update("UPDATE digital_qc_grant SET revoked_at=statement_timestamp() WHERE user_id=?",f.user);
         for(String endpoint:List.of("/ai","/roi"))assertHttpError(b.send("GET",root+endpoint+"?publicationVersion=1",null,null,false),404,"DIGITAL_QC_NOT_FOUND");
         assertThat(jdbc.queryForObject("SELECT coalesce(sum(requests),0) FROM viewer_read_budget WHERE user_id=?",Long.class,f.user)).isEqualTo(count+2);
+    }
+
+    private record DecisionFixture(TaskFixture source,UUID result){}
+    private DecisionFixture decisionFixture(Fixture f){var d=taskFixture(f);var job=acceptedTask(f,d);reportTemplates();return f.as(()->{
+        var result=results.create(d.source().request(),resultInput(job),"decision-result").receipt().resourceId();
+        diagnosis.decide(d.source().caseId(),dd(d.source().caseId(),-1,null),"decision-claim",com.pis.diagnosis.DiagnosisContracts.Action.CLAIM);
+        reports.save(d.source().caseId(),rs(d.source().caseId(),-1,1,"Synthetic unchanged manual text"),"decision-report");return new DecisionFixture(d,result);});}
+    private com.pis.report.SyntheticDecisionService.Command decisionInput(DecisionFixture d,long version,com.pis.report.SyntheticDecisionService.Action action){var c=reports.detail(d.source().source().caseId());return new com.pis.report.SyntheticDecisionService.Command(c.context().caseId(),d.result(),c.current().id(),c.current().version(),c.context().assignmentVersion(),version,action,"Synthetic explicit human decision",true);}
+    @Test void syntheticDecisionAcceptCopiesOnlyManualFieldsAndReplaysSingleImmutableReference(){
+        var f=new Fixture();var d=decisionFixture(f);f.as(()->{var id=d.source().source().caseId();var original=reports.detail(id).current();var input=decisionInput(d,-1,com.pis.report.SyntheticDecisionService.Action.ACCEPT_REFERENCE);
+            var first=syntheticDecisions.decide(id,input,"human-accept");var repeated=syntheticDecisions.decide(id,input,"human-accept");assertThat(repeated.replayed()).isTrue();assertThat(repeated.receipt()).isEqualTo(first.receipt());
+            var current=reports.detail(id).current();assertThat(current.version()).isEqualTo(original.version()+1);assertThat(current.fields()).isEqualTo(original.fields());assertThat(current.id()).isNotEqualTo(original.id());
+            var v=syntheticDecisions.view(id,d.result(),1);assertThat(v.executionAllowed()).isFalse();assertThat(v.history()).hasSize(1);assertThat(v.history().getFirst().adoptedRevisionId()).isEqualTo(current.id());assertThat(v.history().getFirst().binding().resultId()).isEqualTo(d.result());
+            assertCode(()->syntheticDecisions.decide(id,input,"new-key-stale"),"AI_DECISION_CONFLICT");return null;});
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM audit_event WHERE operation_code='AI_RESULT_DECISION_V1' AND resource_id IN (SELECT id FROM report_result_decision WHERE result_id=?)",Long.class,d.result())).isEqualTo(1);
+        assertThatThrownBy(()->jdbc.update("UPDATE report_result_decision SET reason='Synthetic changed' WHERE result_id=?",d.result())).isInstanceOf(org.springframework.dao.DataAccessException.class);
+        assertThatThrownBy(()->jdbc.update("DELETE FROM report_result_decision WHERE result_id=?",d.result())).isInstanceOf(org.springframework.dao.DataAccessException.class);
+    }
+    @Test void syntheticDecisionRejectAndDeferKeepReportAndAuditFailureRollsEverythingBack(){
+        var f=new Fixture();var d=decisionFixture(f);f.as(()->{var id=d.source().source().caseId();var old=reports.detail(id).current();syntheticDecisions.decide(id,decisionInput(d,-1,com.pis.report.SyntheticDecisionService.Action.REJECT),"human-reject");syntheticDecisions.decide(id,decisionInput(d,0,com.pis.report.SyntheticDecisionService.Action.DEFER),"human-defer");assertThat(reports.detail(id).current()).isEqualTo(old);return null;});
+        jdbc.execute("CREATE FUNCTION fail_synthetic_decision() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.operation_code='AI_RESULT_DECISION_V1' THEN RAISE EXCEPTION 'Synthetic audit failure';END IF;RETURN NEW;END $$");jdbc.execute("CREATE TRIGGER fail_synthetic_decision BEFORE INSERT ON audit_event FOR EACH ROW EXECUTE FUNCTION fail_synthetic_decision()");
+        try{f.as(()->{var id=d.source().source().caseId();var old=reports.detail(id).current();assertThatThrownBy(()->syntheticDecisions.decide(id,decisionInput(d,1,com.pis.report.SyntheticDecisionService.Action.ACCEPT_REFERENCE),"audit-fail")).isInstanceOf(RuntimeException.class);assertThat(reports.detail(id).current()).isEqualTo(old);return null;});}
+        finally{jdbc.execute("DROP TRIGGER fail_synthetic_decision ON audit_event");jdbc.execute("DROP FUNCTION fail_synthetic_decision()");}
+        assertThat(jdbc.queryForObject("SELECT version FROM report_result_head WHERE result_id=?",Long.class,d.result())).isEqualTo(1);assertThat(jdbc.queryForObject("SELECT count(*) FROM report_result_decision WHERE result_id=?",Long.class,d.result())).isEqualTo(2);
+    }
+    @Test void syntheticDecisionConcurrentChoicesHaveOneWinner()throws Exception{
+        var f=new Fixture();var d=decisionFixture(f);var input=f.as(()->decisionInput(d,-1,com.pis.report.SyntheticDecisionService.Action.DEFER));
+        try(var pool=Executors.newVirtualThreadPerTaskExecutor()){var jobs=new java.util.ArrayList<java.util.concurrent.Future<Boolean>>();for(int i=0;i<2;i++){String key="choice-"+i;jobs.add(pool.submit(()->f.as(()->{try{syntheticDecisions.decide(d.source().source().caseId(),input,key);return true;}catch(ApiException e){assertThat(e.code()).isEqualTo("AI_DECISION_CONFLICT");return false;}})));}assertThat(List.of(jobs.get(0).get(20,TimeUnit.SECONDS),jobs.get(1).get(20,TimeUnit.SECONDS))).containsExactlyInAnyOrder(true,false);}
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM report_result_decision WHERE result_id=?",Long.class,d.result())).isEqualTo(1);
+    }
+    @Test void syntheticDecisionRevokedResultBlocksNewAndReplayButKeepsAuthorizedHistory(){
+        var f=new Fixture();var d=decisionFixture(f);var input=f.as(()->decisionInput(d,-1,com.pis.report.SyntheticDecisionService.Action.DEFER));f.as(()->{syntheticDecisions.decide(d.source().source().caseId(),input,"before-revoke");ai.change(f.scope,d.source().model(),new com.pis.ai.AiContracts.StateChange(1L,"DISABLED","Synthetic withdrawal"),"decision-disable");assertCode(()->syntheticDecisions.decide(d.source().source().caseId(),input,"before-revoke"),"AI_RESULT_INVALIDATED");var history=syntheticDecisions.view(d.source().source().caseId(),d.result(),1);assertThat(history.ready()).isFalse();assertThat(history.invalidReason()).isEqualTo("RESULT_DEPENDENCY_CHANGED");assertThat(history.history()).hasSize(1);return null;});
+        jdbc.update("UPDATE diagnosis_grant SET can_diagnose=false WHERE user_id=?",f.user);f.as(()->{assertThatThrownBy(()->syntheticDecisions.view(d.source().source().caseId(),d.result(),1)).isInstanceOf(ApiException.class);return null;});
+    }
+    @Test void syntheticDecisionFrozenAndForeignCaseRemainRejected(){
+        var f=new Fixture();var d=decisionFixture(f);var foreign=new Fixture();
+        foreign.as(()->{assertCode(()->syntheticDecisions.view(d.source().source().caseId(),d.result(),1),"DIAGNOSIS_NOT_FOUND");return null;});
+        jdbc.update("INSERT INTO user_role_scope(user_id,role_code,hospital_id,scope_kind,case_filter) VALUES(?,'SECURITY_ADMIN_TEMPLATE',?,'HOSPITAL','ALL_IN_SCOPE')",foreign.user,f.hospital);
+        var admin=new PisPrincipal(new AccountRepository(jdbc).findByUsername(foreign.principal.getUsername()).orElseThrow());SecurityContextHolder.getContext().setAuthentication(UsernamePasswordAuthenticationToken.authenticated(admin,null,List.of()));
+        try{assertCode(()->syntheticDecisions.view(d.source().source().caseId(),d.result(),1),"DIAGNOSIS_NOT_FOUND");}finally{SecurityContextHolder.clearContext();}
+        reviewGrant(f,f);jdbc.update("INSERT INTO report_review_policy(scope_id,code,separate_author_review,separate_review_sign) VALUES(?,'SYN-REVIEW-1',false,false)",f.scope);
+        f.as(()->{var id=d.source().source().caseId();var input=decisionInput(d,-1,com.pis.report.SyntheticDecisionService.Action.ACCEPT_REFERENCE);reviews.decide(id,rd(id,false),"decision-review",com.pis.report.ReviewContracts.Action.APPROVE);reviews.decide(id,rd(id,true),"decision-sign",com.pis.report.ReviewContracts.Action.SIMULATE_SIGN);assertCode(()->syntheticDecisions.decide(id,input,"frozen-decision"),"REPORT_SIMULATED_FROZEN");assertThat(syntheticDecisions.view(id,d.result(),1).ready()).isFalse();return null;});
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM report_result_decision WHERE result_id=?",Long.class,d.result())).isZero();
+    }
+
+    @Test void syntheticDecisionHttpStrictCsrfBindingConfirmationAndQualifiedScope()throws Exception{
+        String password="Synthetic-decision-http-42!";var f=new Fixture(encoder.encode(password));var d=decisionFixture(f);var input=f.as(()->decisionInput(d,-1,com.pis.report.SyntheticDecisionService.Action.DEFER));var json=tools.jackson.databind.json.JsonMapper.builder().build();String path="/api/requests/reports/cases/"+d.source().source().caseId()+"/synthetic-decisions";var b=new Browser();
+        assertThat(b.send("GET",path+"?resultId="+d.result(),null,null,false).statusCode()).isEqualTo(401);
+        assertThat(b.send("POST","/api/auth/login","username="+f.principal.getUsername()+"&password="+java.net.URLEncoder.encode(password,java.nio.charset.StandardCharsets.UTF_8),b.csrf(),true).statusCode()).isEqualTo(204);
+        String body=json.writeValueAsString(input);assertHttpError(b.send("POST",path,body,null,false),403,"CSRF_INVALID");assertThat(b.send("POST",path,body.replace("true","false"),b.csrf(),false).statusCode()).isEqualTo(400);
+        var accepted=b.send("POST",path,body,b.csrf(),false);assertThat(accepted.statusCode()).isEqualTo(200);var first=json.readValue(accepted.body(),com.pis.idempotency.IdempotentCommands.Result.class);
+        var replay=b.send("POST",path,body,b.csrf(),false);assertThat(replay.statusCode()).isEqualTo(200);assertThat(json.readValue(replay.body(),com.pis.idempotency.IdempotentCommands.Result.class)).isEqualTo(new com.pis.idempotency.IdempotentCommands.Result(first.receipt(),true));
+        assertHttpError(b.send("POST",path,body.replace("Synthetic explicit human decision","Synthetic changed reason"),b.csrf(),false),409,"IDEMPOTENCY_KEY_REUSED");
+        assertThat(b.send("GET",path+"?resultId="+d.result(),null,null,false).statusCode()).isEqualTo(200);
+        jdbc.update("UPDATE diagnosis_grant SET can_diagnose=false WHERE user_id=?",f.user);
+        assertThat(b.send("POST",path,body,b.csrf(),false).statusCode()).isEqualTo(404);assertThat(b.send("GET",path+"?resultId="+d.result(),null,null,false).statusCode()).isEqualTo(404);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM report_result_decision WHERE result_id=?",Long.class,d.result())).isEqualTo(1);
     }
 
     @Test void syntheticResultAuthenticatedHttpAcceptsCurrentTaskAndKeepsExactReplay()throws Exception {

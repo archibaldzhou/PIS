@@ -1,0 +1,14 @@
+PASS viewer quota SQL: concurrent 239→240 admits one; paid bytes remain bounded at 33554432
+Traceback (most recent call last):
+  File "/workspace/PIS/backend/src/test/probes/ai-postgres.py", line 179, in <module>
+    sql('BEGIN;'+insert+';ROLLBACK;');assert sql('SELECT count(*) FROM report_result_decision')=='0'
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/PIS/backend/src/test/probes/ai-postgres.py", line 8, in sql
+    if ok and r.returncode:raise RuntimeError(r.stderr)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: ERROR:  column reference "old.id" is ambiguous
+LINE 1: ...ROM report_revision v JOIN report_revision old ON old.id=NEW...
+                                                             ^
+DETAIL:  It could refer to either a PL/pgSQL variable or a table column.
+QUERY:  NEW.adopted_revision_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM report_revision v JOIN report_revision old ON old.id=NEW.target_revision_id WHERE v.id=NEW.adopted_revision_id AND v.case_id=NEW.case_id AND v.version=old.version+1 AND v.fields=old.fields AND v.template_code=old.template_code AND v.template_version=old.template_version AND v.assignment_version=NEW.assignment_version)
+CONTEXT:  PL/pgSQL function guard_report_result_decision() line 3 at IF

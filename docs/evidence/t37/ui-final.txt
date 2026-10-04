@@ -1,0 +1,27 @@
+
+> pis-frontend@0.0.1 test:ui
+> playwright test --config playwright.ui.config.ts synthetic-decision.spec.ts
+
+[WebServer] (node:419743) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:419764) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 5 tests using 1 worker
+
+(node:419782) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:419782) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 ui-tests/synthetic-decision.spec.ts:12:1 › explicit confirmation cancel, dirty return and immutable synthetic snapshot screenshot (4.0s)
+  ✓  2 ui-tests/synthetic-decision.spec.ts:13:1 › uncertain retry keeps exact key body, double click and controlled late response cannot overwrite form (2.9s)
+  ✓  3 ui-tests/synthetic-decision.spec.ts:14:1 › revoked source remains visible as history but blocks all new decisions (2.4s)
+  ✓  4 ui-tests/synthetic-decision.spec.ts:15:1 › cancelled delayed source cannot replace newly selected exact result (2.2s)
+  ✓  5 ui-tests/synthetic-decision.spec.ts:17:1 › action-only changes require explicit discard before refreshing (3.8s)
+
+  5 passed (17.6s)
+npm notice
+npm notice New major version of npm available! 11.21.0 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice

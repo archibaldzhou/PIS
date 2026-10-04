@@ -1,0 +1,1 @@
+HTTP helper declaration review: 30 caller methods, 0 requiring review. Source check, not full test compilation.

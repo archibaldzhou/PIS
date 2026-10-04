@@ -1,0 +1,38 @@
+import {expect} from '@playwright/test';
+import {test,forbidden} from './viewer-fixture';
+import {safeResultBody} from './result-diagnostics';
+import type {View} from '../src/features/report/decision-api';
+test('qualified doctor explicitly adopts unchanged draft reference and revoked model blocks replay',async({page,browser,source},info)=>{
+ test.setTimeout(60_000); // bounded complete model/task/result/report pipeline, each HTTP call <=10s
+ const {scope,rid,scanPath,scanId,headers}=source;
+ const post=async(path:string,data:unknown,h:Record<string,string>=headers())=>{const r=await page.request.post(path,{headers:h,data,timeout:10000});expect(r.status(),JSON.stringify(safeResultBody(await r.body()))).toBe(200);return r;};
+ const aiPath=`${scanPath}/${scanId}/ai`,models=`/api/requests/ai/scopes/${scope}/models`;
+ const scanResponse=await page.request.get(`${aiPath}?publicationVersion=2`,{timeout:10000});expect(scanResponse.status()).toBe(200);const scan=await scanResponse.json() as {manifestHash:string;calibrationVersion:number|null};
+ const registered=await post(models,{modelId:crypto.randomUUID(),expectedHead:-1,code:'SYN-HUMAN',metadata:{digest:'a'.repeat(64),preprocessing:'SYN-PRE-1',configSchema:'SYN-AI-CONFIG-1',maxTiles:16,inputContract:'SYN-RGB-PYRAMID-1',pathology:'SYN-PATH',stain:'SYN-STAIN',scannerCode:'SYN-DEVICE',scannerVersion:'SYN-V1',quality:'ALL_DIGITAL_QC_PASS',calibration:'PIXEL_ONLY',approvalScope:'SYNTHETIC_CONTRACT_ONLY',evidence:'DECLARED_SYNTHETIC',evidenceRef:'SYN-REFERENCE',limitations:'Synthetic no diagnostic claim'},reason:'Synthetic registry'});
+ const model=(await registered.json() as {receipt:{resourceId:string}}).receipt.resourceId;
+ await post(`${models}/${model}/state`,{expectedVersion:0,state:'VALIDATION_ONLY',reason:'Synthetic only'});
+ await post(`${aiPath}/profile`,{publicationVersion:2,manifestHash:scan.manifestHash,expectedVersion:-1,profile:{pathology:'SYN-PATH',stain:'SYN-STAIN',scannerVersion:'SYN-V1'},reason:'Synthetic source'});
+ const assessed=await post(`${aiPath}/assess`,{modelVersionId:model,stateVersion:1,profileVersion:0,publicationVersion:2,manifestHash:scan.manifestHash,calibrationVersion:scan.calibrationVersion,reason:'Synthetic assessment'});
+ const assessment=(await assessed.json() as {receipt:{resourceId:string}}).receipt.resourceId;
+ const submitted=await post(`${scanPath}/${scanId}/synthetic-tasks`,{assessmentId:assessment,workerSchema:'SYN-CONTRACT-WORKER-1',reason:'Synthetic only'});
+ const task=(await submitted.json() as {receipt:{resourceId:string}}).receipt.resourceId,taskPath=`/api/requests/${rid}/synthetic-tasks/${task}`;
+ await post(`${taskPath}/actions/CLAIM`,{expectedVersion:0,generation:0,leaseId:null,reason:'Synthetic claim'});
+ const runningResponse=await page.request.get(taskPath,{timeout:10000});expect(runningResponse.status()).toBe(200);const running=await runningResponse.json() as {job:{version:number;generation:number;leaseId:string}};
+ await post(`${taskPath}/run`,{expectedVersion:running.job.version,generation:running.job.generation,leaseId:running.job.leaseId,reason:'Synthetic fixture'});
+ const generated=await post(`/api/requests/${rid}/synthetic-results`,{taskId:task,expectedTaskVersion:2,reason:'Synthetic visual reference'});
+ const result=(await generated.json() as {receipt:{resourceId:string}}).receipt.resourceId;
+ const storage=await page.request.get(`/api/requests/${rid}/storage`,{timeout:10000});expect(storage.status()).toBe(200);const caseId=(await storage.json() as {caseId:string}).caseId;
+ await post(`/api/requests/diagnosis/cases/${caseId}/claim`,{expectedVersion:-1,confirmedCaseId:caseId,targetUserId:null,reason:'Synthetic doctor claim'});
+ const reportPath=`/api/requests/reports/cases/${caseId}`,fields={gross:'',microscopy:'Synthetic manual text',diagnosis:'Synthetic manual text',notes:''};
+ await post(`${reportPath}/draft`,{expectedVersion:-1,assignmentVersion:0,confirmedCaseId:caseId,templateCode:'SYN-REPORT',templateVersion:1,fields,reason:'Synthetic manual draft'});
+ await page.goto('/');await page.getByRole('button',{name:'申请登记工作区'}).click();await page.getByLabel('授权工作范围').click();await page.getByText('合成申请工作范围',{exact:true}).last().click();await page.getByRole('button',{name:'报告草稿',exact:true}).click();await page.getByRole('button',{name:`编辑报告草稿 ${caseId}`}).click();await page.getByRole('button',{name:'医生人工处理合成结果',exact:true}).click();await page.getByLabel('人工处理结果ID',{exact:true}).fill(result);await page.getByRole('button',{name:'核验人工处理依据'}).click();await expect(page.getByText(/决定版本 -1/)).toBeVisible();
+ await page.getByLabel('人工处理动作').click();await page.getByRole('option',{name:'采纳非诊断引用',exact:true}).click();await page.getByLabel('人工处理原因').fill('Synthetic explicit non diagnostic reference');await page.getByRole('button',{name:'确认人工处理版本'}).click();
+ const sent=page.waitForResponse(r=>r.url().endsWith('/synthetic-decisions')&&r.request().method()==='POST',{timeout:10000});await page.getByRole('button',{name:'明确提交人工处理'}).click();const response=await sent;expect(response.status(),JSON.stringify(safeResultBody(await response.body()))).toBe(200);await expect(page.getByText(/决定版本 0/).first()).toBeVisible();await expect(page.getByLabel('人工处理原因')).toHaveValue('');
+ const body=response.request().postDataJSON() as unknown,originalKey=response.request().headers()['idempotency-key'];const replay=await post(`${reportPath}/synthetic-decisions`,body,{...headers(),'Idempotency-Key':originalKey});expect((await replay.json() as {replayed:boolean}).replayed).toBe(true);
+ const currentResponse=await page.request.get(reportPath,{timeout:10000});expect(currentResponse.status()).toBe(200);const current=await currentResponse.json() as {current:{version:number;fields:typeof fields}};expect(current.current.version).toBe(1);expect(current.current.fields).toEqual(fields);
+ await page.screenshot({path:info.outputPath('real-service-human-synthetic-reference.png'),fullPage:true});
+ await post(`${models}/${model}/state`,{expectedVersion:1,state:'DISABLED',reason:'Synthetic withdrawal'});
+ expect((await page.request.post(`${reportPath}/synthetic-decisions`,{headers:{...headers(),'Idempotency-Key':originalKey},data:body,timeout:10000})).status()).toBe(409);
+ const history=await page.request.get(`${reportPath}/synthetic-decisions?resultId=${result}`,{timeout:10000});expect(history.status()).toBe(200);const historical=await history.json() as View;expect(historical.ready).toBe(false);expect(historical.history).toHaveLength(1);expect(historical.executionAllowed).toBe(false);
+ await forbidden(browser,[`${reportPath}/synthetic-decisions?resultId=${result}`]);
+});
