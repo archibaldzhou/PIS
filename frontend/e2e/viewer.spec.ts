@@ -1,9 +1,9 @@
-import { test, expect } from '@playwright/test';
+import { test as base, expect, type Page, type Browser, type Response } from '@playwright/test';
 import { createHash } from 'node:crypto';
 import { signInWorkflow, handoffUsername } from './workflow-login';
 import type { Version, View } from '../src/features/storage/api';
 import type { Job } from '../src/features/scan/api';
-test('viewer renders actual authorized RGB pyramid and revocation rejects warmed resources', async ({ page, browser }, info) => {
+async function prepareViewer(page: Page) {
   await signInWorkflow(page);
   const scopes = await (await page.request.get('/api/requests/scopes')).json() as { id: string }[];
   expect(scopes).toHaveLength(1); const scope = scopes[0].id;
@@ -68,6 +68,36 @@ test('viewer renders actual authorized RGB pyramid and revocation rejects warmed
   await page.getByRole('button', { name: '生成或原键确认合成瓦片' }).click();
   const canvas = page.getByLabel('合成瓦片画布', { exact: true }).locator('canvas').first();
   await expect.poll(async () => canvas.evaluate(node => { const c = node as HTMLCanvasElement; const ctx = c.getContext('2d'); if (!ctx) return 0; const p = ctx.getImageData(0, 0, c.width, c.height).data; let pink = 0; for (let i = 0; i < p.length; i += 16) if (p[i] > 140 && p[i + 2] > 120 && p[i] > p[i + 1] + 15) pink++; return pink; })).toBeGreaterThan(500);
+  return {scope, rid, headers, scanPath, scanId, qcPath, viewerPath, canvas};
+}
+const test=base.extend<{source: Awaited<ReturnType<typeof prepareViewer>>; transportEvidence: void}>({
+  transportEvidence: [async ({page},use,info)=>{
+    const started=Date.now(),events:{elapsedMs:number;resource:string;status:number}[]=[];
+    const record=(response:Response)=>{const path=new URL(response.url()).pathname;
+      const resource=path.includes('/synthetic-results/')?(path.includes('/tiles/')?'result-png':'result-metadata'):path.includes('/viewer')?(path.includes('/tiles/')?'viewer-tile':'viewer-manifest'):undefined;
+      if(resource){events.push({elapsedMs:Date.now()-started,resource,status:response.status()});if(events.length>40)events.shift();}
+    };
+    page.on('response',record);
+    await use();page.off('response',record);
+    await info.attach('bounded synthetic viewer transport statuses',{body:JSON.stringify(events),contentType:'application/json'});
+  },{auto:true}],
+  source: [async ({page}, use) => { await use(await prepareViewer(page)); }, {timeout:30_000}],
+});
+async function forbidden(browser: Browser, resources: string[]) {
+  const other = await browser.newContext({ baseURL: 'http://127.0.0.1:5173' });
+  try {
+    const receiver = await other.newPage(); await signInReceiver(receiver);
+    for (const resource of resources) expect((await receiver.request.get(resource)).status()).toBe(404);
+  } finally { await other.close(); }
+}
+async function signInReceiver(receiver: Page) {
+  await receiver.goto('/'); await receiver.getByLabel('用户名', {exact:true}).fill(handoffUsername());
+  await receiver.getByLabel('密码', {exact:true}).fill(process.env.PIS_E2E_HANDOFF_PASSWORD ?? 'Synthetic-handoff-only-42!');
+  const accepted=receiver.waitForResponse(r=>new URL(r.url()).pathname==='/api/auth/login');
+  await receiver.getByRole('button',{name:'登录',exact:true}).click(); expect((await accepted).status()).toBe(204);
+}
+test('viewer RGB pixels ROI and QC revocation protect warmed resources', async ({page,browser,source},info)=>{
+  const {headers,scanPath,scanId,qcPath,viewerPath}=source;
   const original = await page.getByText(/图像相对缩放/).textContent(); await page.getByRole('button', { name: '放大图像' }).click(); await expect(page.getByText(/图像相对缩放/)).not.toHaveText(original ?? '');
   await page.getByRole('button', { name: '适配窗口' }).click(); await page.screenshot({ path: info.outputPath('real-service-synthetic-viewer.png'), fullPage: true });
   await page.getByRole('button', { name: '打开ROI编辑', exact: true }).click();
@@ -93,6 +123,17 @@ test('viewer renders actual authorized RGB pyramid and revocation rejects warmed
   expect(rgb).toEqual({ width: 128, height: 128, cell: [160, 72, 157, 255], background: [238, 210, 232, 255] });
   const concurrent = await Promise.all(Array.from({ length: 4 }, () => page.request.get(tilePath)));
   for (const response of concurrent) { expect(response.status()).toBe(200); expect(await response.body()).toEqual(await tile.body()); expect(response.headers()['cache-control']).toBe('private, no-store'); }
+  expect((await page.request.post(`${qcPath}/REVOKE`, { headers: headers(), data: { expectedVersion: 2, assessmentVersion: 1, reason: 'Synthetic viewer revoke' } })).status()).toBe(200);
+  expect((await page.request.get(`${scanPath}/${scanId}/ai?publicationVersion=2`)).status()).toBe(409);
+  for (const resource of [tilePath, `${viewerPath}?publicationVersion=2`, `${viewerPath}/thumbnail?publicationVersion=2`]) expect((await page.request.get(resource)).status()).toBe(409);
+  await expect(page.getByLabel('合成瓦片画布', { exact: true }).locator('canvas')).toHaveCount(0, { timeout: 6000 });
+  expect((await page.request.get(`${roiPath}?publicationVersion=2`)).status()).toBe(409);
+  expect((await page.request.get(`${roiPath}/${roiView.items[0].roiId}/history`)).status()).toBe(200);
+  await expect(page.getByLabel('ROI图像叠加层', { exact: true })).toHaveCount(0);
+  await forbidden(browser,[qcPath,`${roiPath}/${roiView.items[0].roiId}/history`,tilePath,`${qcPath}/bytes?publicationVersion=2`]);
+});
+test('accepted synthetic task renders exact result pixels and model revocation clears consumption', async ({page,browser,source},info)=>{
+  const {scope,rid,headers,scanPath,scanId,viewerPath}=source;
   // T34: registry is metadata only; exact current source qualification never permits execution.
   const aiPath=`${scanPath}/${scanId}/ai`,modelsPath=`/api/requests/ai/scopes/${scope}/models`;
   const aiScanResponse=await page.request.get(`${aiPath}?publicationVersion=2`);expect(aiScanResponse.status()).toBe(200);
@@ -141,8 +182,21 @@ test('viewer renders actual authorized RGB pyramid and revocation rejects warmed
   const visual=await metadata.json() as {epoch:string;tileHash:string;intensities:number[];result:{id:string;taskId:string;binding:{input:{decision:{modelDigest:string;manifestHash:string}}}};executionAllowed:boolean};
   expect(visual.executionAllowed).toBe(false);expect(visual.result.id).toBe(visualId);expect(visual.result.taskId).toBe(taskState.job.id);expect(visual.result.binding.input.decision.manifestHash).toBe(aiScan.manifestHash);
   const binary=await page.request.get(`${visualPath}/tiles/0?epoch=${visual.epoch}`);expect(binary.status()).toBe(200);expect(binary.headers()['cache-control']).toContain('private');expect(createHash('sha256').update(await binary.body()).digest('hex')).toBe(visual.tileHash);expect((await binary.body()).subarray(0,8)).toEqual(Buffer.from([137,80,78,71,13,10,26,10]));
-  await page.getByRole('button',{name:'返回当前扫描AI契约',exact:true}).click();await page.getByRole('button',{name:'返回当前扫描阅片',exact:true}).click();
-  await page.getByLabel('精确合成结果ID',{exact:true}).fill(visualId);await page.getByRole('button',{name:'核验并加载合成叠加',exact:true}).click();
+  await page.getByRole('button',{name:'返回当前扫描AI契约',exact:true}).click();const manifestResponse=page.waitForResponse(r=>new URL(r.url()).pathname===viewerPath&&r.request().method()==='GET',{timeout:10_000});
+  await page.getByRole('button',{name:'返回当前扫描阅片',exact:true}).click();
+  expect((await manifestResponse).status(),'returned viewer manifest').toBe(200);
+  await expect(page.getByRole('status').filter({hasText:'真实合成PNG已加载'})).toBeVisible();
+  await expect.poll(async()=>source.canvas.evaluate(node=>{const c=node as HTMLCanvasElement;const ctx=c.getContext('2d');if(!ctx)return 0;const p=ctx.getImageData(0,0,c.width,c.height).data;let pink=0;for(let i=0;i<p.length;i+=16)if(p[i]>140&&p[i+2]>120&&p[i]>p[i+1]+15)pink++;return pink;})).toBeGreaterThan(500);
+  await page.getByLabel('精确合成结果ID',{exact:true}).fill(visualId);const browserMetadata=page.waitForResponse(r=>new URL(r.url()).pathname===visualPath,{timeout:10_000});
+  const browserTile=page.waitForResponse(r=>new URL(r.url()).pathname===`${visualPath}/tiles/0`,{timeout:10_000});
+  await page.getByRole('button',{name:'核验并加载合成叠加',exact:true}).click();
+  await Promise.all([
+    browserMetadata.then(async delivered=>{expect(delivered.status(),'browser result metadata').toBe(200);expect(await delivered.json()).toEqual(visual);}),
+    browserTile.then(async delivered=>{expect(delivered.status(),'browser result PNG').toBe(200);expect(createHash('sha256').update(await delivered.body()).digest('hex')).toBe(visual.tileHash);}),
+  ]);
+  const overlayPanel=page.getByRole('region',{name:'非诊断合成结果叠加'});
+  await expect(overlayPanel.getByRole('alert').filter({hasText:/损坏|失效|失败/})).toHaveCount(0);
+  await expect(overlayPanel.getByRole('status')).toContainText('合成强度叠加已核验');
   const resultLayer=page.getByLabel('实际合成强度图层',{exact:true});await expect(resultLayer).toBeVisible();
   const resultPixel=await resultLayer.locator('image').evaluate(async node=>{const image=new Image();image.src=(node as SVGImageElement).href.baseVal;await image.decode();const canvas=document.createElement('canvas');canvas.width=64;canvas.height=64;const context=canvas.getContext('2d');if(!context)throw Error('Missing canvas');context.drawImage(image,0,0);return Array.from(context.getImageData(8,8,1,1).data);});
   expect(resultPixel).toEqual([visual.intensities[0],255-visual.intensities[0],64,255]);
@@ -154,13 +208,5 @@ test('viewer renders actual authorized RGB pyramid and revocation rejects warmed
   expect((await page.request.get(`${aiPath}/assess/${aiId}`)).status()).toBe(409);expect((await page.request.post(`${aiPath}/assess`,{headers:aiHeaders,data:aiInput})).status()).toBe(409);
   expect((await page.request.post(`${taskPath}/artifact`,{headers:headers()})).status()).toBe(409);
   await expect(page.getByLabel('合成瓦片画布',{exact:true}).locator('canvas').first()).toBeVisible();
-  expect((await page.request.post(`${qcPath}/REVOKE`, { headers: headers(), data: { expectedVersion: 2, assessmentVersion: 1, reason: 'Synthetic viewer revoke' } })).status()).toBe(200);
-  expect((await page.request.get(`${aiPath}?publicationVersion=2`)).status()).toBe(409);
-  for (const resource of [tilePath, `${viewerPath}?publicationVersion=2`, `${viewerPath}/thumbnail?publicationVersion=2`]) expect((await page.request.get(resource)).status()).toBe(409);
-  await expect(page.getByLabel('合成瓦片画布', { exact: true }).locator('canvas')).toHaveCount(0, { timeout: 6000 });
-  expect((await page.request.get(`${roiPath}?publicationVersion=2`)).status()).toBe(409);
-  expect((await page.request.get(`${roiPath}/${roiView.items[0].roiId}/history`)).status()).toBe(200);
-  await expect(page.getByLabel('ROI图像叠加层', { exact: true })).toHaveCount(0);
-  const other = await browser.newContext({ baseURL: 'http://127.0.0.1:5173' });
-  try { const receiver = await other.newPage(); await receiver.goto('/'); await receiver.getByLabel('用户名', { exact: true }).fill(handoffUsername()); await receiver.getByLabel('密码', { exact: true }).fill(process.env.PIS_E2E_HANDOFF_PASSWORD ?? 'Synthetic-handoff-only-42!'); const accepted = receiver.waitForResponse(r => new URL(r.url()).pathname === '/api/auth/login'); await receiver.getByRole('button', { name: '登录', exact: true }).click(); expect((await accepted).status()).toBe(204); expect((await receiver.request.get(visualPath)).status()).toBe(404); expect((await receiver.request.get(`${visualPath}/tiles/0?epoch=${visual.epoch}`)).status()).toBe(404); expect((await receiver.request.get(qcPath)).status()).toBe(404); expect((await receiver.request.get(modelsPath)).status()).toBe(404); expect((await receiver.request.get(`${roiPath}/${roiView.items[0].roiId}/history`)).status()).toBe(404); expect((await receiver.request.get(tilePath)).status()).toBe(404); expect((await receiver.request.get(`${qcPath}/bytes?publicationVersion=2`)).status()).toBe(404); } finally { await other.close(); }
+  await forbidden(browser,[visualPath,`${visualPath}/tiles/0?epoch=${visual.epoch}`,modelsPath]);
 });
