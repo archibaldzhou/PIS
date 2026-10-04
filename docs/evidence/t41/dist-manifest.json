@@ -1,0 +1,10 @@
+{
+  "actualLocalDist": true,
+  "backendPackageLocallyVerified": false,
+  "contract": "SYN-DIST-1",
+  "files": {
+    "assets/index-BNLPJnB5.css": "ad1727f00ce2b24d8c16564364309dcc485c2f7c70acb05bd81a53833aad831a",
+    "assets/index-Rn4OO3ct.js": "9196d650fe26f207fb9f3d88027b340e64413c94447bf823e3d74f917211f51e",
+    "index.html": "137c5322a2cd054eb5250d1cbdc7bb9d271b4626e934ab75723be6f2713b8b7e"
+  }
+}

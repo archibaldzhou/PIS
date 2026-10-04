@@ -1,7 +1,7 @@
 name: PIS CI
 on:
   push:
-    branches: [main, validation/t15-20261002, validation/t28, validation/t29, validation/t30, validation/t31, validation/t32, validation/t33, validation/t34, validation/t35, validation/t35-ui-fix, validation/t36, validation/t36-main-fix, validation/t37, validation/t38, validation/t39, validation/t40]
+    branches: [main, validation/t15-20261002, validation/t28, validation/t29, validation/t30, validation/t31, validation/t32, validation/t33, validation/t34, validation/t35, validation/t35-ui-fix, validation/t36, validation/t36-main-fix, validation/t37, validation/t38, validation/t39, validation/t40, validation/t41]
   pull_request:
 permissions:
   contents: read
@@ -63,12 +63,26 @@ jobs:
       - name: Frontend typecheck and build
         working-directory: frontend
         run: npm run build
+      - name: Local release and proxy contracts
+        timeout-minutes: 2
+        run: python3 -m unittest discover -s scripts/deployment -p 'test_*.py' -v
+      - name: Packaged application deployment and rollback rehearsal
+        timeout-minutes: 9
+        run: python3 scripts/deployment/rehearse.py --jar backend/target/pis-backend-0.0.1-SNAPSHOT.jar --dist frontend/dist --revision "$GITHUB_SHA"
       - name: Install test browser
         working-directory: frontend
         run: npx playwright install --with-deps chromium
       - name: Browser integration tests
         working-directory: frontend
         run: npm run test:e2e
+      - name: Built dist real service browser contracts
+        timeout-minutes: 4
+        working-directory: frontend
+        run: npm run test:dist
+      - name: Built dist synthetic UI contracts
+        timeout-minutes: 2
+        working-directory: frontend
+        run: npm run test:dist-ui
       - name: Synthetic browser UI contracts
         working-directory: frontend
         run: npm run test:ui

@@ -1,0 +1,1 @@
+PASS YAML; all prior gates retained; dist and packaged-JAR rehearsal mandatory; read-only permissions; verify 30min.

@@ -1,0 +1,1 @@
+PASS Java source helper compiled and rejected absent local _test DB config; no DB connection attempted.

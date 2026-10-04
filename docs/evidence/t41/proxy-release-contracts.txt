@@ -1,0 +1,10 @@
+test_down_upstream_is_502_not_spa_and_concurrency_is_bounded (test_deployment.Contracts.test_down_upstream_is_502_not_spa_and_concurrency_is_bounded) ... ok
+test_manifest_reproducible_corruption_schema_and_failed_switch_keep_prior (test_deployment.Contracts.test_manifest_reproducible_corruption_schema_and_failed_switch_keep_prior) ... ok
+test_path_host_and_mutated_asset_fail_closed (test_deployment.Contracts.test_path_host_and_mutated_asset_fail_closed) ... ok
+test_real_http_deep_link_assets_api_and_cookie_csrf_forwarding (test_deployment.Contracts.test_real_http_deep_link_assets_api_and_cookie_csrf_forwarding) ... ok
+test_root_and_symlink_and_request_length_are_rejected (test_deployment.Contracts.test_root_and_symlink_and_request_length_are_rejected) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 4.522s
+
+OK
