@@ -2,6 +2,8 @@
 
 同一环境 `/workspace/PIS`，基线为已验证 T35 修复 `67dd0fa86e0d3b44f24a7a1ec9b3c6870ff772d4`。T36 位于独立 validation/t36，未合 main。全部数据为合成夹具；clinical executionAllowed=false，默认模式关闭。
 
+日志仅规范化行末空白，保留测试内容及错误。
+
 ## 最终结果
 
 - 181 项前端单测通过（32 文件）。

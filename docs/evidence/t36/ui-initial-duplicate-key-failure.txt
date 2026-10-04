@@ -114,7 +114,7 @@ Running 91 tests using 2 workers
   ✓  91 ui-tests/workflow.spec.ts:863:1 › archive wrong barcode blocks operation and cancelled form switch retains scan (3.7s)
 
 
-  1) ui-tests/roi.spec.ts:15:1 › ROI calibration edits and soft deletion preserve exact revision history while QC clears overlays 
+  1) ui-tests/roi.spec.ts:15:1 › ROI calibration edits and soft deletion preserve exact revision history while QC clears overlays
 
     Error: locator.fill: Error: strict mode violation: getByLabel('历史ROI ID', { exact: true }) resolved to 16 elements:
         1) <input value="" type="text" aria-label="历史ROI ID" class="ant-input css-dev-only-do-not-override-oc1rc0 ant-input-outlined css-var-_r_0_ ant-input-css-var"/> aka getByRole('textbox', { name: '历史ROI ID' }).first()
@@ -149,7 +149,7 @@ Running 91 tests using 2 workers
     Error Context: test-results/roi-ROI-calibration-edits--f78fd-ry-while-QC-clears-overlays/error-context.md
 
   1 failed
-    ui-tests/roi.spec.ts:15:1 › ROI calibration edits and soft deletion preserve exact revision history while QC clears overlays 
+    ui-tests/roi.spec.ts:15:1 › ROI calibration edits and soft deletion preserve exact revision history while QC clears overlays
   90 passed (4.6m)
 npm notice
 npm notice New major version of npm available! 11.21.0 -> 12.2.0

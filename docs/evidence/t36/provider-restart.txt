@@ -10,4 +10,3 @@ FIXTURE variant=1 source_sha256=1e02699982e15fd4681c7b74b942d44844c1b874ce6c5bd4
 PASS rejected truncated, oversized, unknown magic and header-only; 257x129 edge tile 1x1
 LOAD jobs=32 threads=2 duration_ms=383 max_heap_bytes=134217728 sum_pool_peak_heap_bytes=91247352 java=21.0.12.1 os=Linux arch=amd64
 PASS provider-only bounded concurrency, exact RGB, levels, cancellation; ICC/real WSI/GPU/full application restart NOT VERIFIED
-
