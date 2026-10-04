@@ -1,0 +1,12 @@
+Source-level public-service declaration review only; not Java type compilation.
+syntheticDecisions.consumeReference: public Event consumeReference(UUID id,UUID decision)
+syntheticDecisions.decide: public IdempotentCommands.Result decide(UUID id,Command input,String key)
+syntheticDecisions.impact: public Impact impact(UUID id,UUID decision)
+syntheticDecisions.reviewImpact: public IdempotentCommands.Result reviewImpact(UUID id,UUID decision,ReviewCommand input,String key)
+reports.detail: public Detail detail(UUID id)
+reviews.decide: public IdempotentCommands.Result decide(UUID id,Decision input,String key,Action action)
+ai.change: public IdempotentCommands.Result change(UUID scope,UUID version,StateChange input,String key)
+results.metadata: public Metadata metadata(UUID request,UUID id)
+digitalQc.command: public IdempotentCommands.Result command(UUID request,UUID scan,String action,Command input,String key)
+scans.create: public IdempotentCommands.Result create(UUID rid,Create input,String key)
+PASS: all T38 direct service calls reviewed against public declarations; no direct ReportService.current/revision calls in RequestWorkflowTest.
