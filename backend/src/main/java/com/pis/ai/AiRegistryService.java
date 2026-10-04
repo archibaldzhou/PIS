@@ -82,6 +82,16 @@ public class AiRegistryService {
   viewer.annotationHistory(request,scan);UUID scopeId=requests.authorizedScope(request).id();var c=scope(scopeId,"ASSESS");var d=snapshot(request,scan,id);var input=new Assess(d.modelVersionId(),d.stateVersion(),d.profileVersion(),d.publicationVersion(),d.manifestHash(),d.calibrationVersion(),"Read current synthetic contract");if(!d.equals(decision(request,scan,input)))throw conflict();audit.append(c.hospital(),"AI_ASSESS_READ_V1","AI_ASSESSMENT",id,null,0);return d;});}
  public record WorkerBinding(Decision decision,String preprocessing,String configDigest,UUID caseId){}
  public WorkerBinding workerBinding(UUID request,UUID scan,UUID assessment){return tx.execute(t->{var d=assessment(request,scan,assessment);var m=model(d.scopeId(),d.modelVersionId());if(d.executionAllowed()||!d.outcome().equals("VALIDATION_ONLY_APPLICABLE"))throw conflict();return new WorkerBinding(d,m.metadata().preprocessing(),com.pis.scan.ScanFormat.sha(json.writeValueAsString(m.metadata()).getBytes(java.nio.charset.StandardCharsets.UTF_8)),scans.detail(request,scan).caseId());});}
+ // Expected dependency changes are data, not exceptions crossing participating transaction boundaries.
+ // The history/QC boundary holds the request lock; model() holds series/state locks through commit.
+ public boolean workerBindingCurrent(UUID request,UUID scan,UUID assessment,WorkerBinding expected){return tx.execute(t->{
+  var image=viewer.annotationHistory(request,scan);var c=scope(requests.authorizedScope(request).id(),"ASSESS");var d=snapshot(request,scan,assessment);
+  if(!expected.decision().equals(d)||!image.manifestHash().equals(d.manifestHash())||!viewer.publicationCurrent(request,scan,d.publicationVersion()))return false;
+  var m=model(c.id(),d.modelVersionId());var p=profile(scan);
+  if(!m.state().equals("VALIDATION_ONLY")||m.head()!=d.modelHead()||m.ordinal()!=d.modelOrdinal()||m.stateVersion()!=d.stateVersion()||!m.metadata().digest().equals(d.modelDigest())||p==null||p.version()!=d.profileVersion()||p.publicationVersion()!=d.publicationVersion()||!p.manifestHash().equals(d.manifestHash()))return false;
+  var cal=roi.view(request,scan,d.publicationVersion()).calibration();if(!Objects.equals(d.calibrationVersion(),cal==null?null:cal.version()))return false;
+  return expected.equals(workerBinding(request,scan,assessment));
+ });}
  public void authorizeTaskHistory(UUID request,UUID scan){tx.executeWithoutResult(t->{viewer.annotationHistory(request,scan);scope(requests.authorizedScope(request).id(),"ASSESS");});}
  private static IdempotentCommands.Mutation mutation(String type,UUID id,long version){return new IdempotentCommands.Mutation(new CommandReceipt(200,type,id,version),null);}
  private static ApiException missing(){return problem(HttpStatus.NOT_FOUND,"AI_NOT_FOUND");}
