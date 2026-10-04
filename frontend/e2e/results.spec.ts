@@ -1,4 +1,5 @@
-import { expect } from '@playwright/test';
+import { expect, type Request } from '@playwright/test';
+import {displayedResultBytes} from './displayed-result';
 import { createHash } from 'node:crypto';
 import { test, forbidden } from './viewer-fixture';
 import {safeResultBody,safeTaskFacts,safeUiErrors,safeQuotaFacts} from './result-diagnostics';
@@ -87,38 +88,46 @@ test('accepted synthetic task renders exact result pixels and model revocation c
   await expect(page.getByRole('status').filter({hasText:'真实合成PNG已加载'})).toBeVisible();
   await expect.poll(async()=>source.canvas.evaluate(node=>{const c=node as HTMLCanvasElement;const ctx=c.getContext('2d');if(!ctx)return 0;const p=ctx.getImageData(0,0,c.width,c.height).data;let pink=0;for(let i=0;i<p.length;i+=16)if(p[i]>140&&p[i+2]>120&&p[i]>p[i+1]+15)pink++;return pink;})).toBeGreaterThan(500);
   phase('returned-viewer-ready');
-  await page.getByLabel('精确合成结果ID',{exact:true}).fill(visualId);const browserMetadata=page.waitForResponse(r=>new URL(r.url()).pathname===visualPath,{timeout:10_000});
-  const browserTile=page.waitForResponse(r=>new URL(r.url()).pathname===`${visualPath}/tiles/0`,{timeout:10_000});
-  await page.getByRole('button',{name:'核验并加载合成叠加',exact:true}).click();
-  await Promise.all([
-    browserMetadata.then(async delivered=>{expect(delivered.status(),'browser result metadata').toBe(200);expect(await delivered.json()).toEqual(visual);}),
-    browserTile.then(async delivered=>{expect(delivered.status(),'browser result PNG').toBe(200);expect(createHash('sha256').update(await delivered.body()).digest('hex')).toBe(visual.tileHash);}),
-  ]);
-  const overlayPanel=page.getByRole('region',{name:'非诊断合成结果叠加'});
+  // Only responses to requests initiated after this observer was installed belong to this load.
+  const observeLoad=()=>{const fresh=new Set<Request>();const seen=(r:Request)=>{const path=new URL(r.url()).pathname;if(r.method()==='GET'&&(path===visualPath||path===`${visualPath}/tiles/0`))fresh.add(r);};page.on('request',seen);return {
+    metadata:page.waitForResponse(r=>fresh.has(r.request())&&new URL(r.url()).pathname===visualPath,{timeout:10_000}),
+    tile:page.waitForResponse(r=>fresh.has(r.request())&&new URL(r.url()).pathname===`${visualPath}/tiles/0`,{timeout:10_000}),
+    stop:()=>page.off('request',seen)};};
+  const overlayPanel=page.getByRole('region',{name:'非诊断合成结果叠加'}),resultLayer=page.getByLabel('实际合成强度图层',{exact:true});
+  const verifyDisplayed=async()=>{
+    await expect(resultLayer).toBeVisible({timeout:5000});
+    expect(JSON.parse((await overlayPanel.locator('details pre').textContent())??'null') as unknown).toEqual(visual);
+    const consumed=await displayedResultBytes(resultLayer);
+    expect(consumed).toEqual({sha256:visual.tileHash,magic:[137,80,78,71,13,10,26,10],width:64,height:64,
+      first:[visual.intensities[0],255-visual.intensities[0],64,255],last:[visual.intensities[15],255-visual.intensities[15],64,255]});
+  };
+  await page.getByLabel('精确合成结果ID',{exact:true}).fill(visualId);const initial=observeLoad();
+  try{
+    await page.getByRole('button',{name:'核验并加载合成叠加',exact:true}).click();
+    await Promise.all([initial.metadata.then(r=>expect(r.status(),'browser result metadata').toBe(200)),initial.tile.then(async r=>{expect(r.status(),'browser result PNG').toBe(200);expect(await r.headerValue('X-Result-Epoch')).toBe(visual.epoch);expect(await r.headerValue('X-Content-SHA256')).toBe(visual.tileHash);})]);
+  }finally{initial.stop();}
   await expect(overlayPanel.getByRole('alert').filter({hasText:/损坏|失效|失败/})).toHaveCount(0);
   await expect(overlayPanel.getByRole('status')).toContainText('合成强度叠加已核验');
-  const resultLayer=page.getByLabel('实际合成强度图层',{exact:true});await expect(resultLayer).toBeVisible();
-  const readResultPixel=()=>resultLayer.locator('image').evaluate(async node=>{const image=new Image();image.src=(node as SVGImageElement).href.baseVal;await image.decode();const canvas=document.createElement('canvas');canvas.width=64;canvas.height=64;const context=canvas.getContext('2d');if(!context)throw Error('Missing canvas');context.drawImage(image,0,0);return Array.from(context.getImageData(8,8,1,1).data);});
-  expect(await test.step('decode first accepted PNG pixels',readResultPixel,{timeout:5000})).toEqual([visual.intensities[0],255-visual.intensities[0],64,255]);
+  await test.step('hash and decode first actually displayed Blob',verifyDisplayed,{timeout:5000});
   phase('first-real-pixels-complete');
   await page.getByLabel('合成瓦片画布',{exact:true}).scrollIntoViewIfNeeded();await page.screenshot({path:info.outputPath('real-service-synthetic-result-overlay.png'),fullPage:true});
   phase('toggle-start');
   await page.getByRole('button',{name:'隐藏合成叠加',exact:true}).click();await expect(resultLayer).toHaveCount(0);
-  const shownMetadata=page.waitForResponse(r=>new URL(r.url()).pathname===visualPath,{timeout:10_000});
-  const shownTile=page.waitForResponse(r=>new URL(r.url()).pathname===`${visualPath}/tiles/0`,{timeout:10_000});
+  const shown=observeLoad();
   let metadataStatus:number|null=null,tileStatus:number|null=null;
   let metadataQuota:ReturnType<typeof safeQuotaFacts>|null=null,tileQuota:ReturnType<typeof safeQuotaFacts>|null=null;
   try {
     await page.getByRole('button',{name:'显示合成叠加',exact:true}).click();
     await Promise.all([
-      shownMetadata.then(async r=>{metadataStatus=r.status();metadataQuota=safeQuotaFacts(await r.headerValue('X-Viewer-Quota-Checks'),await r.headerValue('X-Viewer-Quota-Units'),await r.headerValue('Retry-After'));phase('toggle-metadata-response');expect(metadataQuota.units).toBe(1);expect(metadataStatus,JSON.stringify(safeResultBody(await r.body()))).toBe(200);expect(await r.json()).toEqual(visual);}),
-      shownTile.then(async r=>{tileStatus=r.status();tileQuota=safeQuotaFacts(await r.headerValue('X-Viewer-Quota-Checks'),await r.headerValue('X-Viewer-Quota-Units'),await r.headerValue('Retry-After'));phase('toggle-png-response');expect(tileStatus,JSON.stringify(tileQuota)).toBe(200);expect(tileQuota.units).toBe(1);expect(createHash('sha256').update(await r.body()).digest('hex')).toBe(visual.tileHash);}),
+      shown.metadata.then(async r=>{metadataStatus=r.status();metadataQuota=safeQuotaFacts(await r.headerValue('X-Viewer-Quota-Checks'),await r.headerValue('X-Viewer-Quota-Units'),await r.headerValue('Retry-After'));phase('toggle-metadata-response');expect(metadataQuota.units).toBe(1);expect(metadataStatus,JSON.stringify(metadataQuota)).toBe(200);}),
+      shown.tile.then(async r=>{tileStatus=r.status();tileQuota=safeQuotaFacts(await r.headerValue('X-Viewer-Quota-Checks'),await r.headerValue('X-Viewer-Quota-Units'),await r.headerValue('Retry-After'));phase('toggle-png-response');expect(tileStatus,JSON.stringify(tileQuota)).toBe(200);expect(tileQuota.units).toBe(1);expect(await r.headerValue('X-Result-Epoch')).toBe(visual.epoch);expect(await r.headerValue('X-Content-SHA256')).toBe(visual.tileHash);}),
     ]);
     await expect(overlayPanel.getByRole('status')).toContainText('合成强度叠加已核验',{timeout:5000});
     await expect(resultLayer).toBeVisible({timeout:5000});
-    expect(await test.step('decode newly authorized toggle PNG pixels',readResultPixel,{timeout:5000})).toEqual([visual.intensities[0],255-visual.intensities[0],64,255]);
+    await test.step('hash and decode newly displayed toggle Blob',verifyDisplayed,{timeout:5000});
     phase('toggle-real-pixels-complete');
   } finally {
+    shown.stop();
     console.log('T36_RESULT_TOGGLE_DIAGNOSTIC '+JSON.stringify({elapsedMs:Date.now()-started,metadataStatus,tileStatus,metadataQuota,tileQuota,layerCount:await resultLayer.count(),ui:safeUiErrors(await overlayPanel.getByRole('alert').allTextContents())}));
   }
   phase('model-revocation-start');

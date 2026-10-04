@@ -1,0 +1,39 @@
+
+> pis-frontend@0.0.1 test:ui
+> playwright test --config playwright.ui.config.ts viewer.spec.ts viewer-validation.spec.ts roi.spec.ts
+
+[WebServer] (node:408001) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:408014) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 13 tests using 2 workers
+
+(node:408033) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:408032) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:408033) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:408032) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   2 ui-tests/roi.spec.ts:12:1 › ROI rectangle polygon and point persist canonical pixels with real rotated overlay and screenshot (7.2s)
+  ✓   1 ui-tests/viewer-validation.spec.ts:5:2 › T33 real OSD pixels and bounded A B lifecycle 1280 (8.6s)
+  ✓   3 ui-tests/roi.spec.ts:13:1 › ROI failed save freezes original key, cancellation preserves uncertain request and explicit retry succeeds (4.0s)
+  ✓   4 ui-tests/viewer-validation.spec.ts:5:2 › T33 real OSD pixels and bounded A B lifecycle 1024 (6.5s)
+  ✓   5 ui-tests/roi.spec.ts:14:1 › ROI dirty switching is cancellable and dual images only synchronize identical manifests (6.2s)
+  ✓   6 ui-tests/viewer-validation.spec.ts:43:1 › T33 corrupt binary never becomes a blank success and retry requires current authorization (3.3s)
+  ✓   8 ui-tests/viewer.spec.ts:3:1 › viewer renders actual generated PNG pixels, navigates and saves real screenshot (3.3s)
+  ✓   7 ui-tests/roi.spec.ts:15:1 › ROI calibration edits and soft deletion preserve exact revision history while QC clears overlays (7.1s)
+  ✓   9 ui-tests/viewer.spec.ts:4:1 › viewer cache cannot preserve display after QC revocation (2.8s)
+  ✓  11 ui-tests/viewer.spec.ts:5:1 › viewer missing tiles fail visibly and explicit retry recovers actual pixels (3.2s)
+  ✓  10 ui-tests/roi.spec.ts:17:1 › ROI cancelled late save cannot restore A after explicit abandonment and switching to B (5.7s)
+  ✓  12 ui-tests/viewer.spec.ts:6:1 › viewer late A response never replaces B and stopping destroys all canvases (3.2s)
+  ✓  13 ui-tests/viewer.spec.ts:8:1 › viewer cancelled uncertain preparation retries the original key and renders only after confirmation (3.0s)
+
+  13 passed (36.1s)
+npm notice
+npm notice New major version of npm available! 11.21.0 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice

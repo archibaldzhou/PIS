@@ -2,6 +2,7 @@ import {test,expect,type Page} from '@playwright/test';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {render,manifest,pixels} from './viewer-fixture';
+import {displayedResultBytes} from '../e2e/displayed-result';
 import {resultFixture,resultId} from '../test-fixtures/result';
 const bytes=readFileSync(new URL('./fixtures/result.png',import.meta.url)),hash=createHash('sha256').update(bytes).digest('hex');
 function gate(){let resolve:()=>void=()=>{throw Error('Uninitialized');};const promise=new Promise<void>(r=>{resolve=r;});return{promise,resolve};}
@@ -55,6 +56,7 @@ test('hide cancels pending toggle pixels and show requires fresh metadata and by
  const next=gate();state.captured=next.resolve;await page.getByRole('button',{name:'显示合成叠加',exact:true}).click();await next.promise;
  await expect(layer).toBeVisible();await expect(layer.locator('image')).not.toHaveAttribute('href',oldUrl??'');
  expect(await actualColors(page)).toEqual({a:[0,255,64,255],b:[240,15,64,255],width:64,height:64});
+ expect(await displayedResultBytes(layer)).toEqual({sha256:hash,magic:[137,80,78,71,13,10,26,10],width:64,height:64,first:[0,255,64,255],last:[240,15,64,255]});
  await page.getByLabel('合成瓦片画布',{exact:true}).scrollIntoViewIfNeeded();await page.screenshot({path:info.outputPath('toggle-reverified-pixels.png'),fullPage:true});
 });
 for(const reject of [401,409,500] as const)test(`show refusal ${reject} never revives previously delivered pixels`,async({page})=>{
@@ -62,5 +64,23 @@ for(const reject of [401,409,500] as const)test(`show refusal ${reject} never re
  await page.getByRole('button',{name:'隐藏合成叠加',exact:true}).click();await expect(layer).toHaveCount(0);state.reject=reject;
  await page.getByRole('button',{name:'显示合成叠加',exact:true}).click();
  await expect(page.getByRole('region',{name:'非诊断合成结果叠加'}).getByRole('alert').filter({hasText:reject===401?'登录已失效':'合成结果资格或依据版本已失效'})).toBeVisible();await expect(layer).toHaveCount(0);
+ await page.getByRole('button',{name:'取消合成叠加',exact:true}).click();await expect(layer).toHaveCount(0);
+});
+
+// Hash the very Blob rendered by SVG; helper must not issue an additional server PNG request.
+test('repeated same URL toggles verify actual displayed bytes after controlled response delays',async({page},info)=>{
+ let tileRequests=0;const state:{tileCaptured:()=>void;tileDelay?:Promise<void>}={tileCaptured:()=>{tileRequests++;}};
+ await setup(page,state);const layer=page.getByLabel('实际合成强度图层',{exact:true});await expect(layer).toBeVisible();
+ const expected={sha256:hash,magic:[137,80,78,71,13,10,26,10],width:64,height:64,first:[0,255,64,255],last:[240,15,64,255]};
+ const firstCount=tileRequests;expect(await displayedResultBytes(layer)).toEqual(expected);expect(tileRequests).toBe(firstCount);
+ for(let attempt=0;attempt<2;attempt++){
+  const oldUrl=await layer.locator('image').getAttribute('href');
+  await page.getByRole('button',{name:'隐藏合成叠加',exact:true}).click();await expect(layer).toHaveCount(0);
+  const delayed=gate(),seen=gate();state.tileDelay=delayed.promise;state.tileCaptured=()=>{tileRequests++;seen.resolve();};
+  await page.getByRole('button',{name:'显示合成叠加',exact:true}).click();await seen.promise;await expect(layer).toHaveCount(0);
+  delayed.resolve();await expect(layer).toBeVisible();await expect(layer.locator('image')).not.toHaveAttribute('href',oldUrl??'');
+  const consumedCount=tileRequests;expect(await displayedResultBytes(layer)).toEqual(expected);expect(tileRequests).toBe(consumedCount);
+ }
+ await page.getByLabel('合成瓦片画布',{exact:true}).scrollIntoViewIfNeeded();await page.screenshot({path:info.outputPath('displayed-blob-repeated-toggle.png'),fullPage:true});
  await page.getByRole('button',{name:'取消合成叠加',exact:true}).click();await expect(layer).toHaveCount(0);
 });
