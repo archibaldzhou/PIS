@@ -8,6 +8,7 @@ import mimetypes
 import os
 from pathlib import Path
 import socket
+import signal
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
@@ -55,14 +56,22 @@ class Active:
             self._target = target
 
 class Server(ThreadingMixIn, HTTPServer):
-    daemon_threads = True
-    allow_reuse_address = False
+    daemon_threads = False
+    block_on_close = True
+    # Reclaim TIME_WAIT only; no SO_REUSEPORT and no sharing a live listener.
+    allow_reuse_address = True
     def __init__(self, port, active):
         if os.geteuid() == 0:
             raise ValueError('NON_ROOT_REQUIRED')
+        self.handlers = set()
+        self.handler_lock = threading.Lock()
         self.active = active
         self.slots = threading.BoundedSemaphore(8)
         super().__init__(('127.0.0.1', port), Handler)
+    def server_close(self):
+        with self.handler_lock: handlers=list(self.handlers)
+        for handler in handlers: handler.expire()
+        super().server_close() # Join only this server's request threads.
     def process_request(self, request, address):
         if not self.slots.acquire(blocking=False):
             try:
@@ -95,6 +104,7 @@ class Handler(BaseHTTPRequestHandler):
         self.connection.settimeout(15)
         self.upstream_connection=None
         self.deadline=threading.Timer(20,self.expire)
+        with self.server.handler_lock:self.server.handlers.add(self)
         self.deadline.daemon=True;self.deadline.start()
     def expire(self):
         # Absolute connection budget also interrupts slow-drip upstream reads.
@@ -104,7 +114,9 @@ class Handler(BaseHTTPRequestHandler):
                 except OSError:pass
     def finish(self):
         self.deadline.cancel()
-        super().finish()
+        try:super().finish()
+        finally:
+            with self.server.handler_lock:self.server.handlers.discard(self)
     def fail(self, status, code):
         body = json.dumps({'code':code}).encode()
         self.send_response(status)
@@ -207,6 +219,10 @@ def main():
     parser.add_argument('--upstream-port',type=int,default=8080)
     args=parser.parse_args()
     if not 1024<=args.port<=65535: raise ValueError('INVALID_LISTEN_PORT')
+    def stop(signum, _frame):
+        raise SystemExit(128+signum) # finally closes our listener and in-flight connections.
+    signal.signal(signal.SIGTERM,stop)
+    signal.signal(signal.SIGINT,stop)
     server=Server(args.port,Active(Target(args.dist,args.upstream_port)))
     try: server.serve_forever(poll_interval=.1)
     finally: server.server_close()

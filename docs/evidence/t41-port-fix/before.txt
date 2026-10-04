@@ -1,0 +1,5 @@
+owned_first_process_exited= -15
+State     Recv-Q Send-Q Local Address:Port  Peer Address:Port
+TIME-WAIT 0      0          127.0.0.1:53479    127.0.0.1:41452
+
+second_exit= 1 EADDRINUSE= True

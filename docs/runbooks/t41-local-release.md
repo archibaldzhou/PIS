@@ -42,3 +42,5 @@ python3 scripts/deployment/rehearse.py --jar backend/target/pis-backend-0.0.1-SN
 - `rehearse.py`：真正正式JAR冷启动/readiness/重启/失败候选/回切，CI必检。本地若缺BOM必须明确未运行。
 
 CI保留原有全部门禁和verify30分钟预算，新增步骤分别有界；失败日志只输出阶段/退出码/异常类名，私有JVM日志、DB配置和Cookie不作为制品。不是production ready、临床、TLS或灾备批准。
+
+T41端口修复：真实dist套件使用5175，合成dist套件使用5176；代理SIGTERM/SIGINT会清理自己的连接并等待请求线程。SO_REUSEADDR仅回收TIME_WAIT，活跃监听仍拒绝冲突。Playwright保持reuseExistingServer=false并等待所属代理退出，不能通过杀任意占端口进程恢复。见[根因与本地证据](../api/t41-port-lifecycle-fix.md)。
