@@ -30,3 +30,7 @@ UI在合成任务页面填写原因并生成视觉结果，展示确切ID；在�
 - 最终本地前端检查数量及状态见证据目录；完整后端Maven仍因离线BOM缺失未到编译/测试，详见backend-offline.txt。完整CI由父会话核验最终SHA，通过前不合main。
 
 截图为实际Chromium渲染：`synthetic-overlay.png`可见强度格与中央矩形叠于原图；`synthetic-overlay-rotated-flipped-cropped.png`可见旋转/镜像后的中央裁剪，均已视觉检查。仅合成视觉夹具，不证明诊断、真实WSI、颜色保真或临床测量有效。
+
+## T36 配额计量修复
+
+结果生成、metadata、PNG 内部的重复来源核验不等于多个 HTTP 请求。见 [ADR 0026](../adr/0026-viewer-http-quota-accounting.md)：每个物理 HTTP 请求按用户只收取一个阅片频次单位，全部内部权限核验保留；实际字节仍累计，240次/分钟与32MiB上限不变。响应含本请求 `X-Viewer-Quota-Checks` 和 `X-Viewer-Quota-Units` 数字；429/VIEWER_RATE 含有界 Retry-After。不得用这些响应头作为权限凭据或以客户端头跳过计数。

@@ -1,7 +1,8 @@
 import {describe,it,expect} from 'vitest';
-import {safeResultBody,safeTaskFacts,safeUiErrors} from '../../e2e/result-diagnostics';
+import {safeResultBody,safeTaskFacts,safeUiErrors,safeQuotaFacts} from '../../e2e/result-diagnostics';
 const body=(v:unknown)=>new TextEncoder().encode(JSON.stringify(v));
 describe('bounded synthetic result CI diagnostics',()=>{
+ it('keeps only bounded quota counts and Retry-After',()=>{expect(safeQuotaFacts('14','1','60')).toEqual({checks:14,units:1,retryAfterSeconds:60});expect(safeQuotaFacts('secret','999999','61')).toEqual({checks:null,units:null,retryAfterSeconds:null});});
  it('keeps exact known HTTP error code without arbitrary error body',()=>{expect(safeResultBody(body({status:429,code:'VIEWER_RATE',detail:'private',token:'secret'}))).toMatchObject({code:'VIEWER_RATE',status:429});expect(JSON.stringify(safeResultBody(body({code:'secret',title:'secret',detail:'secret',headers:{cookie:'secret'}})))).not.toContain('secret');});
  it('preserves receipt version facts without revealing identity',()=>{const value=safeResultBody(body({replayed:false,receipt:{status:200,resourceType:'SYNTHETIC_AI_RESULT',resourceId:'99999999-9999-4999-8999-999999999999',version:0}}));expect(value).toMatchObject({replayed:false,receipt:{status:200,version:0,validResourceId:true}});expect(JSON.stringify(value)).not.toContain('99999999');});
  it('rejects oversized malformed and nonfinite data',()=>{expect(safeResultBody(new Uint8Array(8193))).toEqual({kind:'OVERSIZE_BODY'});expect(safeResultBody(new Uint8Array([255]))).toEqual({kind:'NON_JSON_BODY'});expect(safeResultBody(body({status:'401',receipt:{version:-1}}))).toMatchObject({status:null,receipt:{version:null}});});

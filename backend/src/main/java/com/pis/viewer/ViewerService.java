@@ -29,12 +29,13 @@ public class ViewerService {
     private final JdbcTemplate jdbc;
     private final IdempotentCommands commands;
     private final TransactionTemplate tx;
+    private final TransactionTemplate quotaTx;
     private final JsonMapper json=JsonMapper.builder().build();
     private final Semaphore generators=new Semaphore(2);
     // Private decoded/encoded image cache. Authorization is never stored as a reusable decision.
     private final LinkedHashMap<ConsumerBinding,Cached> cache=new LinkedHashMap<>(16,.75f,true);
     private long cacheBytes;
-    public ViewerService(DigitalQcService qc,JdbcTemplate jdbc,IdempotentCommands commands,PlatformTransactionManager manager){this.qc=qc;this.jdbc=jdbc;this.commands=commands;tx=new TransactionTemplate(manager);tx.setTimeout(10);}
+    public ViewerService(DigitalQcService qc,JdbcTemplate jdbc,IdempotentCommands commands,PlatformTransactionManager manager){this.qc=qc;this.jdbc=jdbc;this.commands=commands;tx=new TransactionTemplate(manager);tx.setTimeout(10);quotaTx=new TransactionTemplate(manager);quotaTx.setTimeout(5);quotaTx.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);}
     private synchronized Cached cached(ConsumerBinding key){return cache.get(key);}
     private synchronized void save(ConsumerBinding key,Cached value){
         var old=cache.remove(key);if(old!=null)cacheBytes-=old.pyramid().byteSize();
@@ -58,7 +59,32 @@ public class ViewerService {
     }
     private Content stored(UUID scan){var rows=jdbc.queryForList("SELECT manifest::text FROM viewer_manifest WHERE scan_id=?",String.class,scan);if(rows.isEmpty())throw conflict("VIEWER_NOT_PREPARED");return json.readValue(rows.getFirst(),Content.class);}
     private void bind(Content content,ConsumerBinding b){if(!content.hospitalId().equals(b.hospitalId())||!content.requestId().equals(b.requestId())||!content.scanId().equals(b.scanId())||!content.slideId().equals(b.slideId())||!content.objectId().equals(b.objectId())||!content.objectHash().equals(b.objectHash())||content.scanVersion()!=b.scanVersion()||!content.provider().equals(SyntheticPyramid.VERSION))throw conflict("VIEWER_BINDING");}
-    private void budget(ConsumerBinding b,int size){tx.executeWithoutResult(s->{unchanged(b,"VIEWER_MANIFEST");var minute=OffsetDateTime.now(ZoneOffset.UTC).truncatedTo(java.time.temporal.ChronoUnit.MINUTES);jdbc.update("INSERT INTO viewer_read_budget(user_id,minute,requests,bytes) VALUES(?,?,0,0) ON CONFLICT DO NOTHING",b.actorId(),minute);if(jdbc.update("UPDATE viewer_read_budget SET requests=requests+1,bytes=bytes+? WHERE user_id=? AND minute=? AND requests<240 AND bytes+?<=33554432",size,b.actorId(),minute,size)!=1)throw problem(HttpStatus.TOO_MANY_REQUESTS,"VIEWER_RATE");});}
+    private void persistBudget(TransactionTemplate transaction,ConsumerBinding b,OffsetDateTime minute,int units,int size){
+        // HTTP uses quotaTx for this counter only; business writes/audits and non-HTTP callers retain their transactions.
+        transaction.executeWithoutResult(s->{
+            jdbc.update("INSERT INTO viewer_read_budget(user_id,minute,requests,bytes) VALUES(?,?,0,0) ON CONFLICT DO NOTHING",b.actorId(),minute);
+            if(jdbc.update("UPDATE viewer_read_budget SET requests=requests+?,bytes=bytes+? WHERE user_id=? AND minute=? AND requests+?<=240 AND bytes+?<=33554432",units,size,b.actorId(),minute,units,size)!=1)throw problem(HttpStatus.TOO_MANY_REQUESTS,"VIEWER_RATE");
+        });
+    }
+    private void budget(ConsumerBinding b,int size){
+        unchanged(b,"VIEWER_MANIFEST"); // Always recheck; request accounting is not an authorization cache.
+        var minute=OffsetDateTime.now(ZoneOffset.UTC).truncatedTo(java.time.temporal.ChronoUnit.MINUTES);
+        var attributes=org.springframework.web.context.request.RequestContextHolder.getRequestAttributes();
+        if(!(attributes instanceof org.springframework.web.context.request.ServletRequestAttributes web)){
+            persistBudget(tx,b,minute,1,size);return; // Non-HTTP service callers retain per-call bounds.
+        }
+        var request=web.getRequest();ViewerRequestMeter meter;
+        synchronized(request){
+            String key=ViewerRequestMeter.class.getName();
+            if(request.getAttribute(key) instanceof ViewerRequestMeter existing)meter=existing;
+            else {meter=new ViewerRequestMeter();request.setAttribute(key,meter);}
+        }
+        try {meter.charge(b.actorId(),minute,size,(at,units,bytes)->persistBudget(quotaTx,b,at,units,bytes));}
+        finally {var response=web.getResponse();if(response!=null&&!response.isCommitted()){
+            var count=meter.snapshot();response.setHeader("X-Viewer-Quota-Checks",Integer.toString(count.checks()));
+            response.setHeader("X-Viewer-Quota-Units",Integer.toString(count.requestUnits()));
+        }}
+    }
     public IdempotentCommands.Result prepare(UUID request,UUID scan,long publication,String key){
         var b=authorize(request,scan,publication,"VIEWER_PREPARE");budget(b,0);var generated=generate(b);
         return commands.execute(b.hospitalId(),"VIEWER_PREPARE_V1",key,Map.of("request",request,"scan",scan,"publication",publication),new IdempotentCommands.Work(){

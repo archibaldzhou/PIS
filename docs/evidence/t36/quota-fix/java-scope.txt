@@ -1,0 +1,1 @@
+Source lexical-scope scan: 237 files, 0 possible conflicts; not full type compilation

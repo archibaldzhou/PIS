@@ -93,8 +93,13 @@ try:
  sql("UPDATE viewer_manifest SET manifest_hash=repeat('e',64)",False);sql("DELETE FROM viewer_manifest",False)
  sql(fmt("INSERT INTO viewer_read_budget(user_id,minute,requests,bytes) VALUES('{u}',date_trunc('minute',statement_timestamp()),239,0)"))
  with concurrent.futures.ThreadPoolExecutor(2) as pool:
-  results=list(pool.map(lambda _:sql("UPDATE viewer_read_budget SET requests=requests+1 WHERE requests<240 RETURNING requests"),range(2)))
+  results=list(pool.map(lambda _:sql("UPDATE viewer_read_budget SET requests=requests+1,bytes=bytes+0 WHERE requests+1<=240 AND bytes+0<=33554432 RETURNING requests"),range(2)))
  assert sum('UPDATE 1' in r for r in results)==1,results
+ # A paid physical request still accounts every byte; no extra request unit, no byte-limit bypass.
+ assert 'UPDATE 1' in sql('UPDATE viewer_read_budget SET requests=requests+0,bytes=bytes+33554432 WHERE requests+0<=240 AND bytes+33554432<=33554432')
+ assert 'UPDATE 0' in sql('UPDATE viewer_read_budget SET requests=requests+0,bytes=bytes+1 WHERE requests+0<=240 AND bytes+1<=33554432')
+ assert sql("SELECT requests::text||','||bytes::text FROM viewer_read_budget")=='240,33554432'
+ print('PASS viewer quota SQL: concurrent 239→240 admits one; paid bytes remain bounded at 33554432')
  sql(fmt("INSERT INTO roi_head(scan_id,manifest_hash) VALUES('{scan}',repeat('d',64))"))
  sql(fmt("INSERT INTO roi_head(scan_id,manifest_hash) VALUES('{scan}',repeat('f',64))"),False)
  with concurrent.futures.ThreadPoolExecutor(2) as pool:

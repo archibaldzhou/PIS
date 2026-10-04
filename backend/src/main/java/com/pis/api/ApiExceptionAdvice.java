@@ -48,8 +48,11 @@ public final class ApiExceptionAdvice extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<ProblemDetail> domain(ApiException exception, HttpServletRequest request) {
-        return ResponseEntity.status(exception.status()).header(HttpHeaders.CACHE_CONTROL, "no-store")
-            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+        var response=ResponseEntity.status(exception.status()).header(HttpHeaders.CACHE_CONTROL, "no-store");
+        if(exception.status()==HttpStatus.TOO_MANY_REQUESTS && exception.code().equals("VIEWER_RATE")) {
+            response.header(HttpHeaders.RETRY_AFTER,Long.toString(60-Math.floorMod(java.time.Instant.now().getEpochSecond(),60)));
+        }
+        return response.contentType(MediaType.APPLICATION_PROBLEM_JSON)
             .body(ApiProblems.create(request, exception.status(), exception.code(), exception.safeDetail()));
     }
 

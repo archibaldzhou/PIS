@@ -1,7 +1,7 @@
 import { expect } from '@playwright/test';
 import { createHash } from 'node:crypto';
 import { test, forbidden } from './viewer-fixture';
-import {safeResultBody,safeTaskFacts,safeUiErrors} from './result-diagnostics';
+import {safeResultBody,safeTaskFacts,safeUiErrors,safeQuotaFacts} from './result-diagnostics';
 test('accepted synthetic task renders exact result pixels and model revocation clears consumption', async ({page,browser,source},info)=>{
   // CI 37173320165 reached actual pixels but exhausted 30s during toggle.
   // This scenario includes model/task/result creation and revocation; requests stay bounded.
@@ -58,18 +58,19 @@ test('accepted synthetic task renders exact result pixels and model revocation c
   expect(taskFacts).toMatchObject({effectiveState:'SYNTHETIC_SUCCEEDED',taskVersion:2,generation:1,publicationVersion:2,modelStateVersion:1,clinicalExecutionAllowed:false,executionAllowed:false,hasArtifact:true,invalidated:false});
   const createPath=`/api/requests/${rid}/synthetic-results`;
   const generated=page.waitForResponse(r=>new URL(r.url()).pathname===createPath&&r.request().method()==='POST',{timeout:10_000});
+  let createQuota:ReturnType<typeof safeQuotaFacts>|null=null;
   let httpStatus:number|null=null,bodySummary:ReturnType<typeof safeResultBody>|null=null;
   try {
     await page.getByRole('button',{name:'生成非诊断合成视觉结果',exact:true}).click();
-    const response=await generated;httpStatus=response.status();bodySummary=safeResultBody(await response.body());
+    const response=await generated;httpStatus=response.status();bodySummary=safeResultBody(await response.body());createQuota=safeQuotaFacts(await response.headerValue('X-Viewer-Quota-Checks'),await response.headerValue('X-Viewer-Quota-Units'),await response.headerValue('Retry-After'));
     const submitted=response.request().postDataJSON() as {taskId:string;expectedTaskVersion:number;reason:string};
     expect(submitted).toEqual({taskId:taskState.job.id,expectedTaskVersion:taskFacts.taskVersion,reason:'Synthetic non diagnostic visual fixture'});
     if(!response.ok())await expect(page.getByRole('button',{name:'原键确认任务操作',exact:true})).toBeEnabled();
-    expect(httpStatus,JSON.stringify(bodySummary)).toBe(200);
+    expect(httpStatus,JSON.stringify(bodySummary)).toBe(200);expect(createQuota.units).toBe(1);
     expect(bodySummary).toMatchObject({replayed:false,receipt:{status:200,version:0,resourceType:'SYNTHETIC_AI_RESULT',validResourceId:true}});
     await expect(page.getByLabel('已确认合成结果ID',{exact:true})).toBeVisible();
   } finally {
-    const diagnostic={httpStatus,body:bodySummary,lastConfirmedTask:taskFacts,ui:safeUiErrors(await page.getByRole('region',{name:'合成契约任务'}).getByRole('alert').allTextContents())};
+    const diagnostic={httpStatus,createQuota,body:bodySummary,lastConfirmedTask:taskFacts,ui:safeUiErrors(await page.getByRole('region',{name:'合成契约任务'}).getByRole('alert').allTextContents())};
     console.log('T36_RESULT_CREATE_DIAGNOSTIC '+JSON.stringify(diagnostic));
     await info.attach('synthetic-result-create-diagnostic',{body:JSON.stringify(diagnostic),contentType:'application/json'});
   }
@@ -106,18 +107,19 @@ test('accepted synthetic task renders exact result pixels and model revocation c
   const shownMetadata=page.waitForResponse(r=>new URL(r.url()).pathname===visualPath,{timeout:10_000});
   const shownTile=page.waitForResponse(r=>new URL(r.url()).pathname===`${visualPath}/tiles/0`,{timeout:10_000});
   let metadataStatus:number|null=null,tileStatus:number|null=null;
+  let metadataQuota:ReturnType<typeof safeQuotaFacts>|null=null,tileQuota:ReturnType<typeof safeQuotaFacts>|null=null;
   try {
     await page.getByRole('button',{name:'显示合成叠加',exact:true}).click();
     await Promise.all([
-      shownMetadata.then(async r=>{metadataStatus=r.status();phase('toggle-metadata-response');expect(metadataStatus,JSON.stringify(safeResultBody(await r.body()))).toBe(200);expect(await r.json()).toEqual(visual);}),
-      shownTile.then(async r=>{tileStatus=r.status();phase('toggle-png-response');expect(tileStatus).toBe(200);expect(createHash('sha256').update(await r.body()).digest('hex')).toBe(visual.tileHash);}),
+      shownMetadata.then(async r=>{metadataStatus=r.status();metadataQuota=safeQuotaFacts(await r.headerValue('X-Viewer-Quota-Checks'),await r.headerValue('X-Viewer-Quota-Units'),await r.headerValue('Retry-After'));phase('toggle-metadata-response');expect(metadataQuota.units).toBe(1);expect(metadataStatus,JSON.stringify(safeResultBody(await r.body()))).toBe(200);expect(await r.json()).toEqual(visual);}),
+      shownTile.then(async r=>{tileStatus=r.status();tileQuota=safeQuotaFacts(await r.headerValue('X-Viewer-Quota-Checks'),await r.headerValue('X-Viewer-Quota-Units'),await r.headerValue('Retry-After'));phase('toggle-png-response');expect(tileStatus,JSON.stringify(tileQuota)).toBe(200);expect(tileQuota.units).toBe(1);expect(createHash('sha256').update(await r.body()).digest('hex')).toBe(visual.tileHash);}),
     ]);
     await expect(overlayPanel.getByRole('status')).toContainText('合成强度叠加已核验',{timeout:5000});
     await expect(resultLayer).toBeVisible({timeout:5000});
     expect(await test.step('decode newly authorized toggle PNG pixels',readResultPixel,{timeout:5000})).toEqual([visual.intensities[0],255-visual.intensities[0],64,255]);
     phase('toggle-real-pixels-complete');
   } finally {
-    console.log('T36_RESULT_TOGGLE_DIAGNOSTIC '+JSON.stringify({elapsedMs:Date.now()-started,metadataStatus,tileStatus,layerCount:await resultLayer.count(),ui:safeUiErrors(await overlayPanel.getByRole('alert').allTextContents())}));
+    console.log('T36_RESULT_TOGGLE_DIAGNOSTIC '+JSON.stringify({elapsedMs:Date.now()-started,metadataStatus,tileStatus,metadataQuota,tileQuota,layerCount:await resultLayer.count(),ui:safeUiErrors(await overlayPanel.getByRole('alert').allTextContents())}));
   }
   phase('model-revocation-start');
   expect((await page.request.post(`${modelsPath}/${modelId}/state`,{headers:headers(),data:{expectedVersion:1,state:'DISABLED',reason:'Synthetic recall'}})).status()).toBe(200);

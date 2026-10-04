@@ -1,0 +1,1 @@
+PASS actual request meter: 14 checks→1 unit; all bytes charged; minute crossing; failed charge; 16 concurrent checks; next request isolated. NOT Spring/HTTP validation.

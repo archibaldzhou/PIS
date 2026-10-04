@@ -32,3 +32,7 @@ export function safeUiErrors(texts:string[]){
   '合成结果资格或依据版本已失效，叠加不可用。','该任务已有结果，请使用原幂等请求或已知结果ID。','任务版本、租约或状态已变化，请保留原请求并重新核对。'];
  return {count:Math.min(texts.length,10),recognized:messages.filter(message=>texts.slice(0,10).some(text=>text.trim()===message)),unknownPresent:texts.slice(0,10).some(text=>!messages.includes(text.trim()))};
 }
+export function safeQuotaFacts(checks:string|null,units:string|null,retryAfter:string|null){
+ const bounded=(value:string|null,max:number)=>value!==null&&/^\d{1,5}$/.test(value)&&Number(value)<=max?Number(value):null;
+ return {checks:bounded(checks,10000),units:bounded(units,16),retryAfterSeconds:bounded(retryAfter,60)};
+}
