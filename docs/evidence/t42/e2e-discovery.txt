@@ -1,0 +1,58 @@
+
+> pis-frontend@0.0.1 test:e2e
+> playwright test --list
+
+Listing tests:
+  accession.spec.ts:5:1 › synthetic request registration, editing and submission persist through real API
+  adapters.spec.ts:4:1 › local adapter persists source binding receipt dedup and explicit ACK then reconciliation
+  amendment.spec.ts:5:1 › supplement and correction create new independently reviewed branches while original PDF stays byte identical
+  archive.spec.ts:6:1 › archive local roles reserve, approve, scan, return and preserve inventory history
+  consultation.spec.ts:6:1 › case-scoped consultation records disagreement, explicit confirmation and atomic non-signing adoption
+  cytology.spec.ts:5:1 › cytology direct, liquid and cell-block preparations retain exact lineage and fail closed after source QC changes
+  decisions.spec.ts:5:1 › qualified doctor explicitly adopts unchanged draft reference and revoked model blocks replay
+  delivery.spec.ts:5:1 › local persistent delivery requires receiver evidence before ACK and independent reconciliation
+  diagnosis.spec.ts:4:1 › qualified assignment, explicit claim, transfer and receiving user claim preserve versions and QC gate
+  digitalqc.spec.ts:6:1 › digital QC evaluates an exact synthetic scan, publishes explicitly and revokes consumption
+  frozen.spec.ts:5:1 › independent frozen manual workflow requires separate qualified review and receiver evidence
+  grossing.spec.ts:4:1 › grossing keeps description revisions, cassette sources and private photo withdrawal
+  hello.spec.ts:42:1 › anonymous users see an accessible login form without protected data
+  hello.spec.ts:54:1 › real login, Hello retry, refresh session restoration, and logout
+  hello.spec.ts:76:1 › wrong password shows a generic failure and clears the submitted password
+  hello.spec.ts:86:1 › disabled account gets exactly the same generic failure
+  hello.spec.ts:94:1 › empty credentials are validated before submitting
+  hello.spec.ts:104:1 › a failed initial session check can be retried without assuming logout
+  hello.spec.ts:114:1 › login CSRF errors are explicit and retry gets a fresh token
+  hello.spec.ts:132:1 › login network error clears the password and a later real login recovers
+  hello.spec.ts:153:1 › repeated submit while login is pending sends one real login request
+  hello.spec.ts:176:1 › shows a Hello HTTP error after login and recovers on retry
+  hello.spec.ts:186:1 › shows a Hello network error after login and recovers on retry
+  hello.spec.ts:195:1 › a server-invalidated session returns to login with an expired message
+  hello.spec.ts:206:1 › resource permission denial retains the session and explains access failure
+  hello.spec.ts:218:1 › failed logout is not presented as successful and can be retried
+  hello.spec.ts:231:1 › a delayed Hello response cannot restore the view after logout
+  hello.spec.ts:252:1 › missing or incorrect CSRF is rejected by the real login endpoint
+  hello.spec.ts:265:1 › login and signed-in content fit a narrow mobile viewport
+  labels.spec.ts:4:1 › labels preserve identity through preview, simulated failure, retry, cancel and reprint
+  materials.spec.ts:4:1 › material identity, recut/deeper, same-entity reprint and source void survive real API refresh
+  materials.spec.ts:79:1 › explicit direct cytology registers a slide without inventing a block or technical task
+  output.spec.ts:5:1 › fixed synthetic PDF is identical across audited access and print records never claim hardware success
+  quality.spec.ts:4:1 › QC fail isolates labels, creates linked rework and requires independent new-slide QC
+  reception.spec.ts:29:1 › checked reception creates a case once and survives refresh
+  reception.spec.ts:38:1 › identity mismatch blocks reception and preserves return history
+  reception.spec.ts:50:1 › information exception requires explanation and fresh reception check
+  report.spec.ts:4:1 › manual draft revisions bind template versions and reject stale or quarantined saves
+  results.spec.ts:6:1 › accepted synthetic task renders exact result pixels and model revocation clears consumption
+  review.spec.ts:5:1 › separated synthetic review and simulation bind exact revisions and freeze the original
+  scan.spec.ts:6:1 › synthetic scan binds real stored object and slide, leases, isolates publication and rejects cancelled callbacks
+  staining.spec.ts:5:1 › staining freezes new identities, binds control versions, rejects stale writes and preserves revoked results
+  statistics.spec.ts:5:1 › authorized saved events produce frozen statistics, open waiting, exact source drill and scoped denial
+  storage.spec.ts:5:1 › private original stages, survives finish replay, returns exact ranges and denies ungranted receiver
+  technical.spec.ts:4:1 › two synthetic users confirm handoff and keep aborted/rework task history
+  viewer.spec.ts:5:1 › viewer RGB pixels ROI and QC revocation protect warmed resources
+  worklist.spec.ts:4:1 › worklist claims selected tasks with partial failure and replays original batch
+Total: 47 tests in 28 files
+npm notice
+npm notice New major version of npm available! 11.21.0 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice

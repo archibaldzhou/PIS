@@ -80,3 +80,5 @@
 - [T40 受限运维与合成隔离恢复](T40-operations-recovery.md)：用户授权开发，已查看 UI-035/036 实际像素；无医院灾备、加密或合规批准。
 
 - [T41 本地构建产物与部署回滚演练](T41-local-release-rehearsal.md)：只授权隔离本地/CI，非公网或医院生产部署。
+
+- [T42 最终开发验收](T42-development-acceptance.md)：42项可追溯矩阵与证据分层，非医院UAT；原始招标正文缺口仍保留。

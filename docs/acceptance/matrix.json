@@ -1,0 +1,1774 @@
+{
+  "schema": "PIS-DEVELOPMENT-ACCEPTANCE-1",
+  "baseline": "5be3b823a68dbddb2d8962b53492afe618f82f82",
+  "taskCount": 42,
+  "sourceLimitation": "任务序列依据用户逐项指令、提交及开发PRD重建；原始招标PRD和独立任务总计划未取得可读正文，不能声称逐条满足。",
+  "tasks": [
+    {
+      "id": "T01",
+      "requirement": "工程约束落地",
+      "status": "工程范围已实现并验证；非业务/临床批准",
+      "prd": "docs/adr/0001-engineering-baseline.md",
+      "implementation": [
+        "AGENTS.md",
+        "docs/engineering-gates.md"
+      ],
+      "migrations": [],
+      "prototype": [],
+      "tests": [
+        "scripts/acceptance.py"
+      ],
+      "evidence": [
+        "docs/acceptance/baseline-evidence.json"
+      ],
+      "limitations": "工程基线不是医院批准；无可读原始招标PRD/独立42任务计划。",
+      "testMethods": []
+    },
+    {
+      "id": "T02",
+      "requirement": "Java/React工具链和冻结构建",
+      "status": "工程范围已实现并验证；非业务/临床批准",
+      "prd": "README.md",
+      "implementation": [
+        "backend/pom.xml",
+        "backend/.mvn/wrapper/maven-wrapper.properties",
+        "frontend/package.json",
+        "frontend/package-lock.json"
+      ],
+      "migrations": [],
+      "prototype": [],
+      "tests": [
+        ".github/workflows/ci.yml"
+      ],
+      "evidence": [
+        "docs/acceptance/baseline-evidence.json"
+      ],
+      "limitations": "Temurin21补丁与ubuntu运行器未逐摘要冻结；无跨平台JAR逐字节重现保证。",
+      "testMethods": []
+    },
+    {
+      "id": "T03",
+      "requirement": "CI测试与依赖门禁",
+      "status": "工程范围已实现并验证；非业务/临床批准",
+      "prd": "docs/engineering-gates.md",
+      "implementation": [
+        ".github/workflows/ci.yml"
+      ],
+      "migrations": [],
+      "prototype": [],
+      "tests": [
+        "frontend/package.json",
+        "backend/pom.xml"
+      ],
+      "evidence": [
+        "docs/acceptance/baseline-evidence.json"
+      ],
+      "limitations": "前端全依赖审计；PR依赖变更检查不等于Java全量扫描，秘密全量扫描仍缺失。",
+      "testMethods": []
+    },
+    {
+      "id": "T04",
+      "requirement": "PostgreSQL/Flyway基础",
+      "status": "工程范围已实现并验证；非业务/临床批准",
+      "prd": "docs/database-development.md",
+      "implementation": [
+        "backend/src/main/resources/application.properties",
+        "compose.yaml"
+      ],
+      "migrations": [
+        "backend/src/main/resources/db/migration/V1__initialize_schema.sql"
+      ],
+      "prototype": [],
+      "tests": [
+        "backend/src/test/java/com/pis/database/PostgresMigrationTest.java",
+        "backend/src/test/java/com/pis/database/DatabaseStartupFailureTest.java"
+      ],
+      "evidence": [
+        "docs/acceptance/baseline-evidence.json"
+      ],
+      "limitations": "PG17合成库验证；生产账号分离和规模迁移未验证。",
+      "testMethods": []
+    },
+    {
+      "id": "T05",
+      "requirement": "患者/就诊/申请/病例/容器核心关系",
+      "status": "工程范围已实现并验证；非业务/临床批准",
+      "prd": "docs/core-data-model.md",
+      "implementation": [
+        "backend/src/main/java/com/pis/core/CoreModelQueries.java"
+      ],
+      "migrations": [
+        "backend/src/main/resources/db/migration/V2__core_data_model.sql"
+      ],
+      "prototype": [
+        "UI-006"
+      ],
+      "tests": [
+        "backend/src/test/java/com/pis/core/CoreModelConstraintsTest.java",
+        "backend/src/test/java/com/pis/core/CoreModelVersionTest.java"
+      ],
+      "evidence": [
+        "docs/acceptance/baseline-evidence.json"
+      ],
+      "limitations": "合成身份关系及编号域；没有真实MPI或医院身份合并政策。",
+      "testMethods": []
+    },
+    {
+      "id": "T06",
+      "requirement": "会话、角色和对象作用域",
+      "status": "工程范围已实现并验证；非业务/临床批准",
+      "prd": "docs/security-access-control.md",
+      "implementation": [
+        "backend/src/main/java/com/pis/security/SecurityStartupChecks.java",
+        "backend/src/main/java/com/pis/security/access/CaseAccessPolicy.java"
+      ],
+      "migrations": [
+        "backend/src/main/resources/db/migration/V3__identity_and_resource_access.sql"
+      ],
+      "prototype": [
+        "UI-033"
+      ],
+      "tests": [
+        "backend/src/test/java/com/pis/security/SecurityHttpTest.java",
+        "backend/src/test/java/com/pis/security/access/CaseAccessPolicyTest.java"
+      ],
+      "evidence": [
+        "docs/acceptance/baseline-evidence.json"
+      ],
+      "limitations": "显式资格/范围，不提供生产SSO或完整用户授权管理界面；管理员无临床权。",
+      "testMethods": []
+    },
+    {
+      "id": "T07",
+      "requirement": "API错误、原子审计及幂等",
+      "status": "工程范围已实现并验证；非业务/临床批准",
+      "prd": "docs/api-audit-idempotency.md",
+      "implementation": [
+        "backend/src/main/java/com/pis/idempotency/IdempotentCommands.java",
+        "backend/src/main/java/com/pis/api/TraceIdFilter.java"
+      ],
+      "migrations": [
+        "backend/src/main/resources/db/migration/V4__audit_and_idempotency.sql"
+      ],
+      "prototype": [
+        "UI-037"
+      ],
+      "tests": [
+        "backend/src/test/java/com/pis/idempotency/IdempotentCommandsTest.java",
+        "backend/src/test/java/com/pis/api/TraceIdFilterTest.java"
+      ],
+      "evidence": [
+        "docs/acceptance/baseline-evidence.json"
+      ],
+      "limitations": "同库事务成功审计不是医院合规长期防篡改归档；无OpenAPI生成链。",
+      "testMethods": []
+    },
+    {
+      "id": "T08",
+      "requirement": "申请登记/查询/编辑/提交",
+      "status": "合成开发范围已验证；完整医院/原型范围部分实现",
+      "prd": "docs/prd/development-accession-v1.md",
+      "implementation": [
+        "backend/src/main/java/com/pis/accession/RequestService.java",
+        "frontend/src/features/accession/Registration.tsx"
+      ],
+      "migrations": [
+        "backend/src/main/resources/db/migration/V5__development_request_workflow.sql"
+      ],
+      "prototype": [
+        "UI-002",
+        "UI-003",
+        "UI-004"
+      ],
+      "tests": [
+        "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+        "frontend/e2e/accession.spec.ts"
+      ],
+      "evidence": [
+        "docs/acceptance/baseline-evidence.json"
+      ],
+      "limitations": "只用既有合成就诊；无真实HIS建档、医院编号或身份合并。",
+      "testMethods": [
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "registersEditsSubmitsAndReplaysWithoutRepeatingHistoryOrContainers"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "auditFailureRollsBackTheWholeRegistrationAndSameKeyCanRecover"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "simultaneousSameKeyCreatesOneRequestAndOneAuditEvent"
+        }
+      ]
+    },
+    {
+      "id": "T09",
+      "requirement": "标本接收、核对、异常及退回",
+      "status": "合成开发范围已验证；完整医院/原型范围部分实现",
+      "prd": "docs/prd/development-accession-v1.md",
+      "implementation": [
+        "backend/src/main/java/com/pis/specimen/ReceptionService.java",
+        "frontend/src/features/specimen/Reception.tsx"
+      ],
+      "migrations": [
+        "backend/src/main/resources/db/migration/V6__specimen_reception.sql"
+      ],
+      "prototype": [
+        "UI-005",
+        "UI-007",
+        "UI-037"
+      ],
+      "tests": [
+        "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+        "frontend/e2e/reception.spec.ts"
+      ],
+      "evidence": [
+        "docs/acceptance/baseline-evidence.json"
+      ],
+      "limitations": "整申请异常；身份/数量不符阻断，无条件接收或物理交接证明。",
+      "testMethods": [
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "writeDoesNotGrantReceptionAndRevocationBlocksReplay"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "receptionAuditFailureRollsBackCaseContainersStateEventAndReceipt"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "competingReceptionsWaitAndOnlyOneCaseIsCreated"
+        }
+      ]
+    },
+    {
+      "id": "T10",
+      "requirement": "稳定条码和标签重打",
+      "status": "合成开发范围已验证；完整医院/原型范围部分实现",
+      "prd": "docs/prd/development-labels-v1.md",
+      "implementation": [
+        "backend/src/main/java/com/pis/label/LabelService.java",
+        "frontend/src/features/labels/Labels.tsx"
+      ],
+      "migrations": [
+        "backend/src/main/resources/db/migration/V7__container_label_jobs.sql"
+      ],
+      "prototype": [
+        "UI-007"
+      ],
+      "tests": [
+        "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+        "frontend/e2e/labels.spec.ts"
+      ],
+      "evidence": [
+        "docs/acceptance/baseline-evidence.json"
+      ],
+      "limitations": "合成标签预览/打印请求，不证明真实扫码器/打印机输出。",
+      "testMethods": [
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "labelReprintKeepsEntityBarcodeTemplateAndHistoryWithoutCreatingSpecimens"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "labelFailedRetryCancelAreVersionedAndNeverClaimPhysicalSuccess"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "labelsRejectCrossScopeUnreceivedMismatchedBarcodeAndRevokedReprints"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "labelAuditFailureRollsBackIdentityJobAndReceipt"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "labelHttpRequiresCsrfPrintPermissionAndNonblankReprintReason"
+        }
+      ]
+    },
+    {
+      "id": "T11",
+      "requirement": "取材记录、合成图像、取材盒",
+      "status": "合成开发范围已验证；完整医院/原型范围部分实现",
+      "prd": "docs/prd/development-grossing-v1.md",
+      "implementation": [
+        "backend/src/main/java/com/pis/grossing/GrossService.java",
+        "frontend/src/features/grossing/Grossing.tsx"
+      ],
+      "migrations": [
+        "backend/src/main/resources/db/migration/V8__grossing_records_and_cassettes.sql"
+      ],
+      "prototype": [
+        "UI-008",
+        "UI-009"
+      ],
+      "tests": [
+        "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+        "frontend/e2e/grossing.spec.ts"
+      ],
+      "evidence": [
+        "docs/acceptance/baseline-evidence.json"
+      ],
+      "limitations": "图像仅固定白名单合成PNG；无通用临床照片上传/真实取材验证。",
+      "testMethods": [
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "grossingDescriptionPhotoAndCassetteKeepCaseLineageAndRevisionHistory"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "grossingSupportsOneSourceSplitAndSameCaseMultipleSourcesWithoutChangingIdentity"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "grossingRejectsUnreceivedCrossCaseSourcesAndNonSyntheticPhotos"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "grossingCancellationAndPhotoWithdrawalKeepHistoryAndBlockNewDownloads"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "grossingPhotoAuditFailureRollsBackMetadataAndCanReplaySameIntentAfterRecovery"
+        }
+      ]
+    },
+    {
+      "id": "T12",
+      "requirement": "技术任务、领取和交接",
+      "status": "合成开发范围已验证；完整医院/原型范围部分实现",
+      "prd": "docs/prd/development-processing-v1.md",
+      "implementation": [
+        "backend/src/main/java/com/pis/processing/TechnicalService.java",
+        "frontend/src/features/processing/Technical.tsx"
+      ],
+      "migrations": [
+        "backend/src/main/resources/db/migration/V9__technical_tasks_and_handoffs.sql"
+      ],
+      "prototype": [
+        "UI-010",
+        "UI-011",
+        "UI-012"
+      ],
+      "tests": [
+        "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+        "frontend/e2e/technical.spec.ts"
+      ],
+      "evidence": [
+        "docs/acceptance/baseline-evidence.json"
+      ],
+      "limitations": "SIMULATED_DONE不是设备工艺完成；未实现跨病例真实设备批次。",
+      "testMethods": [
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "technicalHandoffRequiresDistinctAuthorizedReceiverAndPreservesReworkLineage"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "technicalSourcesPredecessorsAndPermissionsAreRecheckedWithoutForcingOneRoute"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "technicalHandoffAuditFailureRollsBackOwnershipAndReceipt"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "technicalHttpRequiresAuthenticationDedicatedGrantCsrfAndExactIdentity"
+        }
+      ]
+    },
+    {
+      "id": "T13",
+      "requirement": "蜡块/玻片身份、重切与来源链",
+      "status": "合成开发范围已验证；完整医院/原型范围部分实现",
+      "prd": "docs/prd/development-materials-v1.md",
+      "implementation": [
+        "backend/src/main/java/com/pis/material/MaterialService.java",
+        "frontend/src/features/materials/Materials.tsx"
+      ],
+      "migrations": [
+        "backend/src/main/resources/db/migration/V10__material_identity_and_lineage.sql",
+        "backend/src/main/resources/db/migration/V11__generated_identity_trigger_timing.sql"
+      ],
+      "prototype": [
+        "UI-006",
+        "UI-012"
+      ],
+      "tests": [
+        "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+        "frontend/e2e/materials.spec.ts"
+      ],
+      "evidence": [
+        "docs/acceptance/baseline-evidence.json"
+      ],
+      "limitations": "新身份与直制链验证；实物设备及医院路线未验收。",
+      "testMethods": [
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "materialIdsRecutsDeeperVoidingAndLabelReprintsKeepDistinctStableLineage"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "directCytologyHasNoInventedBlockAndCrossCaseSourcesAreRejected"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "materialCreationAndVoidingRollBackIdentityAndCascadeOnAuditFailure"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "materialHttpRequiresDedicatedPermissionCsrfAndRejectsUnknownPaths"
+        }
+      ]
+    },
+    {
+      "id": "T14",
+      "requirement": "技术QC、隔离、撤销和返工",
+      "status": "合成开发范围已验证；完整医院/原型范围部分实现",
+      "prd": "docs/prd/development-quality-v1.md",
+      "implementation": [
+        "backend/src/main/java/com/pis/quality/QualityService.java",
+        "frontend/src/features/quality/Quality.tsx"
+      ],
+      "migrations": [
+        "backend/src/main/resources/db/migration/V12__material_quality_and_quarantine.sql"
+      ],
+      "prototype": [
+        "UI-014",
+        "UI-037"
+      ],
+      "tests": [
+        "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+        "frontend/e2e/quality.spec.ts"
+      ],
+      "evidence": [
+        "docs/acceptance/baseline-evidence.json"
+      ],
+      "limitations": "人工合成QC；无医院缺陷标准、异常放行或真实仪器QC。",
+      "testMethods": [
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "qualityQuarantineReworkAndNewSlideKeepExactVersionsAndIndependentOutcomes"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "qualityIdentityHoldIsStickyAndPermissionsVersionsScopesRemainEnforced"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "qualityAuditFailureRollsBackJudgementAndReworkTaskTogether"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "qualityRevocationRacingLabelConsumptionObservesDatabaseLocksAndBlocksFurtherUse"
+        }
+      ]
+    },
+    {
+      "id": "T15",
+      "requirement": "工作列表、批量领取和追踪",
+      "status": "合成开发范围已验证；完整医院/原型范围部分实现",
+      "prd": "docs/prd/development-worklist-v1.md",
+      "implementation": [
+        "backend/src/main/java/com/pis/worklist/WorklistService.java",
+        "frontend/src/features/worklist/Worklist.tsx"
+      ],
+      "migrations": [
+        "backend/src/main/resources/db/migration/V13__scoped_worklist_and_trace_projections.sql"
+      ],
+      "prototype": [
+        "UI-001",
+        "UI-006"
+      ],
+      "tests": [
+        "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+        "frontend/e2e/worklist.spec.ts"
+      ],
+      "evidence": [
+        "docs/acceptance/baseline-evidence.json"
+      ],
+      "limitations": "当前页逐项处理，不是全院危急消息平台；超期阈值仅开发规则。",
+      "testMethods": [
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "worklistCountsPaginationAndTraceUseDomainPermissionsAndScopedRealStates"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "bulkClaimsReportPartialFailureMaskForeignIdsAndNeverOverrideVersionOrQuarantine"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "worklistHttpPreservesSessionCsrfWhitelistPagingAndCurrentDomainPermissions"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "worklistSqlDeadlineUsesExactBoundaryAndExcludesCompletedItems"
+        }
+      ]
+    },
+    {
+      "id": "T16",
+      "requirement": "诊断分配、领取与转交",
+      "status": "合成开发范围已验证；完整医院/原型范围部分实现",
+      "prd": "docs/prd/development-diagnosis-assignment-v1.md",
+      "implementation": [
+        "backend/src/main/java/com/pis/diagnosis/DiagnosisService.java",
+        "frontend/src/features/diagnosis/Diagnosis.tsx"
+      ],
+      "migrations": [
+        "backend/src/main/resources/db/migration/V14__diagnosis_assignment.sql"
+      ],
+      "prototype": [
+        "UI-019"
+      ],
+      "tests": [
+        "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+        "frontend/e2e/diagnosis.spec.ts"
+      ],
+      "evidence": [
+        "docs/acceptance/baseline-evidence.json"
+      ],
+      "limitations": "限时合成资格；没有真实排班自动派单或临床授权认证。",
+      "testMethods": [
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "diagnosisAssignClaimTransferRequireExplicitQualifiedScopeAndKeepHistory"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "diagnosisBlocksExpiredTargetsIdentityQuarantineAndAuditFailureRollsBackEverything"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "diagnosisConcurrentAssignClaimTransferHaveOneCasWinnerAfterActualRootLockWait"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "diagnosisTargetRevocationDuringLockWaitRejectsAssignmentWithoutReceipt"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "diagnosisHttpMaintainsCsrfFieldsAndNoReportEndpoints"
+        }
+      ]
+    },
+    {
+      "id": "T17",
+      "requirement": "结构化字段、不可变模板与草稿",
+      "status": "合成开发范围已验证；完整医院/原型范围部分实现",
+      "prd": "docs/prd/development-report-drafts-v1.md",
+      "implementation": [
+        "backend/src/main/java/com/pis/report/ReportService.java",
+        "frontend/src/features/report/ReportEditor.tsx"
+      ],
+      "migrations": [
+        "backend/src/main/resources/db/migration/V15__versioned_report_drafts.sql"
+      ],
+      "prototype": [
+        "UI-020",
+        "UI-034"
+      ],
+      "tests": [
+        "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+        "frontend/e2e/report.spec.ts"
+      ],
+      "evidence": [
+        "docs/acceptance/baseline-evidence.json"
+      ],
+      "limitations": "人工合成内容；无医院模板审批/术语系统或自动诊断。",
+      "testMethods": [
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "reportDraftBindsImmutableTemplatesHistoryAndCurrentClaimedDoctor"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "concurrentReportRevisionsHaveOneWinnerAfterRealRequestLockWait"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "reportHttpRequiresOwnerCsrfAndRejectsUnknownFieldsAndTemplateVersions"
+        }
+      ]
+    },
+    {
+      "id": "T18",
+      "requirement": "复核、退回及模拟冻结",
+      "status": "合成开发范围已验证；完整医院/原型范围部分实现",
+      "prd": "docs/prd/development-report-review-v1.md",
+      "implementation": [
+        "backend/src/main/java/com/pis/report/ReviewService.java",
+        "frontend/src/features/report/ReviewEditor.tsx"
+      ],
+      "migrations": [
+        "backend/src/main/resources/db/migration/V16__synthetic_report_review.sql"
+      ],
+      "prototype": [
+        "UI-022"
+      ],
+      "tests": [
+        "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+        "frontend/e2e/review.spec.ts"
+      ],
+      "evidence": [
+        "docs/acceptance/baseline-evidence.json"
+      ],
+      "limitations": "仅显式合成模拟签署，无临床、CA或法律效力；医院策略待批准。",
+      "testMethods": [
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "reviewSeparationReturnAndSimulationFreezeKeepExactSnapshots"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "reviewInvalidatesAfterDraftQcAssignmentAndQualificationChanges"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "reviewAuditFailureRollsBackHeadEventAndReceipt"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "reviewHttpRequiresExplicitQualificationAndExactWhitelistedSnapshot"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "reviewRacesWithDraftQcAndAssignmentAlwaysLoseReadinessAfterDependencyChanges"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "reviewQualificationRevocationDuringGrantLockWaitCannotAuthorizeCommand"
+        }
+      ]
+    },
+    {
+      "id": "T19",
+      "requirement": "固定PDF、预览与打印记录",
+      "status": "合成开发范围已验证；完整医院/原型范围部分实现",
+      "prd": "docs/prd/development-report-output-v1.md",
+      "implementation": [
+        "backend/src/main/java/com/pis/report/OutputService.java",
+        "frontend/src/features/report/OutputEditor.tsx"
+      ],
+      "migrations": [
+        "backend/src/main/resources/db/migration/V17__fixed_report_artifact_and_print_history.sql"
+      ],
+      "prototype": [
+        "UI-024"
+      ],
+      "tests": [
+        "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+        "frontend/e2e/output.spec.ts"
+      ],
+      "evidence": [
+        "docs/acceptance/baseline-evidence.json"
+      ],
+      "limitations": "小型合成PDF≤4MiB/16页；打印自报不证明硬件成功。",
+      "testMethods": [
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "outputCurrentScopePrintRightsOwnResultAndQcAreEnforcedWithoutRegeneratingHistory"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "outputCreationAndAccessAuditFailuresRollbackArtifactHistoryAndReceipts"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "concurrentArtifactCreationKeepsOneBlobAndConcurrentPrintRequestsHaveOneCasWinner"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "outputHttpProtectsBinaryHeadersCsrfHashScopeAndForbidsUnauditedGetOrHardwareStatus"
+        }
+      ]
+    },
+    {
+      "id": "T20",
+      "requirement": "报告补充、更正和版本链",
+      "status": "合成开发范围已验证；完整医院/原型范围部分实现",
+      "prd": "docs/prd/development-report-amendments-v1.md",
+      "implementation": [
+        "backend/src/main/java/com/pis/report/AmendmentService.java",
+        "frontend/src/features/report/AmendmentEditor.tsx"
+      ],
+      "migrations": [
+        "backend/src/main/resources/db/migration/V18__report_amendment_chain.sql"
+      ],
+      "prototype": [
+        "UI-023"
+      ],
+      "tests": [
+        "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+        "frontend/e2e/amendment.spec.ts"
+      ],
+      "evidence": [
+        "docs/acceptance/baseline-evidence.json"
+      ],
+      "limitations": "旧PDF/冻结内容不改写；真实下游替换未接入。",
+      "testMethods": [
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "amendmentRequiresNewReviewAndKeepsOriginalPdfAndFrozenSnapshots"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "amendmentAuthorizationQcAndAuditFailureDoNotAdvanceChain"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "concurrentAmendmentCreationHasOneWinnerAndOneExplicitConflict"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "amendmentHttpRequiresCsrfStrictTypeReasonAndCurrentObjectScope"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "amendmentNewFreezeAndReplacementRollbackTogetherWhenAuditFails"
+        }
+      ]
+    },
+    {
+      "id": "T21",
+      "requirement": "本地投递、ACK、重试、对账和CA接口",
+      "status": "合成开发范围已验证；完整医院/原型范围部分实现",
+      "prd": "docs/prd/development-delivery-v1.md",
+      "implementation": [
+        "backend/src/main/java/com/pis/report/DeliveryService.java",
+        "frontend/src/features/report/DeliveryEditor.tsx"
+      ],
+      "migrations": [
+        "backend/src/main/resources/db/migration/V19__local_delivery_outbox_inbox.sql"
+      ],
+      "prototype": [
+        "UI-024",
+        "UI-032"
+      ],
+      "tests": [
+        "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+        "frontend/e2e/delivery.spec.ts"
+      ],
+      "evidence": [
+        "docs/acceptance/baseline-evidence.json"
+      ],
+      "limitations": "仅本地outbox/inbox；HTTP成功非业务ACK；CA未配置，外部投递未实现。",
+      "testMethods": [
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "deliveryRequiresRealLocalInboxBeforeAckAndDeduplicatesReceiver"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "deliveryTimeoutRejectsLateAckAndPoisonTerminatesWithRollbackOnAuditFailure"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "concurrentDeliveryClaimsHaveExactlyOneAttemptAndOldCasCannotProgress"
+        }
+      ]
+    },
+    {
+      "id": "T22",
+      "requirement": "独立冰冻、人工计时和沟通版本",
+      "status": "合成开发范围已验证；完整医院/原型范围部分实现",
+      "prd": "docs/prd/development-frozen-v1.md",
+      "implementation": [
+        "backend/src/main/java/com/pis/frozen/FrozenService.java",
+        "frontend/src/features/frozen/Frozen.tsx"
+      ],
+      "migrations": [
+        "backend/src/main/resources/db/migration/V20__independent_synthetic_frozen.sql"
+      ],
+      "prototype": [
+        "UI-016",
+        "UI-025"
+      ],
+      "tests": [
+        "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+        "frontend/e2e/frozen.spec.ts"
+      ],
+      "evidence": [
+        "docs/acceptance/baseline-evidence.json"
+      ],
+      "limitations": "人工合成沟通不等于电话送达；无自动诊断/医院TAT承诺。",
+      "testMethods": [
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "frozenIsIndependentOfRoutineRoutingAndCommunicationProofIsSeparate"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "frozenRevocationQcDraftAndHandoffInvalidateExactReviews"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "frozenTimeCorrectionIsAppendOnlyAndCannotReverseDependentTimes"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "frozenAuditFailureRollsBackEventHeadAndIdempotency"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "frozenDraftAndReviewRacesHaveOneCasWinnerAfterObservedRootLockWait"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "frozenForeignScopesAdminAndRevokedReplaysCannotAccess"
+        }
+      ]
+    },
+    {
+      "id": "T23",
+      "requirement": "细胞学三路径与无蜡块玻片链",
+      "status": "合成开发范围已验证；完整医院/原型范围部分实现",
+      "prd": "docs/prd/development-cytology-v1.md",
+      "implementation": [
+        "backend/src/main/java/com/pis/material/CytologyService.java",
+        "frontend/src/features/materials/Cytology.tsx"
+      ],
+      "migrations": [
+        "backend/src/main/resources/db/migration/V21__cytology_preparation_lineage.sql"
+      ],
+      "prototype": [
+        "UI-015"
+      ],
+      "tests": [
+        "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+        "frontend/e2e/cytology.spec.ts"
+      ],
+      "evidence": [
+        "docs/acceptance/baseline-evidence.json"
+      ],
+      "limitations": "直接涂片/液基/可选细胞蜡块合成元数据；无临床分类或真实制备设备。",
+      "testMethods": [
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "cytologyAllPathsKeepIndependentIdsExactConsumptionAndCannotBypassLedger"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "cytologyFailureReturnsAccountedStockButNewPreparationHasIndependentIdentityAndSourceGeneration"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "cytologyForeignScopeAndRevokedQualificationDenyReadAndReplay"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "cytologyAuditFailureRollsBackMaterialLabelsStockAndRetryKey"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "cytologyConcurrentReservationsAndCompletionsHaveOneCasWinner"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "cytologyHttpChecksCsrfWhitelistObjectScopeAndKeyPayload"
+        }
+      ]
+    },
+    {
+      "id": "T24",
+      "requirement": "特殊染色/IHC批次与对照",
+      "status": "合成开发范围已验证；完整医院/原型范围部分实现",
+      "prd": "docs/prd/development-staining-v1.md",
+      "implementation": [
+        "backend/src/main/java/com/pis/material/StainService.java",
+        "frontend/src/features/materials/Staining.tsx"
+      ],
+      "migrations": [
+        "backend/src/main/resources/db/migration/V22__stain_batches_and_controls.sql"
+      ],
+      "prototype": [
+        "UI-013",
+        "UI-017",
+        "UI-018"
+      ],
+      "tests": [
+        "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+        "frontend/e2e/staining.spec.ts"
+      ],
+      "evidence": [
+        "docs/acceptance/baseline-evidence.json"
+      ],
+      "limitations": "单病例冻结成员、人工合成对照；无厂商方案或真实仪器验证。",
+      "testMethods": [
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "stainingFreezesExactOneForOneLineageAndControlRevocationInvalidatesAcceptedResult"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "stainingFailureAndChangedSourceNeverRestoreOldResultOrConsumeSourceTwice"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "stainingSchemeVersionMetadataIsImmutableAndCrossScopeSourceIsRejected"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "stainingAuditFailureRestoresOldSlideAndRollsBackNewIdentityLabelMembersAndCommand"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "stainingConcurrentResultAndRevokeHaveOneCasWinnerAndRevokeEventuallyInvalidatesResult"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "stainingDuplicateSourcesAndRevokedReplayFailWithoutAdditionalIdentities"
+        }
+      ]
+    },
+    {
+      "id": "T25",
+      "requirement": "院内会诊、复阅、意见与分歧",
+      "status": "合成开发范围已验证；完整医院/原型范围部分实现",
+      "prd": "docs/prd/development-consultation-v1.md",
+      "implementation": [
+        "backend/src/main/java/com/pis/report/ConsultationService.java",
+        "frontend/src/features/report/ConsultationEditor.tsx"
+      ],
+      "migrations": [
+        "backend/src/main/resources/db/migration/V23__case_scoped_consultations.sql"
+      ],
+      "prototype": [
+        "UI-021"
+      ],
+      "tests": [
+        "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+        "frontend/e2e/consultation.spec.ts"
+      ],
+      "evidence": [
+        "docs/acceptance/baseline-evidence.json"
+      ],
+      "limitations": "仅限时病例授权和人工意见；无院外共享/真实邀请/自动多数诊断。",
+      "testMethods": [
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "consultationRequiresExplicitConfirmationAndAdoptsOnlyNewNotesRevision"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "consultationNewOpinionInvalidatesExactSummaryAndForeignOrUninvitedUsersCannotRead"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "consultationInputRevisionQcAndAssignmentChangesInvalidateWithoutDeletingOpinions"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "consultationRevocationBlocksParticipantReadsWritesAndIdempotentReplay"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "consultationAuditFailureRollsBackAdoptionAndRetryCreatesExactlyOneRevision"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "consultationParallelPersonalOpinionsHaveExplicitCasConflict"
+        }
+      ]
+    },
+    {
+      "id": "T26",
+      "requirement": "归档、预约借还及冻结盘点",
+      "status": "合成开发范围已验证；完整医院/原型范围部分实现",
+      "prd": "docs/prd/development-archive-v1.md",
+      "implementation": [
+        "backend/src/main/java/com/pis/archive/ArchiveService.java",
+        "frontend/src/features/archive/Archive.tsx"
+      ],
+      "migrations": [
+        "backend/src/main/resources/db/migration/V24__archive_custody.sql"
+      ],
+      "prototype": [
+        "UI-026",
+        "UI-027"
+      ],
+      "tests": [
+        "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+        "frontend/e2e/archive.spec.ts"
+      ],
+      "evidence": [
+        "docs/acceptance/baseline-evidence.json"
+      ],
+      "limitations": "人工登记与物理事实分离；无自动实物确认、外部借阅或销毁。",
+      "testMethods": [
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "archiveReservationPartialReturnAndExactReplayRemainManual"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "archiveWrongBarcodeForeignItemAndRevokedReplayAreRejected"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "archiveInventoryDifferenceAndStaleSnapshotKeepOriginalHistory"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "archiveQcRevocationAndLossNeverEraseTraceabilityOrAllowLoan"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "archiveAuditFailureRollsBackItemRootEventAndOriginalKeyCanRetry"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "archiveConcurrentReservationHasOneWinnerAndOneVersionConflict"
+        }
+      ]
+    },
+    {
+      "id": "T27",
+      "requirement": "工作量/TAT/QC固定统计快照",
+      "status": "合成开发范围已验证；完整医院/原型范围部分实现",
+      "prd": "docs/prd/development-statistics-v1.md",
+      "implementation": [
+        "backend/src/main/java/com/pis/statistics/StatisticsService.java",
+        "frontend/src/features/statistics/Statistics.tsx"
+      ],
+      "migrations": [
+        "backend/src/main/resources/db/migration/V25__synthetic_statistics_snapshots.sql"
+      ],
+      "prototype": [
+        "UI-028",
+        "UI-031"
+      ],
+      "tests": [
+        "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+        "frontend/e2e/statistics.spec.ts"
+      ],
+      "evidence": [
+        "docs/acceptance/baseline-evidence.json"
+      ],
+      "limitations": "实际保存合成事件、自然时长，开放病例单列；无CSV、医院SLA、工作日历或全院BI。",
+      "testMethods": [
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "statisticsScopesBeforeAggregatingAndRevocationBlocksSavedTotalsAndReplay"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "statisticsFixedSnapshotDeduplicatesRetriesAndProtectsHistory"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "statisticsQcSnapshotRetainsOldEvidenceWhileNewSnapshotReflectsRevocation"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "statisticsAuditFailureRollsBackSnapshotAndPreservesRetryKey"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "statisticsConcurrentSameKeyFreezesOneSnapshot"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "statisticsHttpRequiresCsrfStrictFilterAndCurrentScope"
+        }
+      ]
+    },
+    {
+      "id": "T28",
+      "requirement": "私有原件版本、哈希和容量",
+      "status": "本地provider合成验证；S3接口未配置/未验证",
+      "prd": "docs/prd/development-storage-v1.md",
+      "implementation": [
+        "backend/src/main/java/com/pis/storage/StorageService.java",
+        "frontend/src/features/storage/Storage.tsx"
+      ],
+      "migrations": [
+        "backend/src/main/resources/db/migration/V26__private_original_storage.sql"
+      ],
+      "prototype": [
+        "UI-042"
+      ],
+      "tests": [
+        "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+        "frontend/e2e/storage.spec.ts"
+      ],
+      "evidence": [
+        "docs/acceptance/baseline-evidence.json"
+      ],
+      "limitations": "本地受控根目录provider；S3未配置/未集成，容量只反映该文件系统。",
+      "testMethods": [
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "storagePreservesOriginalVersionsAndReplaysFinalizeWithoutDuplicateOutbox"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "storageFailedStageIsDryRunOnlyAndDoesNotExposeBytes"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "storageFileCompletionSurvivesDatabaseAuditRollbackAndReconcilesExactBytes"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "storageStageRecoveryAndRevokedScopeRemainFailClosed"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "storageQuotaRaceReservesOnlyOneBoundedOriginal"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "storageHttpKeepsAuthenticationCsrfRangeAndStrictMetadata"
+        }
+      ]
+    },
+    {
+      "id": "T29",
+      "requirement": "扫描导入、身份映射和重扫",
+      "status": "合成导入已验证；厂商格式与设备接入未实现",
+      "prd": "docs/prd/development-scan-import-v1.md",
+      "implementation": [
+        "backend/src/main/java/com/pis/scan/ScanService.java",
+        "frontend/src/features/scan/Scan.tsx"
+      ],
+      "migrations": [
+        "backend/src/main/resources/db/migration/V27__synthetic_scan_import.sql"
+      ],
+      "prototype": [
+        "UI-038"
+      ],
+      "tests": [
+        "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+        "frontend/e2e/scan.spec.ts"
+      ],
+      "evidence": [
+        "docs/acceptance/baseline-evidence.json"
+      ],
+      "limitations": "有界合成格式白名单；真实厂商WSI/OpenSlide和扫描仪未配置，不伪造预览。",
+      "testMethods": [
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "scanExactObjectIdentityAndRepeatCompletionNeverPublish"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "scanBothManualAndFileIdentityMismatchStayQuarantined"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "scanCancellationRejectsLateResultAndRescanKeepsOriginal"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "scanAuditFailureRollsBackHeadJobAndHistory"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "scanParallelClaimsUseOneAttemptAndQcChangeInvalidatesCompletion"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "scanBatchReportsEachItemAndRevocationDeniesReadsAndReplay"
+        }
+      ]
+    },
+    {
+      "id": "T30",
+      "requirement": "数字扫描QC、隔离和发布",
+      "status": "合成开发范围已验证；完整医院/原型范围部分实现",
+      "prd": "docs/prd/development-digital-qc-v1.md",
+      "implementation": [
+        "backend/src/main/java/com/pis/digitalqc/DigitalQcService.java",
+        "frontend/src/features/digitalqc/DigitalQc.tsx"
+      ],
+      "migrations": [
+        "backend/src/main/resources/db/migration/V28__digital_scan_qc.sql"
+      ],
+      "prototype": [
+        "UI-039"
+      ],
+      "tests": [
+        "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+        "frontend/e2e/digitalqc.spec.ts"
+      ],
+      "evidence": [
+        "docs/acceptance/baseline-evidence.json"
+      ],
+      "limitations": "精确版本人工检查单；不是图像算法或真实WSI质量验证。",
+      "testMethods": [
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "digitalQcRequiresEveryExplicitItemAndNeverInfersImageCapability"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "digitalQcDefectRegionsAndWrongVersionCannotPass"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "digitalQcRevocationAndRepeatedPublishReceiptNeverRestoreAccess"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "digitalQcNewEvaluationRevokesPublishedVersionWithoutOverwritingHistory"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "digitalQcRescanInvalidatesOldPublicationAndCannotBorrowItsChecklist"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "digitalQcSourceRevocationIsEffectiveWithoutRewritingHistoricalPublication"
+        }
+      ]
+    },
+    {
+      "id": "T31",
+      "requirement": "OpenSeadragon、真实合成瓦片与缓存",
+      "status": "合成开发范围已验证；完整医院/原型范围部分实现",
+      "prd": "docs/prd/development-tile-viewer-v1.md",
+      "implementation": [
+        "backend/src/main/java/com/pis/viewer/ViewerService.java",
+        "frontend/src/features/viewer/TileViewer.tsx"
+      ],
+      "migrations": [
+        "backend/src/main/resources/db/migration/V29__viewer_manifest.sql"
+      ],
+      "prototype": [
+        "UI-040"
+      ],
+      "tests": [
+        "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+        "frontend/e2e/viewer.spec.ts"
+      ],
+      "evidence": [
+        "docs/acceptance/baseline-evidence.json"
+      ],
+      "limitations": "实际PNG金字塔逐资源授权；普通合成栅格不代表真实WSI/GPU兼容。",
+      "testMethods": [
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "viewerExactManifestBinaryAndCacheStillRequireCurrentQcAndVersion"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "viewerCacheEvictsAcrossNineIndependentScopesAndColdInstanceRechecksAuthorization"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "viewerDoesNotInventPixelsFromHeaderOnlyFormat"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "viewerCrossScopeAndRevokedPermissionCannotUseCachedPng"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "viewerManifestAuditRollbackDoesNotExposeCachedArtifact"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "viewerConcurrentPreparationFreezesOneManifestAndNoOverwrite"
+        }
+      ]
+    },
+    {
+      "id": "T32",
+      "requirement": "ROI、测量、双视图及坐标版本",
+      "status": "合成开发范围已验证；完整医院/原型范围部分实现",
+      "prd": "docs/prd/development-roi-v1.md",
+      "implementation": [
+        "backend/src/main/java/com/pis/roi/RoiService.java",
+        "frontend/src/features/viewer/RoiEditor.tsx"
+      ],
+      "migrations": [
+        "backend/src/main/resources/db/migration/V30__roi_versions.sql"
+      ],
+      "prototype": [
+        "UI-041"
+      ],
+      "tests": [
+        "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+        "frontend/e2e/viewer.spec.ts"
+      ],
+      "evidence": [
+        "docs/acceptance/baseline-evidence.json"
+      ],
+      "limitations": "像素坐标/独立XY合成校准；无临床精度或自动配准，重扫不迁移标注。",
+      "testMethods": [
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "roiPersistsExactPixelsCasAuthorAndAppendOnlyHistory"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "roiCalibrationHasIndependentXYAndNeverRewritesOldMeasurements"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "roiQcRevocationBlocksCurrentAndEditsButExplicitAuthorizedHistoryRemains"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "roiConcurrentSavesShareCollectionCas"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "roiAuditFailureRollsBackHeadRevisionAndOriginalKeyCanRetry"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "roiCountLimitAndForeignAuthorCannotBeBypassed"
+        }
+      ]
+    },
+    {
+      "id": "T33",
+      "requirement": "格式、色彩、坐标、负载和故障验证",
+      "status": "合成管线开发验证；真实WSI/ICC/GPU未验证",
+      "prd": "docs/prd/development-viewer-validation-v1.md",
+      "implementation": [
+        "backend/src/main/java/com/pis/viewer/ViewerService.java",
+        "frontend/src/features/viewer/TileViewer.tsx"
+      ],
+      "migrations": [],
+      "prototype": [
+        "UI-040",
+        "UI-041"
+      ],
+      "tests": [
+        "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+        "frontend/e2e/viewer.spec.ts"
+      ],
+      "evidence": [
+        "docs/acceptance/baseline-evidence.json"
+      ],
+      "limitations": "开发32固定任务/128MiB探针；真实WSI、ICC临床保真、GPU和校准显示器未验证。",
+      "testMethods": [
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "viewerCacheEvictsAcrossNineIndependentScopesAndColdInstanceRechecksAuthorization"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "viewerHttpRequiresAuthAndEachTileUsesPrivateHeaders"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "viewerHttpAccountingRollsBackWithBusinessAndNeverCachesQcAuthorization"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "viewerCachedReadAuditFailureNeverReturnsBytes"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "roiPersistsExactPixelsCasAuthorAndAppendOnlyHistory"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "roiCalibrationHasIndependentXYAndNeverRewritesOldMeasurements"
+        }
+      ]
+    },
+    {
+      "id": "T34",
+      "requirement": "AI模型注册与适用资格契约",
+      "status": "合成契约范围已验证；临床AI执行未实现且禁止",
+      "prd": "docs/prd/development-ai-registry-v1.md",
+      "implementation": [
+        "backend/src/main/java/com/pis/ai/AiRegistryService.java",
+        "frontend/src/features/ai/AiRegistry.tsx"
+      ],
+      "migrations": [
+        "backend/src/main/resources/db/migration/V31__synthetic_ai_registry.sql"
+      ],
+      "prototype": [
+        "UI-043"
+      ],
+      "tests": [
+        "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+        "frontend/e2e/viewer.spec.ts"
+      ],
+      "evidence": [
+        "docs/acceptance/baseline-evidence.json"
+      ],
+      "limitations": "只有元数据，无权重、性能证书或临床APPROVED；executionAllowed始终false。",
+      "testMethods": [
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "aiImmutableVersionsSeparateQualificationStateCasAndReplay"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "aiExactAssessmentCannotSurviveProfileModelOrQcRevocation"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "aiRegisterAuditRollbackPreservesOriginalKey"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "aiConcurrentMetadataVersionsHaveExactlyOneHead"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "aiHttpKeepsCsrfStrictDtoAndRevokedGrant"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "aiStateRaceAndQualificationRevocationNeverCreateClinicalRights"
+        }
+      ]
+    },
+    {
+      "id": "T35",
+      "requirement": "持久化合成任务、租约、取消及恢复",
+      "status": "合成契约范围已验证；临床AI执行未实现且禁止",
+      "prd": "docs/prd/development-synthetic-worker-v1.md",
+      "implementation": [
+        "backend/src/main/java/com/pis/ai/AiTaskService.java",
+        "frontend/src/features/ai/SyntheticTasks.tsx"
+      ],
+      "migrations": [
+        "backend/src/main/resources/db/migration/V32__synthetic_contract_tasks.sql"
+      ],
+      "prototype": [
+        "UI-044"
+      ],
+      "tests": [
+        "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+        "frontend/e2e/results.spec.ts"
+      ],
+      "evidence": [
+        "docs/acceptance/baseline-evidence.json"
+      ],
+      "limitations": "技术合成worker不执行模型；独立开关默认false；不证明GPU任务或真实推理。",
+      "testMethods": [
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "syntheticTaskPersistsOutboxExactBindingArtifactAndOneCallback"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "syntheticTaskCancelRejectsLateWrongAndUntrustedCallbacks"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "syntheticTaskRevocationPreventsAcceptanceAndConsumption"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "syntheticTaskQcRevocationDuringLeaseNeverBecomesResult"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "syntheticTaskConcurrentClaimHasSingleGeneration"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "syntheticTaskFrozenClockTimeoutBackoffAndBoundedAttempts"
+        }
+      ]
+    },
+    {
+      "id": "T36",
+      "requirement": "不可变合成结果与实际热图叠加",
+      "status": "合成契约范围已验证；临床AI执行未实现且禁止",
+      "prd": "docs/prd/development-synthetic-result-v1.md",
+      "implementation": [
+        "backend/src/main/java/com/pis/ai/AiResultService.java",
+        "frontend/src/features/viewer/ResultOverlay.tsx"
+      ],
+      "migrations": [
+        "backend/src/main/resources/db/migration/V33__synthetic_result_versions.sql"
+      ],
+      "prototype": [
+        "UI-045"
+      ],
+      "tests": [
+        "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+        "frontend/e2e/results.spec.ts"
+      ],
+      "evidence": [
+        "docs/acceptance/baseline-evidence.json"
+      ],
+      "limitations": "实际绑定像素为合成强度，不是疾病风险/阴性；没有真实模型输出。",
+      "testMethods": [
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "syntheticResultBindsImmutableBytesAndReplaysWithoutDuplicateIdentity"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "syntheticResultSchemaHasActualBoundedPixelsAndRejectsNonFiniteGeometry"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "syntheticResultAuditFailureLeavesRecoverableUnpublishedVersion"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "syntheticResultModelAndScopeRevocationRejectMetadataTileAndReplay"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "syntheticResultQcRevocationBlocksPreparedCompletion"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "syntheticResultConcurrentPrepareHasOneIdentity"
+        }
+      ]
+    },
+    {
+      "id": "T37",
+      "requirement": "医生人工采纳/拒绝/暂缓及报告引用",
+      "status": "合成契约范围已验证；临床AI执行未实现且禁止",
+      "prd": "docs/prd/development-synthetic-decision-v1.md",
+      "implementation": [
+        "backend/src/main/java/com/pis/report/SyntheticDecisionService.java",
+        "frontend/src/features/report/SyntheticDecision.tsx"
+      ],
+      "migrations": [
+        "backend/src/main/resources/db/migration/V34__synthetic_report_decisions.sql"
+      ],
+      "prototype": [
+        "UI-046"
+      ],
+      "tests": [
+        "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+        "frontend/e2e/decisions.spec.ts"
+      ],
+      "evidence": [
+        "docs/acceptance/baseline-evidence.json"
+      ],
+      "limitations": "只写明确非诊断引用，不自动写诊断、改签署内容或授予执行许可。",
+      "testMethods": [
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "syntheticDecisionAcceptCopiesOnlyManualFieldsAndReplaysSingleImmutableReference"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "syntheticDecisionRejectAndDeferKeepReportAndAuditFailureRollsEverythingBack"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "syntheticDecisionConcurrentChoicesHaveOneWinner"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "syntheticDecisionRevokedResultBlocksNewAndReplayButKeepsAuthorizedHistory"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "syntheticDecisionFrozenAndForeignCaseRemainRejected"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "syntheticDecisionHttpStrictCsrfBindingConfirmationAndQualifiedScope"
+        }
+      ]
+    },
+    {
+      "id": "T38",
+      "requirement": "模型/QC/重扫失效与人工复核",
+      "status": "合成契约范围已验证；临床AI执行未实现且禁止",
+      "prd": "docs/prd/development-synthetic-impact-v1.md",
+      "implementation": [
+        "backend/src/main/java/com/pis/report/SyntheticDecisionService.java",
+        "frontend/src/features/report/ImpactReview.tsx"
+      ],
+      "migrations": [
+        "backend/src/main/resources/db/migration/V35__synthetic_reference_impact_review.sql"
+      ],
+      "prototype": [
+        "UI-047"
+      ],
+      "tests": [
+        "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+        "frontend/e2e/decisions.spec.ts"
+      ],
+      "evidence": [
+        "docs/acceptance/baseline-evidence.json"
+      ],
+      "limitations": "当前消费拒绝与授权历史分离；不自动用新结果替代旧版或重新诊断。",
+      "testMethods": [
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "syntheticImpactKeepsSignedReportAndNewDependencyEpochReopensReview"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "syntheticImpactQcAndRescanRetainOldIdentityAndRejectConsumption"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "syntheticImpactConcurrentReviewAndAuditFailureAreAtomic"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "syntheticImpactRevocationRaceNeverLeavesConsumableReference"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "syntheticImpactHttpRetainsCsrfScopeAndCurrentReferenceSeparation"
+        }
+      ]
+    },
+    {
+      "id": "T39",
+      "requirement": "HIS/EMR/收费/设备合成合同",
+      "status": "本地合成适配部分实现；医院实际接口未配置",
+      "prd": "docs/prd/development-hospital-adapter-v1.md",
+      "implementation": [
+        "backend/src/main/java/com/pis/integration/HospitalAdapterService.java",
+        "frontend/src/features/integration/Adapters.tsx"
+      ],
+      "migrations": [
+        "backend/src/main/resources/db/migration/V36__local_hospital_adapter.sql"
+      ],
+      "prototype": [
+        "UI-032"
+      ],
+      "tests": [
+        "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+        "frontend/e2e/adapters.spec.ts"
+      ],
+      "evidence": [
+        "docs/acceptance/baseline-evidence.json"
+      ],
+      "limitations": "自定义SYN-HOSPITAL-1及本地EMR别名；HL7/FHIR/厂商/真实支付均未配置。",
+      "testMethods": [
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "localAdapterDeduplicatesBusinessWithoutConfusingReceiveAckOrReconciliation"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "localAdapterOrderRepairAndLostAckRecoveryKeepOneBusinessRecord"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "localAdapterExhaustionPoisonAndCancellationNeverInventSuccess"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "localAdapterAtomicAuditFailureDoesNotConsumeSequenceOrReceipt"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "localAdapterParallelClaimsHaveOneLeaseAndRevokedReplayIsDenied"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "localAdapterHttpStrictIdentityCsrfBodyBoundsAndCurrentScope"
+        }
+      ]
+    },
+    {
+      "id": "T40",
+      "requirement": "受限运维、脱敏日志及实际隔离备份恢复",
+      "status": "受限运维与隔离合成恢复已验证；生产灾备未实现",
+      "prd": "docs/prd/T40-operations-recovery.md",
+      "implementation": [
+        "backend/src/main/java/com/pis/operations/OperationsService.java",
+        "backend/src/main/java/com/pis/security/SecurityStartupChecks.java",
+        "backend/src/main/java/com/pis/api/TraceIdFilter.java",
+        "scripts/synthetic-recovery.py",
+        "frontend/src/features/operations/Operations.tsx"
+      ],
+      "migrations": [
+        "backend/src/main/resources/db/migration/V37__synthetic_operations_scope.sql"
+      ],
+      "prototype": [
+        "UI-035",
+        "UI-036"
+      ],
+      "tests": [
+        "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+        "backend/src/test/java/com/pis/security/SecurityStartupChecksTest.java",
+        "backend/src/test/java/com/pis/api/TraceIdFilterTest.java",
+        "frontend/e2e/adapters.spec.ts",
+        "scripts/synthetic-recovery.py"
+      ],
+      "evidence": [
+        "docs/acceptance/baseline-evidence.json",
+        "docs/evidence/t41/recovery-gate.txt"
+      ],
+      "limitations": "真实PG/对象合成恢复；未实现生产在线一致备份、加密/异地、RPO/RTO及合规认证。",
+      "testMethods": [
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "operationsRequiresExplicitCurrentScopeAndAuditsWithoutExposingContent"
+        },
+        {
+          "file": "backend/src/test/java/com/pis/accession/RequestWorkflowTest.java",
+          "method": "operationsReadCannotSucceedWhenAuditFails"
+        }
+      ]
+    },
+    {
+      "id": "T41",
+      "requirement": "构建产物代理、部署前检查和安全回切",
+      "status": "同构建双实例合成演练已验证；历史二进制与生产未验证",
+      "prd": "docs/prd/T41-local-release-rehearsal.md",
+      "implementation": [
+        "scripts/deployment/local_proxy.py",
+        "scripts/deployment/release.py",
+        "scripts/deployment/rehearse.py"
+      ],
+      "migrations": [],
+      "prototype": [
+        "UI-035",
+        "UI-036"
+      ],
+      "tests": [
+        "scripts/deployment/test_deployment.py",
+        "scripts/deployment/test_proxy_lifecycle.py",
+        "frontend/dist-tests/real.spec.ts",
+        "frontend/dist-tests/contract.spec.ts"
+      ],
+      "evidence": [
+        "docs/acceptance/baseline-evidence.json",
+        "docs/evidence/t41-port-fix/contracts.txt",
+        "docs/evidence/t41-port-fix/dist-second.txt"
+      ],
+      "limitations": "sameBuiltArtifactTwoInstances=true；不同历史二进制兼容未测；TLS/域名未配置，productionReady=false。",
+      "testMethods": []
+    },
+    {
+      "id": "T42",
+      "requirement": "全任务开发验收、矩阵及中文运行指南",
+      "status": "开发验收待本提交CI",
+      "prd": "docs/prd/T42-development-acceptance.md",
+      "implementation": [
+        "docs/acceptance/matrix.json",
+        "docs/acceptance/report.md",
+        "docs/runbooks/t42-synthetic-demo.md",
+        "scripts/acceptance.py",
+        "frontend/src/App.tsx"
+      ],
+      "migrations": [],
+      "prototype": [
+        "UI-001"
+      ],
+      "tests": [
+        "scripts/acceptance.py",
+        "frontend/dist-tests/contract.spec.ts"
+      ],
+      "evidence": [
+        "docs/evidence/t42/checks.txt",
+        "docs/api/t42-notice-fix.md"
+      ],
+      "limitations": "本提交完整CI待父会话；无原始招标正文逐条验收，无医院UAT/生产批准。 本次独立修正首页过时说明，完整CI另验。",
+      "testMethods": []
+    }
+  ]
+}

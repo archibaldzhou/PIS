@@ -1,0 +1,12 @@
+
+> pis-frontend@0.0.1 test:dist
+> playwright test --config playwright.dist.config.ts --list
+
+Listing tests:
+  real.spec.ts:2:1 › actual dist deep link refresh preserves real cookie and enforces CSRF through loopback proxy
+Total: 1 test in 1 file
+npm notice
+npm notice New major version of npm available! 11.21.0 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice

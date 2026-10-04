@@ -1,0 +1,1 @@
+PASS YAML; all existing jobs/steps/actions/commands/timeouts identical to CI-verified baseline; one bounded acceptance step added; contents read unchanged.
