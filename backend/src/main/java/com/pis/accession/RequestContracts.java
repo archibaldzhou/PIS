@@ -14,6 +14,10 @@ public final class RequestContracts {
     public record Draft(@NotNull @Size(max=4000) String clinicalHistory, Instant sampledAt,
         @NotNull @Size(min=1,max=20) List<@NotNull @Valid ContainerInput> containers) { }
     public record Create(@NotNull UUID scopeId, @NotNull UUID encounterId, @NotNull @Valid Draft draft) { }
+    public record ManualCreate(@NotNull UUID scopeId,
+        @NotBlank @Size(max=255) @Pattern(regexp="\\S(?:[\\s\\S]*\\S)?") String patientName,
+        @NotBlank @Size(max=255) @Pattern(regexp="\\S(?:[\\s\\S]*\\S)?") String encounterNumber,
+        @NotNull @Valid Draft draft) { }
     public record Edit(@NotNull @Min(0) Long expectedVersion, @NotNull @Valid Draft draft) { }
     public record Submit(@NotNull @Min(0) Long expectedVersion) { }
     public record Encounter(UUID id, UUID patientId, String patientLabel, String encounterNumber) { }

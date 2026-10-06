@@ -4,14 +4,14 @@ import { ReadController, type RequestFilter, type RequestReader, type RequestSum
 import { NoRecords, ReadPanel } from '../../shared/WorkflowElements';
 
 const initialFilter: RequestFilter = { keyword: '', date: '', status: '', source: '', page: 1 };
-export function RequestList({ reader, onSelect }: { reader: RequestReader; onSelect: (record: RequestSummary) => void }) {
+export function RequestList({ reader, onSelect, onManual }: { reader: RequestReader; onSelect: (record: RequestSummary) => void; onManual?: () => void }) {
   const [form] = Form.useForm<RequestFilter>();
   const [filter, setFilter] = useState(initialFilter);
   const [controller] = useState(() => new ReadController(reader.search.bind(reader)));
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
   useEffect(() => { void controller.run(initialFilter); return controller.stop; }, [controller]);
   const search = (next: RequestFilter) => { setFilter(next); void controller.run(next); };
-  return <Card title="申请单列表">
+  return <Card title="申请单列表" extra={onManual && <Button type="primary" onClick={onManual}>手工申请</Button>}>
     <Form form={form} initialValues={initialFilter} layout="vertical" className="search-form"
       onFinish={values => search({ ...values, page: 1 })}>
       <Form.Item name="keyword" label="申请号 / 就诊号 / 患者双标识"><Input maxLength={255} /></Form.Item>

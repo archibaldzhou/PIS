@@ -8,6 +8,13 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+# Hash canonical repository text, including Windows autocrlf checkouts. Git's
+# index classifies binary assets; their exact bytes must never be normalized.
+TEXT_PATHS = {
+    line.split('\t', 1)[1] for line in subprocess.check_output(
+        ['git', 'ls-files', '--eol'], cwd=ROOT, text=True).splitlines()
+    if '\t' in line and line.split()[0] in {'i/lf', 'i/crlf', 'i/mixed'}
+}
 BASE = '5be3b823a68dbddb2d8962b53492afe618f82f82'
 REQUIRED_STEPS = [
     'Backend test and package', 'Bounded synthetic viewer provider validation',
@@ -35,9 +42,7 @@ def file(path):
 
 def digest(path):
     data = path.read_bytes()
-    # .gitattributes explicitly checks this Windows wrapper out as CRLF; git blob is LF.
-    # Normalize only that documented path; every other byte is checked verbatim.
-    if path.relative_to(ROOT).as_posix() == 'backend/mvnw.cmd':
+    if path.relative_to(ROOT).as_posix() in TEXT_PATHS:
         data = data.replace(b'\r\n', b'\n')
     return hashlib.sha256(data).hexdigest()
 
@@ -81,12 +86,38 @@ def check():
     require(sorted(int(re.fullmatch(r'V(\d+)__.+\.sql', p.name)[1]) for p in migrations) == list(range(1, 38)),
             'Explicit V1–V37 migration contract changed; review required')
     require({p for r in matrix['tasks'] for p in r['migrations']} ==
-            {str(p.relative_to(ROOT)) for p in migrations}, 'Unmapped migration')
+            {p.relative_to(ROOT).as_posix() for p in migrations}, 'Unmapped migration')
     delta = baseline['reviewedDelta']
     require(set(delta) == {'frontend/src/App.tsx', 'frontend/dist-tests/contract.spec.ts'},
             'Only the explicit T42 notice fix may differ; review required')
+    # Historical T42 evidence stays immutable. Later reviewed work has its own exact
+    # file hashes and local evidence, and still runs every required current CI step.
+    manual = json.loads(file('docs/acceptance/manual-request-delta.json').read_text())
+    expected_manual = {
+        'backend/src/main/java/com/pis/accession/RequestContracts.java',
+        'backend/src/main/java/com/pis/accession/RequestController.java',
+        'backend/src/main/java/com/pis/accession/RequestService.java',
+        'frontend/src/WorkflowWorkspace.tsx',
+        'frontend/src/features/accession/Registration.tsx',
+        'frontend/src/features/accession/RequestList.tsx',
+        'frontend/src/features/accession/api.ts',
+        'frontend/ui-tests/workflow.spec.ts',
+        'frontend/e2e/accession.spec.ts',
+    }
+    expected_added = {
+        'backend/src/main/java/com/pis/core/ManualIdentityRegistration.java',
+        'backend/src/test/java/com/pis/accession/ManualRequestTest.java',
+    }
+    require(manual['baseline'] == BASE and manual['ciStatus'] == 'PENDING_CURRENT_REVISION',
+            'Manual extension must not claim historical CI verifies current work')
+    require(set(manual['changed']) == expected_manual and set(manual['added']) == expected_added,
+            'Unexpected manual runtime scope; review required')
+    file(manual['verificationDocument'])
+    delta = {**delta, **manual['changed']}
     for p, values in delta.items():
         require(digest(file(p)) == values['currentSha256'], 'Unreviewed delta: ' + p)
+    for p, sha256 in manual['added'].items():
+        require(digest(file(p)) == sha256, 'Unreviewed manual addition: ' + p)
     for p, sha in baseline['referenceSha256'].items():
         # Historical documentation and the intentionally extended CI are not runtime evidence.
         if p.startswith(('backend/', 'frontend/', 'scripts/')):
@@ -94,9 +125,9 @@ def check():
     tracked = subprocess.check_output(['git', 'ls-files'], cwd=ROOT, text=True).splitlines()
     runtime = sorted(p for p in tracked if p.startswith(tuple(baseline['runtimePrefixes'])) or p in baseline['runtimeFiles'])
     sha = hashlib.sha256()
-    for p in runtime:
+    for p in (p for p in runtime if p not in expected_added):
         sha.update((p + '\0' + (delta[p]['baselineSha256'] if p in delta else digest(file(p))) + '\n').encode())
-    require(len(runtime) == baseline['runtimeTreeFiles'] and sha.hexdigest() == baseline['runtimeTreeSha256'],
+    require(len(runtime) == baseline['runtimeTreeFiles'] + len(expected_added) and sha.hexdigest() == baseline['runtimeTreeSha256'],
             'Runtime/test tree changed: previous CI cannot substitute for new verification')
     screens = json.loads(file('docs/acceptance/prototype-map.json').read_text())['screens']
     require(len(screens) == 47 and {s['id'] for s in screens} == {f'UI-{i:03}' for i in range(1, 48)}, 'Prototype index incomplete')
@@ -121,7 +152,7 @@ def check():
             if '://' not in ref and not ref.startswith('#'):
                 require((p.parent / ref.split('#')[0]).exists(), 'Broken document link: ' + ref)
     print('PASS: explicit 42 tasks; V1–V37; 47 prototype mappings; ' + str(len(runtime)) +
-          ' baseline runtime/test files (559 unchanged, 2 explicit notice-fix deltas awaiting new CI); referenced evidence and required CI steps. Not a runtime test.')
+          ' current runtime/test files; historical baseline plus explicit notice/manual deltas; referenced evidence and all required CI steps. Current revision still requires full CI. Not a runtime test.')
 
 
 if __name__ == '__main__':

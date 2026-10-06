@@ -1,0 +1,47 @@
+{
+  "baseline": "5be3b823a68dbddb2d8962b53492afe618f82f82",
+  "ciStatus": "PENDING_CURRENT_REVISION",
+  "verificationDocument": "docs/api/manual-request.md",
+  "changed": {
+    "backend/src/main/java/com/pis/accession/RequestContracts.java": {
+      "baselineSha256": "dff750b632dfdeeaef19e3338eb23b317ab74931e76f1037c2ea4012ad697384",
+      "currentSha256": "750dbac87d01b100a7f889284a27b400ecf770e18be2520b92e8bdd0e51ff459"
+    },
+    "backend/src/main/java/com/pis/accession/RequestController.java": {
+      "baselineSha256": "f8b4e51c4e457cb477a5fb662eca5d07d99b9f53bc086b778ec5346934aacc70",
+      "currentSha256": "f980fe133cc8f9d63551ee0ccdd97e47ce439da55375fba7f94193a0b211a9f9"
+    },
+    "backend/src/main/java/com/pis/accession/RequestService.java": {
+      "baselineSha256": "559a935d82501ed3eedae45062b9665c4ceeecfe5cefc56c12f3656132e62487",
+      "currentSha256": "783ca07ca03a9c619283046a8fe800205b8c4f83b11d5a1a05b20792268ab597"
+    },
+    "frontend/src/WorkflowWorkspace.tsx": {
+      "baselineSha256": "e91949213507084a4ec0d07cc7ac0eca37ea13b4e1546623c5a9521267009b06",
+      "currentSha256": "168df67714bb937241a6f765456f8c31d43b4a737bb05cadc284f5b1ea51fe0a"
+    },
+    "frontend/src/features/accession/Registration.tsx": {
+      "baselineSha256": "9fdf2b8c00a2668636c07f8ebd76e35ad6a7ea1caa22edc708ce1761d289c9d1",
+      "currentSha256": "335bec81f2aec210748210c0e07250df3ad00469974e121afbb1d6aaf792ceda"
+    },
+    "frontend/src/features/accession/RequestList.tsx": {
+      "baselineSha256": "893eb950532f1283d9d80722037068a8749d1de5db49c854b2d2ebb155cb6098",
+      "currentSha256": "aeefe77b42f58cca73a2c5628916b64a7e67a3c653718f0e69f7e9854fd58cbd"
+    },
+    "frontend/src/features/accession/api.ts": {
+      "baselineSha256": "c98cd6a01c003737db6e1b0f295b5cd218fa4cf736c2dc33bb6d13b9fcc2c087",
+      "currentSha256": "3626d1f099ce7634a4db577073c712c79c6a61db1f5f3bd73f7a1dcb3c961bd6"
+    },
+    "frontend/ui-tests/workflow.spec.ts": {
+      "baselineSha256": "ef258753e5d26cda6d0a45bd48f677a33754e41bf037f7fed70f5cb36a467a08",
+      "currentSha256": "bce1ff29df481a6bb90373e6c0a4f713120eeab93913abee18c38947f5502330"
+    },
+    "frontend/e2e/accession.spec.ts": {
+      "baselineSha256": "e7d498cd132733314d65624c665959a3d7fcd6744b6ff535f31a225fc047a8eb",
+      "currentSha256": "c5f3a875c5b4bb3bc23f3ee0b26c64ac0cc14033142cbd8f0d46a84f843a54a3"
+    }
+  },
+  "added": {
+    "backend/src/main/java/com/pis/core/ManualIdentityRegistration.java": "cadb8a34e9554f7a392c45d2676f51d7361119c238a74046d9dec9d98ff7c20b",
+    "backend/src/test/java/com/pis/accession/ManualRequestTest.java": "3d2748a98faabc6bfbdc13610060373753d28252d194a7e016ae6ee46fd0ca66"
+  }
+}

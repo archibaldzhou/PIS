@@ -25,8 +25,11 @@ public class RequestService {
     private final WorkflowAccess access;
     private final IdempotentCommands commands;
     private final Validator validator;
-    public RequestService(JdbcTemplate jdbc, WorkflowAccess access, IdempotentCommands commands, Validator validator) {
+    private final com.pis.core.ManualIdentityRegistration identities;
+    public RequestService(JdbcTemplate jdbc, WorkflowAccess access, IdempotentCommands commands, Validator validator,
+            com.pis.core.ManualIdentityRegistration identities) {
         this.jdbc = jdbc; this.access = access; this.commands = commands; this.validator = validator;
+        this.identities = identities;
     }
     @Transactional(timeout=10)
     public List<WorkflowAccess.Scope> scopes() {
@@ -127,6 +130,31 @@ public class RequestService {
                     INSERT INTO pathology_request(id,hospital_id,patient_id,encounter_id,source_system_id,request_number,requesting_department_id,requested_at)
                     VALUES(?,?,?,?,?,?,?,statement_timestamp())
                     """,id,scope.hospitalId(),patients.getFirst(),input.encounterId(),scope.sourceId(),"DEV-AP-"+id,scope.departmentId());
+                jdbc.update("INSERT INTO request_workflow(request_id,hospital_id,scope_id,state,clinical_history,sampled_at,created_by) VALUES(?,?,?,'DRAFT',?,?,?)",
+                    id,scope.hospitalId(),scope.id(),input.draft().clinicalHistory(),timestamp(input.draft().sampledAt()),actor.id());
+                for(var container:input.draft().containers()) {
+                    UUID cid=UUID.randomUUID();
+                    jdbc.update("INSERT INTO specimen_container(id,hospital_id,request_id) VALUES(?,?,?)",cid,scope.hospitalId(),id);
+                    jdbc.update("INSERT INTO request_container_detail(container_id,site,laterality,material_quantity,fixative,fixed_at) VALUES(?,?,?,?,?,?)",
+                        cid,container.site(),container.laterality().name(),container.materialQuantity(),container.fixative(),timestamp(container.fixedAt()));
+                }
+                return new IdempotentCommands.Mutation(new CommandReceipt(201,"PATHOLOGY_REQUEST",id,0),null);
+            }
+        });
+    }
+    public IdempotentCommands.Result createManual(ManualCreate input,String key) {
+        validate(input);
+        var scope=access.require(input.scopeId(),true);
+        return commands.execute(scope.hospitalId(),"REQUEST_MANUAL_CREATE_V1",key,input,new IdempotentCommands.Work() {
+            public void authorize(CurrentActor.Actor actor) { access.require(scope.id(),true); }
+            public void authorizeReplay(CurrentActor.Actor actor,CommandReceipt receipt) { requireResource(receipt.resourceId(),true); }
+            public IdempotentCommands.Mutation mutate(CurrentActor.Actor actor) {
+                // Scope/grant/account SHARE locks coordinate revocation throughout the entire write.
+                access.require(scope.id(),true);
+                var identity=identities.register(scope.hospitalId(),scope.departmentId(),scope.sourceId(),input.patientName(),input.encounterNumber());
+                UUID id=UUID.randomUUID();
+                jdbc.update("INSERT INTO pathology_request(id,hospital_id,patient_id,encounter_id,source_system_id,request_number,requesting_department_id,requested_at) VALUES(?,?,?,?,?,?,?,statement_timestamp())",
+                    id,scope.hospitalId(),identity.patientId(),identity.encounterId(),scope.sourceId(),"DEV-AP-"+id,scope.departmentId());
                 jdbc.update("INSERT INTO request_workflow(request_id,hospital_id,scope_id,state,clinical_history,sampled_at,created_by) VALUES(?,?,?,'DRAFT',?,?,?)",
                     id,scope.hospitalId(),scope.id(),input.draft().clinicalHistory(),timestamp(input.draft().sampledAt()),actor.id());
                 for(var container:input.draft().containers()) {

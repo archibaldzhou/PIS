@@ -35,7 +35,7 @@ import { Grossing } from './features/grossing/Grossing';
 import { Labels } from './features/labels/Labels';
 import { Reception } from './features/specimen/Reception';
 
-const pages = { operations: '受限运维快照', adapters: '合成医院接口', requests: '申请单查询', registration: '病理申请录入', reception: '标本接收与异常', labels: '标签打印与重打', grossing: '取材记录与取材盒', technical: '技术任务与交接', materials: '蜡块与玻片谱系', quality: '技术QC与隔离', worklist: '工作列表与追踪', diagnosis: '诊断分配与领取', report: '报告草稿', review: '复核与模拟签署', output: '固定PDF与打印记录', amendments: '报告补充与更正', delivery: '本地投递与回执', frozen: '术中冰冻工作站', cytology: '细胞学制备工作站', staining: '特殊染色与IHC批次', consultation: '院内会诊与复阅', archive: '归档借阅与盘点', statistics: '工作量TAT与QC统计', storage: '原件版本与容量', scan: '扫描任务与导入', digitalqc: '数字扫描QC', viewer: '合成数字阅片器', ai: 'AI模型与适用契约', aitasks: '合成契约任务' };
+const pages = { operations: '受限运维快照', adapters: '合成医院接口', requests: '申请单查询', registration: '病理申请录入', manual: '手工申请', reception: '标本接收与异常', labels: '标签打印与重打', grossing: '取材记录与取材盒', technical: '技术任务与交接', materials: '蜡块与玻片谱系', quality: '技术QC与隔离', worklist: '工作列表与追踪', diagnosis: '诊断分配与领取', report: '报告草稿', review: '复核与模拟签署', output: '固定PDF与打印记录', amendments: '报告补充与更正', delivery: '本地投递与回执', frozen: '术中冰冻工作站', cytology: '细胞学制备工作站', staining: '特殊染色与IHC批次', consultation: '院内会诊与复阅', archive: '归档借阅与盘点', statistics: '工作量TAT与QC统计', storage: '原件版本与容量', scan: '扫描任务与导入', digitalqc: '数字扫描QC', viewer: '合成数字阅片器', ai: 'AI模型与适用契约', aitasks: '合成契约任务' };
 type Page = keyof typeof pages;
 export function WorkflowWorkspace({ onClose, onLogout, onExpired, api = accessionApi }: {
   onClose: () => void; onLogout: () => void; onExpired: () => void; api?: AccessionApi;
@@ -85,7 +85,7 @@ export function WorkflowWorkspace({ onClose, onLogout, onExpired, api = accessio
     try { return await api.search(scope, filter, signal); }
     catch (error) { if (error instanceof ApiError && error.status === 401) onExpired(); throw error; }
   } };
-  const registration = (detail?: RequestDetail) => <Registration key={detail ? `${detail.id}:${detail.version}` : scope}
+  const registration = (detail?: RequestDetail) => <Registration key={detail ? `${detail.id}:${detail.version}` : `${scope}:${page}`} manual={page === 'manual'}
     api={api} scopeId={scope} record={detail} onDirty={() => setDirty(true)} onExpired={onExpired}
     onPending={value => { setUnresolved(value); if (!value) setNavWarning(''); }}
     onSaved={() => { setDirty(false); setRecord(undefined); setPage('requests'); setNotice('服务器已确认操作；列表将重新查询。'); }} />;
@@ -124,7 +124,7 @@ export function WorkflowWorkspace({ onClose, onLogout, onExpired, api = accessio
       {scope && page === 'diagnosis' && <Diagnosis key={scope} scopeId={scope} onDirty={() => setDirty(true)} onClean={() => setDirty(false)} onPending={value => { setUnresolved(value); if (!value) setNavWarning(''); }} onExpired={onExpired} />}
       {scope && page === 'statistics' && <Statistics key={scope} scopeId={scope} onDirty={() => setDirty(true)} onClean={() => setDirty(false)} onExpired={onExpired} />}
       {scope && page === 'worklist' && <Worklist key={scope} scopeId={scope} onDirty={() => setDirty(true)} onClean={() => setDirty(false)} onPending={setUnresolved} onExpired={onExpired} />}
-      {scope && page === 'requests' && <RequestList key={scope} reader={reader} onSelect={selected => navigate('registration', selected)} />}
+      {scope && page === 'requests' && <RequestList key={scope} reader={reader} onManual={() => navigate('manual')} onSelect={selected => navigate('registration', selected)} />}
       {scope && page === 'registration' && (record ? <><Button onClick={() => navigate('operations', record)}>查看此申请运维</Button><Button onClick={() => navigate('adapters', record)}>处理此申请接口</Button><Button onClick={() => navigate('scan', record)}>处理此申请扫描导入</Button><Button onClick={() => navigate('storage', record)}>处理此申请原件</Button><Button onClick={() => navigate('archive', record)}>处理此申请档案</Button><Button onClick={() => navigate('staining', record)}>处理此申请染色批次</Button><Button onClick={() => navigate('cytology', record)}>处理此申请细胞学</Button><Button onClick={() => navigate('frozen', record)}>处理此申请冰冻</Button><Button onClick={() => navigate('reception', record)}>处理此申请接收与异常</Button><Button onClick={() => navigate('labels', record)}>处理此申请标签</Button><Button onClick={() => navigate('grossing', record)}>处理此病例取材</Button><Button onClick={() => navigate('technical', record)}>处理此病例技术任务</Button><Button onClick={() => navigate('materials', record)}>处理此病例材料谱系</Button><Button onClick={() => navigate('quality', record)}>处理此病例技术QC</Button><ReadPanel state={detailState}>{registration}</ReadPanel></> : registration())}
       {scope && page === 'reception' && (record ? <Reception key={record.id} id={record.id} onDirty={() => setDirty(true)} onClean={() => setDirty(false)} onPending={setUnresolved} onExpired={onExpired} /> : <Alert type="info" title="请从申请列表查看申请，再进入接收与异常处理" />)}
       {scope && page === 'labels' && (record ? <ReadPanel state={detailState}>{data => <Labels key={data.id} containerIds={data.containers.map(c => c.id)} onDirty={() => setDirty(true)} onClean={() => setDirty(false)} onPending={setUnresolved} onExpired={onExpired} />}</ReadPanel> : <Alert type="info" title="请从申请详情选择标签任务" />)}
@@ -148,7 +148,8 @@ export function WorkflowWorkspace({ onClose, onLogout, onExpired, api = accessio
       {scope && page === 'storage' && (record ? <Storage key={record.id} requestId={record.id} onDirty={() => setDirty(true)} onClean={() => setDirty(false)} onPending={setUnresolved} onExpired={onExpired} /> : <Alert type="info" title="请从已接收申请详情进入原件存储" />)}
       {scope && page === 'archive' && (record ? <Archive key={record.id} requestId={record.id} onDirty={() => setDirty(true)} onClean={() => setDirty(false)} onPending={setUnresolved} onExpired={onExpired} /> : <Alert type="info" title="请从已接收申请详情进入档案台账" />)}
       {scope && page === 'staining' && (record ? <Staining key={record.id} requestId={record.id} onDirty={() => setDirty(true)} onClean={() => setDirty(false)} onPending={setUnresolved} onExpired={onExpired} /> : <Alert type="info" title="请从已接收申请详情进入染色批次" />)}
-      {!scope && page === 'registration' && <Alert type="info" title="先选择授权工作范围，再登记申请" />}
+      {scope && page === 'manual' && registration()}
+      {!scope && (page === 'registration' || page === 'manual') && <Alert type="info" title="先选择授权工作范围，再登记申请" />}
     </section>
     <Modal title="放弃未保存的本地输入？" open={confirming} okText="放弃并继续" cancelText="继续编辑"
       onCancel={() => { pending.current = undefined; setConfirming(false); }}

@@ -17,6 +17,49 @@ async function start(page: Page) {
   await page.getByRole('combobox', { name: '授权工作范围' }).click();
   await page.getByText('合成院区 / 科室', { exact: true }).last().click();
 }
+
+test('manual registration validates identity and sends one typed intent without existing encounter', async ({ page }) => {
+  await start(page);
+  await page.getByRole('button', { name: '手工申请', exact: true }).last().click();
+  await expect(page.getByLabel('精确就诊号')).toHaveCount(0);
+  let writes = 0;
+  await page.route('**/api/requests/manual', async route => {
+    writes++;
+    expect(route.request().postDataJSON()).toMatchObject({ scopeId: scope, patientName: '合成手工患者', encounterNumber: 'SYN-MANUAL-001' });
+    expect(route.request().headers()['idempotency-key']).toBeTruthy();
+    await route.fulfill({ status: 201, json: { receipt: { resourceId: 'manual-request', version: 0 } } });
+  });
+  await page.getByRole('button', { name: '保存草稿', exact: true }).click();
+  expect(writes).toBe(0);
+  await page.getByLabel('患者显示名', { exact: true }).fill('合成手工患者');
+  await page.getByLabel('手工就诊号', { exact: true }).fill('SYN-MANUAL-001');
+  await page.getByLabel('部位', { exact: true }).fill('合成部位');
+  await page.getByRole('button', { name: '保存草稿', exact: true }).dblclick();
+  await expect(page.getByText('服务器已确认操作；列表将重新查询。')).toBeVisible();
+  expect(writes).toBe(1);
+  await page.getByRole('button', { name: '手工申请', exact: true }).last().click();
+  await expect(page.getByLabel('患者显示名', { exact: true })).toHaveValue('');
+  await expect(page.getByLabel('手工就诊号', { exact: true })).toHaveValue('');
+});
+
+test('manual unknown result freezes identity and retries the original key and body', async ({ page }) => {
+  await start(page);
+  await page.getByRole('button', { name: '手工申请', exact: true }).last().click();
+  await page.getByLabel('患者显示名', { exact: true }).fill('合成手工患者');
+  await page.getByLabel('手工就诊号', { exact: true }).fill('SYN-MANUAL-RETRY');
+  await page.getByLabel('部位', { exact: true }).fill('合成部位');
+  const writes: { body: string | null; key: string | undefined }[] = [];
+  await page.route('**/api/requests/manual', async route => {
+    writes.push({ body: route.request().postData(), key: route.request().headers()['idempotency-key'] });
+    await route.abort();
+  });
+  await page.getByRole('button', { name: '保存草稿', exact: true }).click();
+  await expect(page.getByRole('button', { name: '重试原请求确认结果' })).toBeVisible();
+  await expect(page.getByLabel('患者显示名', { exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: '重试原请求确认结果' }).click();
+  await expect.poll(() => writes.length).toBe(2);
+  expect(writes[1]).toEqual(writes[0]);
+});
 test('empty, forbidden and retry errors remain distinct', async ({ page }) => {
   await start(page);
   await expect(page.getByText('没有符合条件的申请；不会自动创建患者')).toBeVisible();

@@ -17,6 +17,7 @@ export interface AccessionApi {
   search(scopeId: string, filter: RequestFilter, signal: AbortSignal): Promise<ReadResult<RequestPage>>;
   detail(id: string, signal: AbortSignal): Promise<RequestDetail>;
   create(scopeId: string, encounterId: string, draft: Draft, key: string): Promise<Receipt>;
+  createManual(scopeId: string, patientName: string, encounterNumber: string, draft: Draft, key: string): Promise<Receipt>;
   edit(id: string, version: number, draft: Draft, key: string): Promise<Receipt>;
   submit(id: string, version: number, key: string): Promise<Receipt>;
 }
@@ -67,6 +68,9 @@ export const accessionApi: AccessionApi = {
   },
   async detail(id, signal) { return detail(await get('/api/requests/' + encodeURIComponent(id), signal)); },
   create(scopeId, encounterId, draft, key) { return write('/api/requests', 'POST', { scopeId, encounterId, draft }, key); },
+  createManual(scopeId, patientName, encounterNumber, draft, key) {
+    return write('/api/requests/manual', 'POST', { scopeId, patientName, encounterNumber, draft }, key);
+  },
   edit(id, expectedVersion, draft, key) { return write('/api/requests/' + encodeURIComponent(id), 'PUT', { expectedVersion, draft }, key); },
   submit(id, expectedVersion, key) { return write('/api/requests/' + encodeURIComponent(id) + '/submit', 'POST', { expectedVersion }, key); },
 };
