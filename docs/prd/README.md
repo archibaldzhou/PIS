@@ -82,3 +82,5 @@
 - [T41 本地构建产物与部署回滚演练](T41-local-release-rehearsal.md)：只授权隔离本地/CI，非公网或医院生产部署。
 
 - [T42 最终开发验收](T42-development-acceptance.md)：42项可追溯矩阵与证据分层，非医院UAT；原始招标正文缺口仍保留。
+
+- [后台用户、岗位权限与自动工作区 V1](development-identity-admin-v1.md)：2026-10-07用户明确授权修改代码；开发负责人为当前任务实现者，医院制度/临床启用仍未批准。见[ADR 0032](../adr/0032-managed-synthetic-identity.md)和[接口与验证](../api/identity-administration.md)。

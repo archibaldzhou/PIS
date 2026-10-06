@@ -20,12 +20,12 @@ public class AccountRepository {
     }
 
     public Optional<AccountState> state(UUID id) {
-        return jdbc.query("SELECT enabled, auth_version FROM app_user WHERE id = ?",
-            (row, index) -> new AccountState(row.getBoolean("enabled"), row.getLong("auth_version")),
+        return jdbc.query("SELECT enabled, auth_version, password_change_required FROM app_user WHERE id = ?",
+            (row, index) -> new AccountState(row.getBoolean("enabled"), row.getLong("auth_version"), row.getBoolean("password_change_required")),
             id).stream().findFirst();
     }
 
     public record Account(UUID id, String username, String displayName, String passwordHash,
                           boolean enabled, long authVersion) { }
-    public record AccountState(boolean enabled, long authVersion) { }
+    public record AccountState(boolean enabled, long authVersion, boolean passwordChangeRequired) { }
 }

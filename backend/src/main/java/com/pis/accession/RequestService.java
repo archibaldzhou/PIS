@@ -86,13 +86,14 @@ public class RequestService {
     }
     @Transactional(timeout=10)
     public Page list(UUID scopeId,String keyword,String state,LocalDate date,int page) {
-        access.require(scopeId,false);
+        if(scopeId!=null)access.require(scopeId,false);
+        var actor=access.actor();
         if(page<1||page>10000 || keyword.length()>255 || !List.of("","DRAFT","SUBMITTED","RECEIVED","EXCEPTION","RETURNED").contains(state)) throw bad("INVALID_QUERY");
-        String where=" WHERE w.scope_id=? AND (?='' OR r.request_number=? OR e.encounter_number=? OR r.patient_id::text=?) AND (?='' OR w.state=?)"
+        String where=" WHERE (?::uuid IS NULL OR w.scope_id=?) AND EXISTS(SELECT 1 FROM workflow_grant g JOIN workflow_scope s ON s.id=g.scope_id WHERE g.scope_id=w.scope_id AND g.user_id=? AND s.enabled AND g.can_read AND g.revoked_at IS NULL AND g.valid_from<=statement_timestamp() AND (g.valid_until IS NULL OR g.valid_until>statement_timestamp())) AND (?='' OR r.request_number=? OR e.encounter_number=? OR r.patient_id::text=?) AND (?='' OR w.state=?)"
             +" AND (? OR (r.created_at>=? AND r.created_at<?))";
         Object start=date==null?null:date.atStartOfDay().atOffset(ZoneOffset.UTC);
         Object end=date==null?null:date.plusDays(1).atStartOfDay().atOffset(ZoneOffset.UTC);
-        Object[] args={scopeId,keyword,keyword,keyword,keyword,state,state,date==null,start,end};
+        Object[] args={scopeId,scopeId,actor.id(),keyword,keyword,keyword,keyword,state,state,date==null,start,end};
         long total=jdbc.queryForObject("SELECT count(*) FROM ("+DETAIL+where+") counted",Long.class,args);
         var parameters=new java.util.ArrayList<>(java.util.Arrays.asList(args)); parameters.add((page-1)*20);
         var items=jdbc.query(DETAIL+where+" ORDER BY r.created_at DESC,r.id DESC LIMIT 20 OFFSET ?",mapper,parameters.toArray());

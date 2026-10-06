@@ -83,10 +83,11 @@ def check():
             require(re.search(r'void\s+' + re.escape(anchor['method']) + r'\s*\(', file(anchor['file']).read_text()),
                     'Missing test method: ' + anchor['method'])
     migrations = list((ROOT / 'backend/src/main/resources/db/migration').glob('*.sql'))
-    require(sorted(int(re.fullmatch(r'V(\d+)__.+\.sql', p.name)[1]) for p in migrations) == list(range(1, 38)),
-            'Explicit V1–V37 migration contract changed; review required')
+    require(sorted(int(re.fullmatch(r'V(\d+)__.+\.sql', p.name)[1]) for p in migrations) == list(range(1, 39)),
+            'Explicit V1–V38 migration contract changed; review required')
+    identity_migration = 'backend/src/main/resources/db/migration/V38__identity_administration.sql'
     require({p for r in matrix['tasks'] for p in r['migrations']} ==
-            {p.relative_to(ROOT).as_posix() for p in migrations}, 'Unmapped migration')
+            {p.relative_to(ROOT).as_posix() for p in migrations} - {identity_migration}, 'Unmapped migration')
     delta = baseline['reviewedDelta']
     require(set(delta) == {'frontend/src/App.tsx', 'frontend/dist-tests/contract.spec.ts'},
             'Only the explicit T42 notice fix may differ; review required')
@@ -114,6 +115,26 @@ def check():
             'Unexpected manual runtime scope; review required')
     file(manual['verificationDocument'])
     delta = {**delta, **manual['changed']}
+    identity = json.loads(file('docs/acceptance/identity-administration-delta.json').read_text())
+    require(identity['baseline'] == BASE and identity['previousRevision'] == '6b247fca1c21406a9f88a990e4343e54c90227b0'
+            and identity['ciStatus'] == 'PENDING_CURRENT_REVISION', 'Identity extension evidence must remain revision-specific')
+    require(identity['migration'] == identity_migration and identity_migration in identity['added'], 'Identity migration must be explicitly mapped')
+    file(identity['verificationDocument'])
+    for p, values in identity['changed'].items():
+        require(p.startswith(('backend/', 'frontend/')) and p not in expected_added, 'Unexpected identity change boundary: ' + p)
+        if p in delta:
+            require(values['previousSha256'] == delta[p]['currentSha256'] and values['baselineSha256'] == delta[p]['baselineSha256'],
+                    'Broken historical delta chain: ' + p)
+        else:
+            require(values['baselineSha256'] == values['previousSha256'], 'Unexpected predecessor baseline: ' + p)
+        delta[p] = values
+    identity_added = set(identity['added'])
+    allowed_additions = ('backend/src/main/java/com/pis/identity/', 'backend/src/test/java/com/pis/identity/', 'frontend/src/features/identity/')
+    named_additions = {identity_migration, 'backend/src/test/java/com/pis/security/testfixture/SyntheticAdminBootstrap.java',
+                       'frontend/e2e/identity.spec.ts', 'frontend/ui-tests/identity.spec.ts'}
+    require(all(p.startswith(allowed_additions) or p in named_additions for p in identity_added), 'Unexpected identity addition boundary')
+    for p, sha256 in identity['added'].items():
+        require(digest(file(p)) == sha256, 'Unreviewed identity addition: ' + p)
     for p, values in delta.items():
         require(digest(file(p)) == values['currentSha256'], 'Unreviewed delta: ' + p)
     for p, sha256 in manual['added'].items():
@@ -125,9 +146,9 @@ def check():
     tracked = subprocess.check_output(['git', 'ls-files'], cwd=ROOT, text=True).splitlines()
     runtime = sorted(p for p in tracked if p.startswith(tuple(baseline['runtimePrefixes'])) or p in baseline['runtimeFiles'])
     sha = hashlib.sha256()
-    for p in (p for p in runtime if p not in expected_added):
+    for p in (p for p in runtime if p not in expected_added | identity_added):
         sha.update((p + '\0' + (delta[p]['baselineSha256'] if p in delta else digest(file(p))) + '\n').encode())
-    require(len(runtime) == baseline['runtimeTreeFiles'] + len(expected_added) and sha.hexdigest() == baseline['runtimeTreeSha256'],
+    require(len(runtime) == baseline['runtimeTreeFiles'] + len(expected_added) + len(identity_added) and sha.hexdigest() == baseline['runtimeTreeSha256'],
             'Runtime/test tree changed: previous CI cannot substitute for new verification')
     screens = json.loads(file('docs/acceptance/prototype-map.json').read_text())['screens']
     require(len(screens) == 47 and {s['id'] for s in screens} == {f'UI-{i:03}' for i in range(1, 48)}, 'Prototype index incomplete')
@@ -151,8 +172,8 @@ def check():
         for ref in re.findall(r'\]\(([^)]+)\)', p.read_text()):
             if '://' not in ref and not ref.startswith('#'):
                 require((p.parent / ref.split('#')[0]).exists(), 'Broken document link: ' + ref)
-    print('PASS: explicit 42 tasks; V1–V37; 47 prototype mappings; ' + str(len(runtime)) +
-          ' current runtime/test files; historical baseline plus explicit notice/manual deltas; referenced evidence and all required CI steps. Current revision still requires full CI. Not a runtime test.')
+    print('PASS: explicit 42 historical tasks plus identity administration; V1–V38; 47 prototype mappings; ' + str(len(runtime)) +
+          ' current runtime/test files; historical baseline plus explicit notice/manual/identity deltas; referenced evidence and all required CI steps. Current revision still requires full CI. Not a runtime test.')
 
 
 if __name__ == '__main__':

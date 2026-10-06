@@ -32,6 +32,10 @@ final class AccountSessionValidationFilter extends OncePerRequestFilter {
                     SecurityResponses.error(response, 401, "SESSION_EXPIRED", "会话已失效，请重新登录");
                     return;
                 }
+                if (state.get().passwordChangeRequired() && !java.util.Set.of("/api/auth/me", "/api/auth/csrf", "/api/auth/logout", "/api/auth/password", "/api/hello").contains(request.getRequestURI())) {
+                    SecurityResponses.error(response, 403, "PASSWORD_CHANGE_REQUIRED", "请先修改初始或重置密码");
+                    return;
+                }
             } catch (DataAccessException unavailable) {
                 // Never authorize using stale identity when its current status cannot be checked.
                 new SecurityContextLogoutHandler().logout(request, response, authentication);

@@ -66,7 +66,8 @@ class SecurityHttpTest {
         var me = browser.get("/api/auth/me");
         assertThat(me.statusCode()).isEqualTo(200);
         assertThat(JSON.readTree(me.body()).path("id").stringValue()).isEqualTo(user.id().toString());
-        assertThat(me.body()).doesNotContain("password", "authVersion", "password_hash");
+        assertThat(me.body()).doesNotContain("\"password\"", "passwordHash", "authVersion", "password_hash", PASSWORD, "$2a$", "$2b$");
+        assertThat(JSON.readTree(me.body()).path("passwordChangeRequired").asBoolean()).isFalse();
         assertThat(browser.get("/api/hello").statusCode()).isEqualTo(200);
         assertThat(new Browser(before).get("/api/auth/me").statusCode()).isEqualTo(401);
     }

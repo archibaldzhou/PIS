@@ -56,7 +56,7 @@ test('digital QC evaluates an exact synthetic scan, publishes explicitly and rev
   const revised = { ...evaluation, expectedVersion: 0, focus: 'PASS', note: 'Synthetic explicit pass' }; const qcKey = headers();
   expect((await page.request.post(qcPath, { headers: qcKey, data: revised })).status()).toBe(200);
   expect((await (await page.request.post(qcPath, { headers: qcKey, data: revised })).json() as { replayed: boolean }).replayed).toBe(true);
-  await page.getByRole('button', { name: '申请登记工作区' }).click(); await page.getByLabel('授权工作范围').click(); await page.getByText('合成申请工作范围', { exact: true }).last().click();
+  await page.getByRole('button', { name: '申请登记工作区' }).click(); await expect(page.getByText('当前工作范围：合成申请工作范围', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: `查看 ${detail.requestNumber}`, exact: true }).click(); await page.getByRole('button', { name: '处理此申请扫描导入' }).click(); await page.getByRole('button', { name: '数字QC 0', exact: true }).click();
   await expect(page.getByText('EVALUATED_NOT_PUBLISHED / 当前依赖有效', { exact: true })).toBeVisible();
   await page.getByLabel('QC人工备注或原因', { exact: true }).fill('Synthetic explicit publication'); await page.getByRole('button', { name: '发布合成契约版本' }).click();
@@ -64,6 +64,6 @@ test('digital QC evaluates an exact synthetic scan, publishes explicitly and rev
   const download = await page.request.get(`${qcPath}/bytes?publicationVersion=2`, { headers: { Range: 'bytes=0-31' } }); expect(download.status()).toBe(206); expect(download.headers()['x-pis-capability']).toBe('SYNTHETIC_CONTRACT_ONLY_NO_VIEWER'); expect(await download.body()).toEqual(data.subarray(0, 32));
   await page.getByLabel('QC人工备注或原因', { exact: true }).fill('Synthetic revoke after review'); await page.getByRole('button', { name: '撤销QC并隔离' }).click(); await expect(page.getByText('ISOLATED / QC_REVOKED', { exact: true })).toBeVisible();
   expect((await page.request.get(`${qcPath}/bytes?publicationVersion=2`)).status()).toBe(409);
-  const other = await browser.newContext({ baseURL: 'http://127.0.0.1:5173' });
+  const other = await browser.newContext({ baseURL: new URL(page.url()).origin });
   try { const receiver = await other.newPage(); await receiver.goto('/'); await receiver.getByLabel('用户名', { exact: true }).fill(handoffUsername()); await receiver.getByLabel('密码', { exact: true }).fill(process.env.PIS_E2E_HANDOFF_PASSWORD ?? 'Synthetic-handoff-only-42!'); const accepted = receiver.waitForResponse(r => new URL(r.url()).pathname === '/api/auth/login'); await receiver.getByRole('button', { name: '登录', exact: true }).click(); expect((await accepted).status()).toBe(204); expect((await receiver.request.get(qcPath)).status()).toBe(404); expect((await receiver.request.get(`${qcPath}/bytes?publicationVersion=2`)).status()).toBe(404); } finally { await other.close(); }
 });

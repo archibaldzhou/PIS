@@ -15,7 +15,7 @@ async function setup(page: Page, encounterNumber: string) {
   const { receipt } = await created.json() as { receipt: { resourceId: string } };
   expect((await page.request.post(`/api/requests/${receipt.resourceId}/submit`, { headers: { 'X-CSRF-TOKEN': csrf.token, 'Idempotency-Key': crypto.randomUUID() }, data: { expectedVersion: 0 } })).status()).toBe(200);
   const detail = await (await page.request.get('/api/requests/' + receipt.resourceId)).json() as { requestNumber: string; patientId: string; encounterNumber: string; containers: { id: string }[] };
-  await page.getByLabel('授权工作范围').click(); await page.getByText('合成申请工作范围', { exact: true }).last().click();
+  await expect(page.getByText('当前工作范围：合成申请工作范围', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '查看 ' + detail.requestNumber, exact: true }).click();
   await page.getByRole('button', { name: '处理此申请接收与异常' }).click();
   await expect(page.getByLabel('接收申请身份')).toBeVisible();

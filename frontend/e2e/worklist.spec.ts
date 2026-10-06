@@ -30,7 +30,7 @@ test('worklist claims selected tasks with partial failure and replays original b
     tasks.push({ id, kind });
   }
 
-  await page.getByLabel('授权工作范围').click(); await page.getByText('合成申请工作范围', { exact: true }).last().click();
+  await expect(page.getByText('当前工作范围：合成申请工作范围', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '工作列表与追踪', exact: true }).click();
   await page.getByLabel('工作类别', { exact: true }).click(); await page.getByRole('option', { name: 'TECHNICAL', exact: true }).click();
   await page.getByLabel('工作排序', { exact: true }).click(); await page.getByRole('option', { name: '最近创建', exact: true }).click();

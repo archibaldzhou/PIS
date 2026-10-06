@@ -3,7 +3,8 @@ import { Adapters } from './features/integration/Adapters';
 import { SyntheticTasks } from './features/ai/SyntheticTasks';
 import { AiRegistry } from './features/ai/AiRegistry';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { Alert, Button, Modal, Select, Space, Tag, Typography } from 'antd';
+import { Alert, Button, Modal, Space, Tag, Typography } from 'antd';
+import { workContext } from './features/identity/api';
 import { ApiError } from './api';
 import { RequestList } from './features/accession/RequestList';
 import { Registration } from './features/accession/Registration';
@@ -37,8 +38,8 @@ import { Reception } from './features/specimen/Reception';
 
 const pages = { operations: '受限运维快照', adapters: '合成医院接口', requests: '申请单查询', registration: '病理申请录入', manual: '手工申请', reception: '标本接收与异常', labels: '标签打印与重打', grossing: '取材记录与取材盒', technical: '技术任务与交接', materials: '蜡块与玻片谱系', quality: '技术QC与隔离', worklist: '工作列表与追踪', diagnosis: '诊断分配与领取', report: '报告草稿', review: '复核与模拟签署', output: '固定PDF与打印记录', amendments: '报告补充与更正', delivery: '本地投递与回执', frozen: '术中冰冻工作站', cytology: '细胞学制备工作站', staining: '特殊染色与IHC批次', consultation: '院内会诊与复阅', archive: '归档借阅与盘点', statistics: '工作量TAT与QC统计', storage: '原件版本与容量', scan: '扫描任务与导入', digitalqc: '数字扫描QC', viewer: '合成数字阅片器', ai: 'AI模型与适用契约', aitasks: '合成契约任务' };
 type Page = keyof typeof pages;
-export function WorkflowWorkspace({ onClose, onLogout, onExpired, api = accessionApi }: {
-  onClose: () => void; onLogout: () => void; onExpired: () => void; api?: AccessionApi;
+export function WorkflowWorkspace({ onClose, onLogout, onExpired, onAdministration, api = accessionApi }: {
+  onClose: () => void; onLogout: () => void; onExpired: () => void; onAdministration?: () => void; api?: AccessionApi;
 }) {
   const [page, setPage] = useState<Page>('requests');
   const [qcScan, setQcScan] = useState('');
@@ -52,10 +53,12 @@ export function WorkflowWorkspace({ onClose, onLogout, onExpired, api = accessio
   const [confirming, setConfirming] = useState(false);
   const pending = useRef<(() => void) | undefined>(undefined);
   const [scopes] = useState(() => new ReadController(async (_: null, signal: AbortSignal) => {
-    try { return { status: 'ready' as const, data: await api.scopes(signal) }; }
+    try { return { status: 'ready' as const, data: await workContext(signal) }; }
     catch (error) { if (error instanceof ApiError && error.status === 401) onExpired(); throw error; }
   }));
   const scopeState = useSyncExternalStore(scopes.subscribe, scopes.getSnapshot);
+  const defaultScope = scopeState.status === 'ready' ? scopeState.data.defaultScopeId ?? '' : '';
+  useEffect(() => { setScope(defaultScope); }, [defaultScope]);
   const [details] = useState(() => new ReadController<RequestDetail, string>(async (id, signal) => {
     try { return { status: 'ready', data: await api.detail(id, signal) }; }
     catch (error) { if (error instanceof ApiError && error.status === 401) onExpired(); throw error; }
@@ -77,21 +80,21 @@ export function WorkflowWorkspace({ onClose, onLogout, onExpired, api = accessio
   function navigate(next: Page, selected?: RequestSummary) {
     if (page === next && record?.id === selected?.id) return;
     leave(() => {
-      details.stop(); setDirty(false); setRecord(selected); setPage(next); setNotice('');
+      details.stop(); setDirty(false); setRecord(selected); setScope(selected?.scopeId ?? defaultScope); setPage(next); setNotice('');
       if (selected && (next === 'registration' || next === 'labels' || next === 'cytology')) void details.run(selected.id);
     });
   }
   const reader: RequestReader = { async search(filter, signal) {
-    try { return await api.search(scope, filter, signal); }
+    try { return await api.search('', filter, signal); }
     catch (error) { if (error instanceof ApiError && error.status === 401) onExpired(); throw error; }
   } };
   const registration = (detail?: RequestDetail) => <Registration key={detail ? `${detail.id}:${detail.version}` : `${scope}:${page}`} manual={page === 'manual'}
-    api={api} scopeId={scope} record={detail} onDirty={() => setDirty(true)} onExpired={onExpired}
+    api={api} scopeId={scope} record={detail} canWrite={scopeState.status === 'ready' && scopeState.data.writableScopes.includes(detail?.scopeId ?? scope)} onDirty={() => setDirty(true)} onExpired={onExpired}
     onPending={value => { setUnresolved(value); if (!value) setNavWarning(''); }}
     onSaved={() => { setDirty(false); setRecord(undefined); setPage('requests'); setNotice('服务器已确认操作；列表将重新查询。'); }} />;
   return <main className="workflow-shell">
     <aside className="workflow-sidebar"><strong>衡知病理 · PIS</strong><p>申请登记 · 开发工作区</p>
-      <nav aria-label="申请登记页面">{Object.entries(pages).map(([key, label]) => {
+      <nav aria-label="申请登记页面">{Object.entries(pages).filter(([key]) => scopeState.status === 'ready' && scopeState.data.menus.includes(key)).map(([key, label]) => {
         const target = key as Page;
         return <Button key={key} type={page === target ? 'primary' : 'text'} aria-current={page === target ? 'page' : undefined}
           onClick={() => navigate(target)}>{label}</Button>;
@@ -99,20 +102,17 @@ export function WorkflowWorkspace({ onClose, onLogout, onExpired, api = accessio
     </aside>
     <section className="workflow-content">
       <header className="workflow-header"><Typography.Title level={1}>{pages[page]}</Typography.Title>
-        <Space wrap><Button onClick={() => leave(onClose)}>返回工程验证</Button><Button onClick={() => leave(onLogout, true)}>退出登录</Button></Space>
+        <Space wrap>{onAdministration && <Button onClick={() => leave(onAdministration)}>后台管理</Button>}<Button onClick={() => leave(onClose)}>返回工程验证</Button><Button onClick={() => leave(onLogout, true)}>退出登录</Button></Space>
       </header>
       <Alert type="warning" showIcon title="合成数据开发工作流 · 非临床使用"
         description="采用新编开发规格。申请功能需要服务端显式开启和独立授权。请勿输入真实患者资料。" />
       <div className="workflow-status" role="status"><Tag color={dirty ? 'orange' : 'default'}>{dirty ? '本地输入尚未保存' : '没有未保存的本地输入'}</Tag></div>
       {notice && <Alert className="workflow-notice" type="success" role="status" title={notice} />}
       {navWarning && <Alert className="workflow-notice" type="warning" role="alert" title={navWarning} />}
-      <ReadPanel state={scopeState}>{values => <div className="scope-picker">
-        <label htmlFor="workflow-scope">授权工作范围</label>
-        <Select id="workflow-scope" value={scope || undefined} placeholder="请选择已授权范围" style={{ minWidth: 240, maxWidth: '100%' }}
-          options={values.map(s => ({ value: s.id, label: s.name }))} onChange={value => leave(() => {
-            details.stop(); setScope(value); setRecord(undefined); setDirty(false); setPage('requests'); setNotice('');
-          })} />
-        {values.length === 0 && <Alert type="warning" title="没有申请业务授权；病例权限不会自动授予申请权限" />}
+      <ReadPanel state={scopeState}>{context => <div className="scope-picker">
+        <Typography.Text>当前工作范围：{context.scopes.find(s => s.id === scope)?.name ?? context.name}</Typography.Text>
+        {context.scopes.length > 1 && <Tag>申请查询汇总 {context.scopes.length} 个已配置范围</Tag>}
+        {!context.defaultScopeId && <Alert type="warning" title={context.name} />}
       </div>}</ReadPanel>
       {scopeState.status !== 'ready' && <Button onClick={() => void scopes.run(null)}>重试加载范围</Button>}
       {scope && page === 'output' && <Diagnosis key={scope} editorKind="output" scopeId={scope} onDirty={() => setDirty(true)} onClean={() => setDirty(false)} onPending={v => { setUnresolved(v); if (!v) setNavWarning(''); }} onExpired={onExpired} renderEditor={(id, callbacks) => <OutputEditor id={id} {...callbacks} />} />}
@@ -124,7 +124,7 @@ export function WorkflowWorkspace({ onClose, onLogout, onExpired, api = accessio
       {scope && page === 'diagnosis' && <Diagnosis key={scope} scopeId={scope} onDirty={() => setDirty(true)} onClean={() => setDirty(false)} onPending={value => { setUnresolved(value); if (!value) setNavWarning(''); }} onExpired={onExpired} />}
       {scope && page === 'statistics' && <Statistics key={scope} scopeId={scope} onDirty={() => setDirty(true)} onClean={() => setDirty(false)} onExpired={onExpired} />}
       {scope && page === 'worklist' && <Worklist key={scope} scopeId={scope} onDirty={() => setDirty(true)} onClean={() => setDirty(false)} onPending={setUnresolved} onExpired={onExpired} />}
-      {scope && page === 'requests' && <RequestList key={scope} reader={reader} onManual={() => navigate('manual')} onSelect={selected => navigate('registration', selected)} />}
+      {scope && page === 'requests' && <RequestList key={scope} reader={reader} onManual={scopeState.status === 'ready' && scopeState.data.writableScopes.includes(defaultScope) ? () => navigate('manual') : undefined} onSelect={selected => navigate('registration', selected)} />}
       {scope && page === 'registration' && (record ? <><Button onClick={() => navigate('operations', record)}>查看此申请运维</Button><Button onClick={() => navigate('adapters', record)}>处理此申请接口</Button><Button onClick={() => navigate('scan', record)}>处理此申请扫描导入</Button><Button onClick={() => navigate('storage', record)}>处理此申请原件</Button><Button onClick={() => navigate('archive', record)}>处理此申请档案</Button><Button onClick={() => navigate('staining', record)}>处理此申请染色批次</Button><Button onClick={() => navigate('cytology', record)}>处理此申请细胞学</Button><Button onClick={() => navigate('frozen', record)}>处理此申请冰冻</Button><Button onClick={() => navigate('reception', record)}>处理此申请接收与异常</Button><Button onClick={() => navigate('labels', record)}>处理此申请标签</Button><Button onClick={() => navigate('grossing', record)}>处理此病例取材</Button><Button onClick={() => navigate('technical', record)}>处理此病例技术任务</Button><Button onClick={() => navigate('materials', record)}>处理此病例材料谱系</Button><Button onClick={() => navigate('quality', record)}>处理此病例技术QC</Button><ReadPanel state={detailState}>{registration}</ReadPanel></> : registration())}
       {scope && page === 'reception' && (record ? <Reception key={record.id} id={record.id} onDirty={() => setDirty(true)} onClean={() => setDirty(false)} onPending={setUnresolved} onExpired={onExpired} /> : <Alert type="info" title="请从申请列表查看申请，再进入接收与异常处理" />)}
       {scope && page === 'labels' && (record ? <ReadPanel state={detailState}>{data => <Labels key={data.id} containerIds={data.containers.map(c => c.id)} onDirty={() => setDirty(true)} onClean={() => setDirty(false)} onPending={setUnresolved} onExpired={onExpired} />}</ReadPanel> : <Alert type="info" title="请从申请详情选择标签任务" />)}
@@ -149,7 +149,7 @@ export function WorkflowWorkspace({ onClose, onLogout, onExpired, api = accessio
       {scope && page === 'archive' && (record ? <Archive key={record.id} requestId={record.id} onDirty={() => setDirty(true)} onClean={() => setDirty(false)} onPending={setUnresolved} onExpired={onExpired} /> : <Alert type="info" title="请从已接收申请详情进入档案台账" />)}
       {scope && page === 'staining' && (record ? <Staining key={record.id} requestId={record.id} onDirty={() => setDirty(true)} onClean={() => setDirty(false)} onPending={setUnresolved} onExpired={onExpired} /> : <Alert type="info" title="请从已接收申请详情进入染色批次" />)}
       {scope && page === 'manual' && registration()}
-      {!scope && (page === 'registration' || page === 'manual') && <Alert type="info" title="先选择授权工作范围，再登记申请" />}
+      {!scope && (page === 'registration' || page === 'manual') && <Alert type="info" title="请联系管理员配置默认工作范围" />}
     </section>
     <Modal title="放弃未保存的本地输入？" open={confirming} okText="放弃并继续" cancelText="继续编辑"
       onCancel={() => { pending.current = undefined; setConfirming(false); }}

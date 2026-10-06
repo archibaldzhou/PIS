@@ -8,13 +8,12 @@ async function start(page: Page) {
   await page.route('**/api/auth/me', route => route.fulfill({ json: { id: 'synthetic-user', username: 'synthetic', displayName: '合成用户' } }));
   await page.route('**/api/auth/csrf', route => route.fulfill({ json: { headerName: 'X-CSRF-TOKEN', token: 'synthetic-only' } }));
   await page.route('**/api/hello', route => route.fulfill({ json: { application: 'PIS', message: 'Hello World' } }));
-  await page.route('**/api/requests/scopes', route => route.fulfill({ json: [{ id: scope, name: '合成院区 / 科室' }] }));
+  await page.route('**/api/requests/work-context', route => route.fulfill({ json: { defaultScopeId: scope, writableScopes: [scope], name: '合成院区 / 科室', scopes: [{ id: scope, name: '合成院区 / 科室' }], administration: false, menus: ['operations', 'adapters', 'requests', 'registration', 'manual', 'reception', 'labels', 'grossing', 'technical', 'materials', 'quality', 'worklist', 'diagnosis', 'report', 'review', 'output', 'amendments', 'delivery', 'frozen', 'cytology', 'staining', 'consultation', 'archive', 'statistics', 'storage', 'scan', 'digitalqc', 'viewer', 'ai', 'aitasks'] } }));
   await page.route('**/api/requests?*', route => route.fulfill({ json: { items: [], total: 0, page: 1, pageSize: 20 } }));
   await page.route('**/api/requests/encounters?*', route => route.fulfill({ json: [encounter] }));
   await page.goto('/');
   await page.getByRole('button', { name: '申请登记工作区' }).click();
-  await page.getByRole('combobox', { name: '授权工作范围' }).click();
-  await page.getByText('合成院区 / 科室', { exact: true }).last().click();
+  await expect(page.getByText('当前工作范围：合成院区 / 科室', { exact: true })).toBeVisible();
 }
 async function openStorage(page: Page) {
  await start(page); const d = { id: rid, scopeId: scope, version: 2, state: 'RECEIVED', requestNumber: 'DEV-AP-STORAGE', patientId: encounter.patientId, patientLabel: encounter.patientLabel, encounterId: encounter.id, encounterNumber: encounter.encounterNumber, department: '合成科室', requestedAt: '2026-01-01T08:00:00Z', clinicalHistory: '合成资料', sampledAt: '2026-01-01T08:00:00Z', containers: [{ id: vid, site: 'Synthetic', laterality: 'UNKNOWN', materialQuantity: 1, fixative: 'Synthetic', fixedAt: '2026-01-01T08:10:00Z' }] };

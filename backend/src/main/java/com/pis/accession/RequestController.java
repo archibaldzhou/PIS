@@ -17,7 +17,7 @@ public class RequestController {
     public RequestController(RequestService service) { this.service=service; }
     @GetMapping("/scopes") public List<WorkflowAccess.Scope> scopes() { return service.scopes(); }
     @GetMapping("/encounters") public List<Encounter> encounters(@RequestParam UUID scopeId,@RequestParam @Size(min=1,max=255) String number) { return service.encounters(scopeId,number); }
-    @GetMapping public Page list(@RequestParam UUID scopeId,@RequestParam(defaultValue="") @Size(max=255) String keyword,
+    @GetMapping public Page list(@RequestParam(required=false) UUID scopeId,@RequestParam(defaultValue="") @Size(max=255) String keyword,
         @RequestParam(defaultValue="") String state,@RequestParam(required=false) LocalDate date,@RequestParam(defaultValue="1") @Min(1) @Max(10000) int page) { return service.list(scopeId,keyword,state,date,page); }
     @GetMapping("/{id}") public Detail detail(@PathVariable UUID id) { return service.detail(id); }
     @PostMapping public ResponseEntity<IdempotentCommands.Result> create(@RequestBody @Valid Create body,@RequestHeader("Idempotency-Key") String key) { return response(service.create(body,key)); }

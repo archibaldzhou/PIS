@@ -1,0 +1,307 @@
+{
+  "baseline": "5be3b823a68dbddb2d8962b53492afe618f82f82",
+  "previousRevision": "6b247fca1c21406a9f88a990e4343e54c90227b0",
+  "ciStatus": "PENDING_CURRENT_REVISION",
+  "verificationDocument": "docs/api/identity-administration.md",
+  "migration": "backend/src/main/resources/db/migration/V38__identity_administration.sql",
+  "changed": {
+    "backend/src/main/java/com/pis/accession/RequestController.java": {
+      "previousSha256": "f980fe133cc8f9d63551ee0ccdd97e47ce439da55375fba7f94193a0b211a9f9",
+      "baselineSha256": "f8b4e51c4e457cb477a5fb662eca5d07d99b9f53bc086b778ec5346934aacc70",
+      "currentSha256": "2acc74638f216d4db2abefd10222e2fa77b1c59b19c2e5d2a121aeac6a6584ee"
+    },
+    "backend/src/main/java/com/pis/accession/RequestService.java": {
+      "previousSha256": "783ca07ca03a9c619283046a8fe800205b8c4f83b11d5a1a05b20792268ab597",
+      "baselineSha256": "559a935d82501ed3eedae45062b9665c4ceeecfe5cefc56c12f3656132e62487",
+      "currentSha256": "596c46ba345263b52b7d6ba646c1f819fb24dbda5f77e0ea09da9239bbfd989e"
+    },
+    "backend/src/main/java/com/pis/diagnosis/DiagnosisController.java": {
+      "previousSha256": "be4d68e45ad8285fba1c9bb33dbed75c1f8991fe5f011b85fcd19950186b564e",
+      "baselineSha256": "be4d68e45ad8285fba1c9bb33dbed75c1f8991fe5f011b85fcd19950186b564e",
+      "currentSha256": "dd39c0591d49eabb0ed9fb4f24fbc2c20662159e5b3bf1b75bb893f204f47730"
+    },
+    "backend/src/main/java/com/pis/diagnosis/DiagnosisService.java": {
+      "previousSha256": "2d6ad1847fe61e8ce50d93141c5c818d11c87e48fe390d10725d95353f415d99",
+      "baselineSha256": "2d6ad1847fe61e8ce50d93141c5c818d11c87e48fe390d10725d95353f415d99",
+      "currentSha256": "6475675e323bb84cc9f88efeee785930d60bb9bca748544185a5879d6d026884"
+    },
+    "backend/src/main/java/com/pis/report/ReviewService.java": {
+      "previousSha256": "9d3e6ab8ce2c0a7cf7c19ff5e14b7e9a02062f4b0ee4d3a91fc2cd3827c409bd",
+      "baselineSha256": "9d3e6ab8ce2c0a7cf7c19ff5e14b7e9a02062f4b0ee4d3a91fc2cd3827c409bd",
+      "currentSha256": "1e40429bc4af4f5ec1f088f0a6630997f3a1158fc682a6da25b11cfa4779edc7"
+    },
+    "backend/src/main/java/com/pis/security/AccountRepository.java": {
+      "previousSha256": "c136bbce63b64c5db00e2cbc26b845d677ed7e6033a90a27c88e220c2e86ab25",
+      "baselineSha256": "c136bbce63b64c5db00e2cbc26b845d677ed7e6033a90a27c88e220c2e86ab25",
+      "currentSha256": "aad8b1ef88ddd707bf3b98b55ee6b24cbaa40b244654643a427967faf1b09872"
+    },
+    "backend/src/main/java/com/pis/security/AccountSessionValidationFilter.java": {
+      "previousSha256": "bd4349421c95c4ae0f1aea1294e6d84931fee0efb18652ca455f74bf26dfb5e6",
+      "baselineSha256": "bd4349421c95c4ae0f1aea1294e6d84931fee0efb18652ca455f74bf26dfb5e6",
+      "currentSha256": "72cd36d587ed0cc6fadd51ed8f9879337cc7f7d39e6706de778a69be4a40e95a"
+    },
+    "backend/src/main/java/com/pis/security/AuthController.java": {
+      "previousSha256": "500bcdb80069e92d0a9042bfac2bfc26805b8bc922bce97612b8c4665257bfcd",
+      "baselineSha256": "500bcdb80069e92d0a9042bfac2bfc26805b8bc922bce97612b8c4665257bfcd",
+      "currentSha256": "ac003009735d08ccb062d012b8585ebadbbbffc050f2241bb212808322f50e2c"
+    },
+    "backend/src/main/java/com/pis/security/SecurityConfiguration.java": {
+      "previousSha256": "bfafaa26cc3a58c9c32b31c5a218bcc44d2606a0b7beefd897ab2716f175ec60",
+      "baselineSha256": "bfafaa26cc3a58c9c32b31c5a218bcc44d2606a0b7beefd897ab2716f175ec60",
+      "currentSha256": "a77aa76e54ed75315efefcf97efff0830e923de4c31bf0fc79b1065e6a0b2761"
+    },
+    "backend/src/test/java/com/pis/security/SecurityHttpTest.java": {
+      "previousSha256": "795107dd2c05ea848545f67d48e70dfe8bed6b9c8147f01e2ad5ef8b9a4e4270",
+      "baselineSha256": "795107dd2c05ea848545f67d48e70dfe8bed6b9c8147f01e2ad5ef8b9a4e4270",
+      "currentSha256": "b2ee7efbcc92499b1df3528ec74aac9a766605ca73d0ab7769660dacfb3fa8f3"
+    },
+    "backend/src/test/java/com/pis/security/testfixture/E2eFixtureConfiguration.java": {
+      "previousSha256": "b98a58c8efeeb6e4b7cc1f154dcb54e0490311a483ea70445bf38effeadd30a3",
+      "baselineSha256": "b98a58c8efeeb6e4b7cc1f154dcb54e0490311a483ea70445bf38effeadd30a3",
+      "currentSha256": "a85fb0a57814a14e09c40e8c895e075964817c1c0a0ae5161a47d11cffabca21"
+    },
+    "frontend/e2e/accession.spec.ts": {
+      "previousSha256": "c5f3a875c5b4bb3bc23f3ee0b26c64ac0cc14033142cbd8f0d46a84f843a54a3",
+      "baselineSha256": "e7d498cd132733314d65624c665959a3d7fcd6744b6ff535f31a225fc047a8eb",
+      "currentSha256": "3764d76d316fce74dee7dc9d5534213718af3534edebbb15bf1a76ce84cc3abe"
+    },
+    "frontend/e2e/adapters.spec.ts": {
+      "previousSha256": "f23733bd9802c77312af12cc7cca1412feeb716e48d84ebe6555bd9097a4239c",
+      "baselineSha256": "f23733bd9802c77312af12cc7cca1412feeb716e48d84ebe6555bd9097a4239c",
+      "currentSha256": "e25833cf2c108457ba263abb6dbe5aa483c5c60891949b39bdbd40111b58fa38"
+    },
+    "frontend/e2e/amendment.spec.ts": {
+      "previousSha256": "72a9b9dc0e8df57222c4060d4d739e10aab1bd73a871deeef15a00414a525e44",
+      "baselineSha256": "72a9b9dc0e8df57222c4060d4d739e10aab1bd73a871deeef15a00414a525e44",
+      "currentSha256": "9c415da379d606394b141699867883be9c0060f536d89145f06a9f46f08e61a6"
+    },
+    "frontend/e2e/archive.spec.ts": {
+      "previousSha256": "3465cb43186bc99aa99a3b1fc910192f48bf3de73891cbb54c5b308caaefea4f",
+      "baselineSha256": "3465cb43186bc99aa99a3b1fc910192f48bf3de73891cbb54c5b308caaefea4f",
+      "currentSha256": "7579f443a35b1f40c97bc950cb5df50f390c08bf79272bed7c6d7f728fa3ee3d"
+    },
+    "frontend/e2e/consultation.spec.ts": {
+      "previousSha256": "1156578a9a200624f3418a3cf5d8afbd49210fd25cfac3e80e1075af34eaf606",
+      "baselineSha256": "1156578a9a200624f3418a3cf5d8afbd49210fd25cfac3e80e1075af34eaf606",
+      "currentSha256": "d4bcf6c3de36912fdbd61ee113e2e69aaeff8ac4d913116b9dd22da822d54941"
+    },
+    "frontend/e2e/cytology.spec.ts": {
+      "previousSha256": "c3858373591a97fb8116f099f6513ecb42e569dfa53e159cbc9028f44b0cd9b6",
+      "baselineSha256": "c3858373591a97fb8116f099f6513ecb42e569dfa53e159cbc9028f44b0cd9b6",
+      "currentSha256": "9a1ac1b93626a281ceaae0565363e3677ed3efe7571c1a478b8f0692e90b2403"
+    },
+    "frontend/e2e/decisions.spec.ts": {
+      "previousSha256": "20558d5833c511f52c2e67e4c16a0b2ef198fd6dafc0ba14dd4f1ed1feaa3b11",
+      "baselineSha256": "20558d5833c511f52c2e67e4c16a0b2ef198fd6dafc0ba14dd4f1ed1feaa3b11",
+      "currentSha256": "9989ca68bf43124ac9e645dbd7747cf5d27e0a35d670e9a0fad795fbb358d74b"
+    },
+    "frontend/e2e/delivery.spec.ts": {
+      "previousSha256": "3ec8da70e8bf4a75e59a04537e9569942cc07ed086eb0fd714bb0ab15825badc",
+      "baselineSha256": "3ec8da70e8bf4a75e59a04537e9569942cc07ed086eb0fd714bb0ab15825badc",
+      "currentSha256": "246bcb6453011869d07500d80c3d76290675dcee09dab2e038009138f65decd0"
+    },
+    "frontend/e2e/diagnosis.spec.ts": {
+      "previousSha256": "6232c0e6c82285bd46690385fe782cac4efa9403d110d90ab66c7fbe1f0a241e",
+      "baselineSha256": "6232c0e6c82285bd46690385fe782cac4efa9403d110d90ab66c7fbe1f0a241e",
+      "currentSha256": "17e836efa613345adda475ef373ea674f820b7b62cfeef1f8db9427b4de68d8d"
+    },
+    "frontend/e2e/digitalqc.spec.ts": {
+      "previousSha256": "089353356b5aed2e319998451ad259c1ebdaa9e886634d13647e7fef12866e4e",
+      "baselineSha256": "089353356b5aed2e319998451ad259c1ebdaa9e886634d13647e7fef12866e4e",
+      "currentSha256": "3030c52d6016fe80bf4a24eaf35610a0e78a0cabe8f4df76cf77ef8ba45390f2"
+    },
+    "frontend/e2e/frozen.spec.ts": {
+      "previousSha256": "df84daea5e35e0848d2cc78c978942113892e699f5a1800c4eadf7bdfd360626",
+      "baselineSha256": "df84daea5e35e0848d2cc78c978942113892e699f5a1800c4eadf7bdfd360626",
+      "currentSha256": "4c355d37710f7787c89ecf514ce0544781b8f5a78505872d339484910a3e0f17"
+    },
+    "frontend/e2e/grossing.spec.ts": {
+      "previousSha256": "44deb79f95e404f0cc92e5743a3189356d07f1696dc489af32b5d6dff8fd0a21",
+      "baselineSha256": "44deb79f95e404f0cc92e5743a3189356d07f1696dc489af32b5d6dff8fd0a21",
+      "currentSha256": "86b355c389a8b931d2d41bbdd7db0b8597e72cf22fd0afbe052f4f5fd16158c4"
+    },
+    "frontend/e2e/labels.spec.ts": {
+      "previousSha256": "5fd21a1ca9ae1c1702212cbafccceeb785c6582f7a2b59833f8030ffcd0bf8c4",
+      "baselineSha256": "5fd21a1ca9ae1c1702212cbafccceeb785c6582f7a2b59833f8030ffcd0bf8c4",
+      "currentSha256": "a5e68536e405d85c624e2b92c075b2e20381dbb2bf4f386cccfb95160151d670"
+    },
+    "frontend/e2e/materials.spec.ts": {
+      "previousSha256": "b02439e48559307b656c5a24c37462a90376bdb54f89ecadbb3a24b072144026",
+      "baselineSha256": "b02439e48559307b656c5a24c37462a90376bdb54f89ecadbb3a24b072144026",
+      "currentSha256": "659b53b485e377278c7e4cab898b68af32cd8e3215b0bee6bc898dba33c6ceaa"
+    },
+    "frontend/e2e/output.spec.ts": {
+      "previousSha256": "c658d403436eeac436490f559ea3e8b3f2a2e8db3c9d689b3b8b3ce8fc042d51",
+      "baselineSha256": "c658d403436eeac436490f559ea3e8b3f2a2e8db3c9d689b3b8b3ce8fc042d51",
+      "currentSha256": "02ec62a50aa0cd729bfe2660b7aba82119c6cd73e1f85fe3010a2591d908a083"
+    },
+    "frontend/e2e/quality.spec.ts": {
+      "previousSha256": "a8fac587815716c1b883d929d458e345151d02ad90fad6ae3af8e8356eeeb9cc",
+      "baselineSha256": "a8fac587815716c1b883d929d458e345151d02ad90fad6ae3af8e8356eeeb9cc",
+      "currentSha256": "62bc1ca14376a928f6ec970dd7066b9a5d4dd7314e87535f23abaacb0bde9b66"
+    },
+    "frontend/e2e/reception.spec.ts": {
+      "previousSha256": "fb122d7d7056906f13e0ae29a08a0a6274619e6767d7b9b0f9bda0a7cd8e7a42",
+      "baselineSha256": "fb122d7d7056906f13e0ae29a08a0a6274619e6767d7b9b0f9bda0a7cd8e7a42",
+      "currentSha256": "886a94bf4b1ed60bb26d82827152f4b02943fecee63716e10117955953099f63"
+    },
+    "frontend/e2e/report.spec.ts": {
+      "previousSha256": "03ca580a259f88bb1be2ef4be043ad1af98dcf69d2bb6adfd06374a407d46380",
+      "baselineSha256": "03ca580a259f88bb1be2ef4be043ad1af98dcf69d2bb6adfd06374a407d46380",
+      "currentSha256": "8c2e8dd9eb8ebf3f0447fcc3c0cdce1f1189e9970e4e0c1ddc9de73b64e51c68"
+    },
+    "frontend/e2e/review.spec.ts": {
+      "previousSha256": "684596cda8374da374c562b7fbbf241255a97045bacccd55b4083fb252c4e507",
+      "baselineSha256": "684596cda8374da374c562b7fbbf241255a97045bacccd55b4083fb252c4e507",
+      "currentSha256": "ff205e05b25623b17fed2c305354e5545ea479d62900426d845bde4a39e17d57"
+    },
+    "frontend/e2e/scan.spec.ts": {
+      "previousSha256": "7e5617885553098a655c694dbc3f7c92a5d998a1123125cdb4cf9e2a9b44cfd9",
+      "baselineSha256": "7e5617885553098a655c694dbc3f7c92a5d998a1123125cdb4cf9e2a9b44cfd9",
+      "currentSha256": "47b9a9066b95d42127da02c7262d07a83c473f39e345241c2d44438c117afbba"
+    },
+    "frontend/e2e/staining.spec.ts": {
+      "previousSha256": "92a31a4807c8cafb468c020fbdc3e8f0f21c9bb669e84110b30a2ae1fe2e86bd",
+      "baselineSha256": "92a31a4807c8cafb468c020fbdc3e8f0f21c9bb669e84110b30a2ae1fe2e86bd",
+      "currentSha256": "fdc2b6461a9978d9d80a3103c503485b91f2afec4f6f2030d93651d3a77054bc"
+    },
+    "frontend/e2e/statistics.spec.ts": {
+      "previousSha256": "3352bb0fc33a315ff699e39e919acd172b85deb8f8e6bf16a6ef1c2cc14972b0",
+      "baselineSha256": "3352bb0fc33a315ff699e39e919acd172b85deb8f8e6bf16a6ef1c2cc14972b0",
+      "currentSha256": "77ff6648835f65ebaef9ba51feb68de362715c5474aedda1aa3f7df899994741"
+    },
+    "frontend/e2e/storage.spec.ts": {
+      "previousSha256": "b7365e50ab1eff189b0ad36cb1db4ed6ce6b374b895fc85062c9b9a76d8d0476",
+      "baselineSha256": "b7365e50ab1eff189b0ad36cb1db4ed6ce6b374b895fc85062c9b9a76d8d0476",
+      "currentSha256": "da36f9a8474a58db3cbee76d95a1ecd5fffa1d8393b5d02f4f93a4ac0f211f29"
+    },
+    "frontend/e2e/technical.spec.ts": {
+      "previousSha256": "7e9c6c32763df45e45e61b26df4a7e12c3be64416111d4f3bd7000feac55ce44",
+      "baselineSha256": "7e9c6c32763df45e45e61b26df4a7e12c3be64416111d4f3bd7000feac55ce44",
+      "currentSha256": "5bd28bf33215669e0716c8eb4a2cbe37303f0933ff118dc69afdb9fc0530c590"
+    },
+    "frontend/e2e/viewer-fixture.ts": {
+      "previousSha256": "5eacb4d7144c60ed141e304d360b9c0a5d340c786c5e9b2627c72f55fde8d925",
+      "baselineSha256": "5eacb4d7144c60ed141e304d360b9c0a5d340c786c5e9b2627c72f55fde8d925",
+      "currentSha256": "abfb5c2f2f075c79927336600eae3fb861ea274f42b11e78f5b170cfe28579f7"
+    },
+    "frontend/e2e/worklist.spec.ts": {
+      "previousSha256": "6d8af2e4dce3b043cf6f5072c3614549a67676d73b0924ce8f6e3ccc34093f78",
+      "baselineSha256": "6d8af2e4dce3b043cf6f5072c3614549a67676d73b0924ce8f6e3ccc34093f78",
+      "currentSha256": "0ac0fd127320641999f8e344a55f4fc65cae87a1d8ac8105ce9bd9f011269f9b"
+    },
+    "frontend/src/App.tsx": {
+      "previousSha256": "3c643a963e84a9822fad41ecf43756844953a990cfaf47b90949476193d639d1",
+      "baselineSha256": "d0df48bd92e1e0d659fd2bb678429be76ed7c75e28b4f1ca602cae86cbf6e2c8",
+      "currentSha256": "451ee666854d37a4078e4ae00cb12cc42196b5a53e0fcb353c4ad325902caf95"
+    },
+    "frontend/src/WorkflowWorkspace.tsx": {
+      "previousSha256": "168df67714bb937241a6f765456f8c31d43b4a737bb05cadc284f5b1ea51fe0a",
+      "baselineSha256": "e91949213507084a4ec0d07cc7ac0eca37ea13b4e1546623c5a9521267009b06",
+      "currentSha256": "af209902ce76e5e143b315786cba4c2d5b5278d09ab5b861a4b0811b1978712b"
+    },
+    "frontend/src/api.ts": {
+      "previousSha256": "1ad873fe730c201cf7bccccdfd39cf650896629f2a46193039c799349ca4c3f8",
+      "baselineSha256": "1ad873fe730c201cf7bccccdfd39cf650896629f2a46193039c799349ca4c3f8",
+      "currentSha256": "2d4a845e05b63ec979e41d7b284c03450581348ab401d39d339c876f8015628a"
+    },
+    "frontend/src/features/accession/Registration.tsx": {
+      "previousSha256": "335bec81f2aec210748210c0e07250df3ad00469974e121afbb1d6aaf792ceda",
+      "baselineSha256": "9fdf2b8c00a2668636c07f8ebd76e35ad6a7ea1caa22edc708ce1761d289c9d1",
+      "currentSha256": "c4b442cb207b2769b1224867ee3f378008b1f4c1b8ad08aed5f3f4b658b1f16b"
+    },
+    "frontend/src/features/accession/RequestList.tsx": {
+      "previousSha256": "aeefe77b42f58cca73a2c5628916b64a7e67a3c653718f0e69f7e9854fd58cbd",
+      "baselineSha256": "893eb950532f1283d9d80722037068a8749d1de5db49c854b2d2ebb155cb6098",
+      "currentSha256": "9649471d9ee85d8b6ed444c90d45fe5f1a3e2dfac00ba612825c6d3177a6423b"
+    },
+    "frontend/src/features/accession/api.ts": {
+      "previousSha256": "3626d1f099ce7634a4db577073c712c79c6a61db1f5f3bd73f7a1dcb3c961bd6",
+      "baselineSha256": "c98cd6a01c003737db6e1b0f295b5cd218fa4cf736c2dc33bb6d13b9fcc2c087",
+      "currentSha256": "9e62020c56c16b0e650d3e518988456ec714f6f80edaff24c5b04b12a4298e34"
+    },
+    "frontend/src/features/diagnosis/Diagnosis.tsx": {
+      "previousSha256": "25e9cdadfbaad9117937dc26d9ba7d55cad3745ec81f572a9d85f0cc9dd57309",
+      "baselineSha256": "25e9cdadfbaad9117937dc26d9ba7d55cad3745ec81f572a9d85f0cc9dd57309",
+      "currentSha256": "1845773090c92b74de95f51d05506430425ffe19f3ffcb101a1ce22da471a07e"
+    },
+    "frontend/src/features/diagnosis/api.ts": {
+      "previousSha256": "ddae7aa3ca4adc6319a51259fb3111e4143e2df05738a7ca9bb692183b742b08",
+      "baselineSha256": "ddae7aa3ca4adc6319a51259fb3111e4143e2df05738a7ca9bb692183b742b08",
+      "currentSha256": "020af2bcf8470fb79cdaf1838e44c4182e9d7d8ad59723078636cc3ac6f0d04a"
+    },
+    "frontend/src/shared/workflow.ts": {
+      "previousSha256": "eb3442f184551d61b51cd1ecce5d66f9fa98a52908db0062653df1cd712d2e48",
+      "baselineSha256": "eb3442f184551d61b51cd1ecce5d66f9fa98a52908db0062653df1cd712d2e48",
+      "currentSha256": "46d119781baeb9ce479b4586a4022584b6531c4bbc46920899fff432aacd6cfa"
+    },
+    "frontend/ui-tests/adapters.spec.ts": {
+      "previousSha256": "e193e6466fff9f3aea1c064d73efde29fe66a75a60d9acb86ac650e4d6f5ce7b",
+      "baselineSha256": "e193e6466fff9f3aea1c064d73efde29fe66a75a60d9acb86ac650e4d6f5ce7b",
+      "currentSha256": "cb6a1cd4ff74b5d8ac87f4a7c0532c75ed5c85464798b6475c52710df6990ad1"
+    },
+    "frontend/ui-tests/digitalqc.spec.ts": {
+      "previousSha256": "b1e680e4bfe868f50d64e51613888f5390bda3f44db7451c0c64b1332676f70a",
+      "baselineSha256": "b1e680e4bfe868f50d64e51613888f5390bda3f44db7451c0c64b1332676f70a",
+      "currentSha256": "8be8b325baccb1157bff9eaa80f31c013aa20e0b80b99e21146d835a24fe0748"
+    },
+    "frontend/ui-tests/operations.spec.ts": {
+      "previousSha256": "c0fbd17c3f1e2c2c2db4bbb88da34c470f43855aeb26ed66ad868eb96baaf6d0",
+      "baselineSha256": "c0fbd17c3f1e2c2c2db4bbb88da34c470f43855aeb26ed66ad868eb96baaf6d0",
+      "currentSha256": "0cab9f44163a302a00d9b9e7fe84afde42180945b1059d7fbbdc4e520896c823"
+    },
+    "frontend/ui-tests/scan.spec.ts": {
+      "previousSha256": "0dfcac830f0386c45f3f78623f43fb741da2b3e5f231a257cf7e3873bec6425c",
+      "baselineSha256": "0dfcac830f0386c45f3f78623f43fb741da2b3e5f231a257cf7e3873bec6425c",
+      "currentSha256": "a40864408c483738fc54dd1c7a25cee9f284a7cf84d9b0a794a4e8c2ddd4a191"
+    },
+    "frontend/ui-tests/statistics.spec.ts": {
+      "previousSha256": "c4d28234ce23a46039e533ba3ee7c0cbed784aca6aae3667630c9fd5256f6b71",
+      "baselineSha256": "c4d28234ce23a46039e533ba3ee7c0cbed784aca6aae3667630c9fd5256f6b71",
+      "currentSha256": "40fa85bfd9d516d015bac922714710e304f45698a39432a732b214322a1f5269"
+    },
+    "frontend/ui-tests/storage.spec.ts": {
+      "previousSha256": "e9c8ed24aa5304c163c9dcc542e9d19a83d65b5873890d4b10623cc7a35a1708",
+      "baselineSha256": "e9c8ed24aa5304c163c9dcc542e9d19a83d65b5873890d4b10623cc7a35a1708",
+      "currentSha256": "840469c4b53a14c9dfd32ea65bd72eed7c3bc4bfe0f618cbb1300a5289e17d21"
+    },
+    "frontend/ui-tests/synthetic-decision.spec.ts": {
+      "previousSha256": "eebebc69eded9d2115b4ada02eeeb007ed76cf987802fc47b3c6b898c510ffa1",
+      "baselineSha256": "eebebc69eded9d2115b4ada02eeeb007ed76cf987802fc47b3c6b898c510ffa1",
+      "currentSha256": "0e1e098223122517769ca25f3df82d5585cca5b944d6efedc48a4f9a1ea2cffc"
+    },
+    "frontend/ui-tests/synthetic-impact.spec.ts": {
+      "previousSha256": "eca76170f788ba2f63b5d72897318a5c79d366ce7b3ede5929f65e6f401cb991",
+      "baselineSha256": "eca76170f788ba2f63b5d72897318a5c79d366ce7b3ede5929f65e6f401cb991",
+      "currentSha256": "5391a401979464bd093984c004f76a1621531f31a902a2789e34114a687192bc"
+    },
+    "frontend/ui-tests/viewer-fixture.ts": {
+      "previousSha256": "1a3c4552aec2e666648b1b8d50bf6ab215968a5f999ab97542045ed977a64def",
+      "baselineSha256": "1a3c4552aec2e666648b1b8d50bf6ab215968a5f999ab97542045ed977a64def",
+      "currentSha256": "ed77e8c0e959617f186dc67d106f589843ef983668c99eb2bc1254f110d60569"
+    },
+    "frontend/ui-tests/workflow.spec.ts": {
+      "previousSha256": "bce1ff29df481a6bb90373e6c0a4f713120eeab93913abee18c38947f5502330",
+      "baselineSha256": "ef258753e5d26cda6d0a45bd48f677a33754e41bf037f7fed70f5cb36a467a08",
+      "currentSha256": "61da6ef961f7685cfaa4b192557c65cdca58e57e943efb077729144bad7096a1"
+    }
+  },
+  "added": {
+    "backend/src/main/java/com/pis/identity/GrantProvisioner.java": "f5a914e33ea214ef663a7e80a720271630e37f295beda08f5f06e5797c93e15a",
+    "backend/src/main/java/com/pis/identity/IdentityAdministration.java": "ea112a732ed1cb4fd62281488fd0c4bb8db73fbb646e1c61841972a5523dbfbb",
+    "backend/src/main/java/com/pis/identity/IdentityContracts.java": "08767f138a784a992dff21775b946e97a567b54132aa9730e2aec58f29b22ad2",
+    "backend/src/main/java/com/pis/identity/IdentityController.java": "3e693a1eb11173ab67cf73915d9fd13a1aa885461d3fddc8f629ed3615ff742d",
+    "backend/src/main/java/com/pis/identity/IdentityFailureAdvice.java": "869b873bff2119254b8072fa7f51604b2186e0ef3e48fe848bb0c8cb81134c93",
+    "backend/src/main/java/com/pis/identity/PasswordChangeService.java": "416c9dba2639f2e6449cb6efe5265435315e46e0e6783d1bb47c81f24856c4b1",
+    "backend/src/main/java/com/pis/identity/PasswordController.java": "9e0011eb085317930142f7ea00319079f680514fa7b9f8dc4ab5cde1718def02",
+    "backend/src/main/java/com/pis/identity/RoleCatalog.java": "6676c4e39fda0fa98f5faf2dc26f10c163a3672e2adaddf831fa9a481e9b6dca",
+    "backend/src/main/resources/db/migration/V38__identity_administration.sql": "eb537bd6f8a1a68f0ef570536c11096a8f0b088edad0d21b0e492150fcfc15d4",
+    "backend/src/test/java/com/pis/identity/IdentityAdministrationTest.java": "6d5d615231d6c3307ef1d0661d8bec8b448cdc00d37cb8f2104a9cb1e0aaea40",
+    "backend/src/test/java/com/pis/identity/IdentityMigrationTest.java": "34d365f8c7f85c408bc3813e96b28705188fcb61166665e7eed9557755b99ccb",
+    "backend/src/test/java/com/pis/security/testfixture/SyntheticAdminBootstrap.java": "f067eba78744f3385bd9b78acd401863754934d9a369ef95927fcc0c882267b3",
+    "frontend/e2e/identity.spec.ts": "b156bcb547549141351c9515dc3612b4041663a31c6016fa4135deefd3b37f3f",
+    "frontend/src/features/identity/Administration.tsx": "9ce7bc3c3d582803668a432003a2a8b403a7cd5b9dd5521b538984d780a6e5df",
+    "frontend/src/features/identity/api.ts": "600c91cfaa185dfc9072e3b44c1ef31e72e4a294bba3326a373448ea4c8b7bd8",
+    "frontend/ui-tests/identity.spec.ts": "70fd8714be41d72257a11327968b15ec8873d918ba0c07c3303282e5ed08b5ec"
+  }
+}

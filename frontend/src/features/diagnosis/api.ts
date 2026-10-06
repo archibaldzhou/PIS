@@ -15,8 +15,8 @@ export function parseItem(v: unknown): Item {
   if (!['UNASSIGNED', 'ASSIGNED', 'ACTIVE'].includes(state) || (state === 'UNASSIGNED' ? version !== -1 || ownerId !== null : version < 0 || ownerId === null)) throw new Error('Invalid diagnosis state');
   return { caseId: str(i.caseId), requestId: str(i.requestId), patientId: str(i.patientId), number: str(i.number), state, version, ownerId, ready: bool(i.ready) };
 }
-export async function loadList(scope: string, f: Filter, signal: AbortSignal) {
-  const p = obj(await readJson(await request(base + '/scopes/' + scope + '?page=' + f.page + '&pageSize=10&state=' + encodeURIComponent(f.state), { signal })));
+export async function loadList(scope: string, f: Filter, signal: AbortSignal, output = false) {
+  const p = obj(await readJson(await request(base + (output ? '/output-scopes/' : '/scopes/') + scope + '?page=' + f.page + '&pageSize=10&state=' + encodeURIComponent(f.state), { signal })));
   if (p.page !== f.page || p.pageSize !== 10) throw new Error('Mismatched diagnosis page');
   return { total: num(p.total), items: list(p.items, parseItem) };
 }

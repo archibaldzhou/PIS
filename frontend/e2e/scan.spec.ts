@@ -48,11 +48,11 @@ test('synthetic scan binds real stored object and slide, leases, isolates public
   expect((await page.request.post(`${scanPath}/${scanId}/PROCESS`, { headers: completedKey, data: completion })).status()).toBe(200);
   expect((await (await page.request.post(`${scanPath}/${scanId}/PROCESS`, { headers: completedKey, data: completion })).json() as { replayed: boolean }).replayed).toBe(true);
   const completed = await (await page.request.get(`${scanPath}/${scanId}`)).json() as Job; expect(completed.state).toBe('PENDING_DIGITAL_QC'); expect(completed.objectHash).toBe(sha256); expect(completed.errorCode).toBe('DIGITAL_QC_REQUIRED');
-  await page.getByRole('button', { name: '申请登记工作区' }).click(); await page.getByLabel('授权工作范围').click(); await page.getByText('合成申请工作范围', { exact: true }).last().click();
+  await page.getByRole('button', { name: '申请登记工作区' }).click(); await expect(page.getByText('当前工作范围：合成申请工作范围', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: `查看 ${detail.requestNumber}`, exact: true }).click(); await page.getByRole('button', { name: '处理此申请扫描导入' }).click();
   await expect(page.getByRole('cell', { name: 'PENDING_DIGITAL_QC', exact: true })).toBeVisible(); await page.getByLabel('人工操作原因', { exact: true }).fill('Synthetic cancellation'); await page.getByRole('button', { name: '取消任务', exact: true }).click(); await expect(page.getByRole('cell', { name: 'CANCELLED', exact: true })).toBeVisible();
   expect((await page.request.post(`${scanPath}/${scanId}/PROCESS`, { headers: headers(), data: completion })).status()).toBe(409);
-  const other = await browser.newContext({ baseURL: 'http://127.0.0.1:5173' });
+  const other = await browser.newContext({ baseURL: new URL(page.url()).origin });
   try {
     const receiver = await other.newPage(); await receiver.goto('/'); await receiver.getByLabel('用户名', { exact: true }).fill(handoffUsername()); await receiver.getByLabel('密码', { exact: true }).fill(process.env.PIS_E2E_HANDOFF_PASSWORD ?? 'Synthetic-handoff-only-42!');
     const accepted = receiver.waitForResponse(r => new URL(r.url()).pathname === '/api/auth/login'); await receiver.getByRole('button', { name: '登录', exact: true }).click(); expect((await accepted).status()).toBe(204);

@@ -24,7 +24,7 @@ test('two synthetic users confirm handoff and keep aborted/rework task history',
   const released = await (await page.request.get('/api/technical/requests/' + receipt.resourceId)).json() as { actorId: string; source: { cassettes: { id: string; number: string }[] } };
   const box = released.source.cassettes[0];
   const enter = async (p: Page) => {
-    await p.getByLabel('授权工作范围').click(); await p.getByText('合成申请工作范围', { exact: true }).last().click();
+    await expect(p.getByText('当前工作范围：合成申请工作范围', { exact: true })).toBeVisible();
     await p.getByTestId('request-row-' + receipt.resourceId).getByRole('button', { name: '查看 ' + detail.requestNumber, exact: true }).click();
     await p.getByRole('button', { name: '处理此病例技术任务', exact: true }).click();
   };
@@ -51,7 +51,7 @@ test('two synthetic users confirm handoff and keep aborted/rework task history',
   await act(page, taskId, '核对并领取', 'claim');
   await act(page, taskId, '发起人员交接', 'offer');
   await expect(page.getByLabel('技术任务身份')).toContainText('HANDOFF_PENDING');
-  const secondContext = await browser.newContext({ baseURL: 'http://127.0.0.1:5173' });
+  const secondContext = await browser.newContext({ baseURL: new URL(page.url()).origin });
   try {
     const receiver = await secondContext.newPage(); await receiver.goto('/');
     await receiver.getByLabel('用户名').fill(handoffUsername());

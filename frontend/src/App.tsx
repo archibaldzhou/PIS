@@ -1,12 +1,15 @@
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { Alert, Button, Card, Form, Input, Space, Spin, Tag, Typography } from 'antd';
 import type { Credentials } from './api';
 import { SessionController } from './session';
 import { WorkflowWorkspace } from './WorkflowWorkspace';
+import { Administration, PasswordChange } from './features/identity/Administration';
 
 export default function App() {
   const [session] = useState(() => new SessionController());
   const [workspaceUser, setWorkspaceUser] = useState<string>();
+  const [adminUser, setAdminUser] = useState<string>();
+  const expired = useCallback(() => { setWorkspaceUser(undefined); setAdminUser(undefined); void session.restore(); }, [session]);
   const state = useSyncExternalStore(session.subscribe, session.getSnapshot);
   const [form] = Form.useForm<Credentials>();
 
@@ -21,9 +24,12 @@ export default function App() {
   }
 
   const loginScreen = state.status === 'anonymous' || state.status === 'authenticating';
+  if (state.status === 'authenticated' && state.user.passwordChangeRequired) return <PasswordChange onDone={expired} onLogout={() => void session.logout()} />;
+  if (state.status === 'authenticated' && adminUser === state.user.id) return <Administration currentUserId={state.user.id} onClose={() => { setAdminUser(undefined); setWorkspaceUser(state.user.id); }} onExpired={expired} />;
   if (state.status === 'authenticated' && workspaceUser === state.user.id) {
     return <WorkflowWorkspace key={state.user.id} onClose={() => setWorkspaceUser(undefined)}
-      onExpired={() => { setWorkspaceUser(undefined); void session.restore(); }}
+      onAdministration={state.user.administration ? () => setAdminUser(state.user.id) : undefined}
+      onExpired={expired}
       onLogout={() => { setWorkspaceUser(undefined); void session.logout(); }} />;
   }
   return <main className="page">
@@ -79,6 +85,7 @@ export default function App() {
           </section>
           <Button type="primary" loading={state.hello.status === 'loading'} onClick={session.retryHello}>重新请求</Button>
           <Button onClick={() => setWorkspaceUser(state.user.id)}>申请登记工作区</Button>
+          {state.user.administration && <Button onClick={() => setAdminUser(state.user.id)}>后台管理</Button>}
         </>}
         <Typography.Text type="secondary">
           仅供合成数据开发演练；无临床 AI，不可用于诊疗或生产

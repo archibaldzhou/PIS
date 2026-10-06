@@ -17,7 +17,7 @@ test('labels preserve identity through preview, simulated failure, retry, cancel
   const detail = await (await page.request.get('/api/requests/' + receipt.resourceId)).json() as { requestNumber: string; containers: { id: string }[] };
   const cid = detail.containers[0].id;
   expect((await page.request.post(`/api/receptions/${receipt.resourceId}/receive`, { headers: headers(), data: { expectedVersion: 1, patientId: encounters[0].patientId, encounterNumber: 'SYN-LABEL-001', containerIds: [cid] } })).status()).toBe(200);
-  await page.getByLabel('授权工作范围').click(); await page.getByText('合成申请工作范围', { exact: true }).last().click();
+  await expect(page.getByText('当前工作范围：合成申请工作范围', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '查看 ' + detail.requestNumber, exact: true }).click();
   await page.getByRole('button', { name: '处理此申请标签' }).click();
   await page.getByLabel('选择容器实体').click(); await page.getByText(cid, { exact: true }).last().click();

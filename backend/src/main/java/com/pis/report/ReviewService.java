@@ -83,7 +83,7 @@ public class ReviewService {
   });
  }
  record Frozen(com.pis.diagnosis.DiagnosisService.ReviewContext context,ReportContracts.Revision revision,UUID signatureId,long signatureVersion,UUID reviewId,String dependencyToken,String schemaCode,boolean dependenciesCurrent) { }
- com.pis.diagnosis.DiagnosisService.ReviewContext outputAccess(UUID id) { return authorize(id,null); }
+ com.pis.diagnosis.DiagnosisService.ReviewContext outputAccess(UUID id) { return diagnosis.outputContext(id); }
  @Transactional(timeout=10) public Frozen outputFrozen(UUID id) {
   var c=outputAccess(id);jdbc.queryForList("SELECT id FROM pathology_request WHERE id=? FOR SHARE",c.requestId());return outputFrozenLocked(id);
  }

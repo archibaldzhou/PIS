@@ -58,11 +58,12 @@ export const accessionApi: AccessionApi = {
   },
   async search(scopeId, filter, signal) {
     const states: Record<string, string> = { '草稿': 'DRAFT', '待接收': 'SUBMITTED', '接收异常': 'EXCEPTION', '已退回': 'RETURNED', '已接收': 'RECEIVED' };
-    const params = new URLSearchParams({ scopeId, keyword: filter.keyword, state: states[filter.status] ?? filter.status, page: String(filter.page) });
+    const params = new URLSearchParams({ keyword: filter.keyword, state: states[filter.status] ?? filter.status, page: String(filter.page) });
+    if (scopeId) params.set('scopeId', scopeId);
     if (filter.date) params.set('date', filter.date);
     const data = object(await get('/api/requests?' + params, signal));
     return { status: 'ready', data: { total: number(data.total), page: number(data.page), pageSize: number(data.pageSize),
-      items: array(data.items, item => { const r = object(item); const d = detail(item); return { id: d.id, version: d.version,
+      items: array(data.items, item => { const r = object(item); const d = detail(item); return { id: d.id, scopeId: d.scopeId, version: d.version,
         requestNumber: d.requestNumber, patientLabel: d.patientLabel, patientIdentifier: d.patientId, encounterNumber: d.encounterNumber,
         department: string(r.department), site: '查看详情', requestedAt: string(r.requestedAt), statusLabel: d.state === 'DRAFT' ? '草稿' : d.state === 'SUBMITTED' ? '待接收' : d.state === 'RECEIVED' ? '已接收' : d.state === 'RETURNED' ? '已退回' : d.state === 'EXCEPTION' ? '接收异常' : d.state }; }) } };
   },

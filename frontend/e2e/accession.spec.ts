@@ -4,8 +4,7 @@ import { test, expect } from '@playwright/test';
 test('manual synthetic identity and request persist without an existing encounter', async ({ page }) => {
   await signInWorkflow(page);
   await page.getByRole('button', { name: '申请登记工作区' }).click();
-  await page.getByLabel('授权工作范围').click();
-  await page.getByText('合成申请工作范围', { exact: true }).last().click();
+  await expect(page.getByText('当前工作范围：合成申请工作范围', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '手工申请', exact: true }).last().click();
   const number = 'SYN-MANUAL-' + crypto.randomUUID();
   await page.getByLabel('患者显示名', { exact: true }).fill('合成手工患者');
@@ -26,8 +25,7 @@ test('manual synthetic identity and request persist without an existing encounte
   expect(record.state).toBe('DRAFT');
   await page.reload();
   await page.getByRole('button', { name: '申请登记工作区' }).click();
-  await page.getByLabel('授权工作范围').click();
-  await page.getByText('合成申请工作范围', { exact: true }).last().click();
+  await expect(page.getByText('当前工作范围：合成申请工作范围', { exact: true })).toBeVisible();
   await expect(page.getByTestId('request-row-' + body.receipt.resourceId)).toContainText(number);
 });
 
@@ -35,8 +33,7 @@ test('manual synthetic identity and request persist without an existing encounte
 test('synthetic request registration, editing and submission persist through real API', async ({ page }) => {
   await signInWorkflow(page);
   await page.getByRole('button', { name: '申请登记工作区' }).click();
-  await page.getByLabel('授权工作范围').click();
-  await page.getByText('合成申请工作范围', { exact: true }).last().click();
+  await expect(page.getByText('当前工作范围：合成申请工作范围', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '病理申请录入', exact: true }).click();
   await page.getByLabel('精确就诊号').fill('SYN-WORKFLOW-001');
   await page.getByRole('button', { name: '查找就诊' }).click();

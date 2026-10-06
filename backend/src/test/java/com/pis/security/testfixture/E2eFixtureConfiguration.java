@@ -23,10 +23,17 @@ public class E2eFixtureConfiguration {
                 insert(jdbc,encoder,owner,value("PIS_E2E_WORKFLOW_PASSWORD", "Synthetic-workflow-only-42!"),"合成工作流用户",true);
                 insert(jdbc,encoder,receiver,value("PIS_E2E_HANDOFF_PASSWORD", "Synthetic-handoff-only-42!"),"合成交接用户",true);
                 workflow(jdbc,owner,receiver,scenario);
+                if(scenario.equals("identity")) {
+                    // Explicit test-only bootstrap; no production migration seeds administrators.
+                    jdbc.update("INSERT INTO identity_account(user_id,hospital_id,employee_number) SELECT u.id,s.hospital_id,'SYN-ADMIN' FROM app_user u JOIN workflow_grant g ON g.user_id=u.id JOIN workflow_scope s ON s.id=g.scope_id WHERE u.username=?",owner);
+                    jdbc.update("INSERT INTO identity_scope_assignment(user_id,hospital_id,scope_id,roles,permissions,qualification_verified,valid_until) SELECT g.user_id,s.hospital_id,s.id,ARRAY['ADMIN'],ARRAY['READ','WRITE','RECEIVE','PRINT','REPRINT'],true,statement_timestamp()+interval '1 year' FROM workflow_grant g JOIN workflow_scope s ON s.id=g.scope_id JOIN app_user u ON u.id=g.user_id WHERE u.username=?",owner);
+                    jdbc.update("UPDATE identity_account a SET default_scope_id=g.scope_id FROM workflow_grant g,app_user u WHERE u.id=a.user_id AND g.user_id=u.id AND u.username=?",owner);
+                    jdbc.update("INSERT INTO identity_admin_grant(user_id,hospital_id,valid_until) SELECT a.user_id,a.hospital_id,statement_timestamp()+interval '1 year' FROM identity_account a JOIN app_user u ON u.id=a.user_id WHERE u.username=?",owner);
+                }
             }
         };
     }
-    static final java.util.List<String> WORKFLOW_SCENARIOS=java.util.List.of("accession","adapters","amendment","archive","consultation","cytology","decisions","delivery","diagnosis","digitalqc","frozen","grossing","labels","materials","output","quality","reception","report","results","review","scan","staining","statistics","storage","technical","viewer","worklist");
+    static final java.util.List<String> WORKFLOW_SCENARIOS=java.util.List.of("accession","adapters","amendment","archive","consultation","cytology","decisions","delivery","diagnosis","digitalqc","frozen","grossing","identity","labels","materials","output","quality","reception","report","results","review","scan","staining","statistics","storage","technical","viewer","worklist");
     private static void workflow(JdbcTemplate jdbc, String username, String receiver, String scenario) {
         boolean viewerScenario=java.util.Set.of("viewer","results","decisions").contains(scenario);
         var hospital=java.util.UUID.randomUUID(); var campus=java.util.UUID.randomUUID();

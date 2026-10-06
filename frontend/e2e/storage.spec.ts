@@ -33,10 +33,10 @@ test('private original stages, survives finish replay, returns exact ranges and 
   const received: Buffer[] = []; for (const start of [0, 1048576]) { const slice = await page.request.get(`${path}/${id}/bytes`, { headers: { 'X-Storage-Purpose': 'DOWNLOAD', Range: `bytes=${start}-${start + 1048575}` } }); expect(slice.status()).toBe(206); expect(slice.headers()['cache-control']).toBe('no-store'); received.push(await slice.body()); }
   expect(createHash('sha256').update(Buffer.concat(received)).digest('hex')).toBe(sha256);
   expect((await page.request.get(`${path}/${id}/bytes`, { headers: { 'X-Storage-Purpose': 'DOWNLOAD' } })).status()).toBe(416);
-  await page.getByRole('button', { name: '申请登记工作区' }).click(); await page.getByLabel('授权工作范围').click(); await page.getByText('合成申请工作范围', { exact: true }).last().click();
+  await page.getByRole('button', { name: '申请登记工作区' }).click(); await expect(page.getByText('当前工作范围：合成申请工作范围', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: `查看 ${detail.requestNumber}`, exact: true }).click(); await page.getByRole('button', { name: '处理此申请原件' }).click();
   await expect(page.getByRole('cell', { name: 'READY / 4', exact: true })).toBeVisible(); await page.getByRole('button', { name: '预览前128字节' }).click(); await expect(page.getByLabel('固定版本十六进制预览')).toContainText(id);
-  const other = await browser.newContext({ baseURL: 'http://127.0.0.1:5173' });
+  const other = await browser.newContext({ baseURL: new URL(page.url()).origin });
   try {
     const receiver = await other.newPage(); await receiver.goto('/'); await receiver.getByLabel('用户名', { exact: true }).fill(handoffUsername()); await receiver.getByLabel('密码', { exact: true }).fill(process.env.PIS_E2E_HANDOFF_PASSWORD ?? 'Synthetic-handoff-only-42!');
     const accepted = receiver.waitForResponse(r => new URL(r.url()).pathname === '/api/auth/login'); await receiver.getByRole('button', { name: '登录', exact: true }).click(); expect((await accepted).status()).toBe(204);

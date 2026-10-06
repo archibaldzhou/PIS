@@ -18,7 +18,7 @@ test('independent frozen manual workflow requires separate qualified review and 
  async function body(p: Page, overrides: Partial<Command['body']> = {}): Promise<Command['body']> { const d = await read(p); return { reviewToken: d.reviewToken, confirmedCaseId: id, expectedVersion: d.head?.version ?? -1, occurredAt: '2026-01-01T12:00:00Z', zoneId: 'UTC', reason: 'Synthetic explicit human record', containerId, site: 'Synthetic frozen site', resultId: d.head?.revisionId ?? null, relatedId: null, targetUserId: null, content: 'Synthetic manually entered workflow text', routineSignatureId: null, comparison: null, ...overrides }; }
  async function act(p: Page, action: Action, overrides: Partial<Command['body']> = {}, status = 200) { const token = await (await p.request.get('/api/auth/csrf')).json() as { token: string }; const r = await p.request.post(path + '/' + action, { headers: { 'X-CSRF-TOKEN': token.token, 'Idempotency-Key': crypto.randomUUID() }, data: await body(p, overrides) }); expect(r.status()).toBe(status); return r; }
  await act(page, 'RECEIVE'); await act(page, 'PREPARE'); await act(page, 'DRAFT', {}, 409); await act(page, 'QC_PASS'); await act(page, 'DRAFT'); await act(page, 'REVIEW', {}, 409);
- const other = await browser.newContext({ baseURL: 'http://127.0.0.1:5173' });
+ const other = await browser.newContext({ baseURL: new URL(page.url()).origin });
  try {
   const receiver = await other.newPage(); await receiver.goto('/'); await receiver.getByLabel('用户名', { exact: true }).fill(handoffUsername()); await receiver.getByLabel('密码', { exact: true }).fill(process.env.PIS_E2E_HANDOFF_PASSWORD ?? 'Synthetic-handoff-only-42!'); const login = receiver.waitForResponse(r => new URL(r.url()).pathname === '/api/auth/login'); await receiver.getByRole('button', { name: '登录', exact: true }).click(); expect((await login).status()).toBe(204);
   const receiverId = (await read(receiver)).actorId; await act(receiver, 'REVIEW'); expect((await read(page)).reviewValid).toBe(true);
@@ -29,6 +29,6 @@ test('independent frozen manual workflow requires separate qualified review and 
   await act(page, 'TRANSFER', { targetUserId: receiverId }); await act(receiver, 'DRAFT', {}, 404); await act(receiver, 'CLAIM'); await act(receiver, 'DRAFT'); await act(page, 'REVIEW'); expect((await read(page)).reviewValid).toBe(true);
   await act(receiver, 'QC_FAIL'); expect((await read(page)).reviewValid).toBe(false); await act(receiver, 'COMMUNICATE', { targetUserId: (await read(page)).actorId }, 409);
  } finally { await other.close(); }
- await page.getByRole('button', { name: '申请登记工作区' }).click(); await page.getByLabel('授权工作范围').click(); await page.getByText('合成申请工作范围', { exact: true }).last().click();
+ await page.getByRole('button', { name: '申请登记工作区' }).click(); await expect(page.getByText('当前工作范围：合成申请工作范围', { exact: true })).toBeVisible();
  const requestDetail = await (await page.request.get('/api/requests/' + requestId)).json() as { requestNumber: string }; await page.getByRole('button', { name: '查看 ' + requestDetail.requestNumber, exact: true }).click(); await page.getByRole('button', { name: '处理此申请冰冻', exact: true }).click(); await page.getByRole('button', { name: new RegExp(id) }).click(); await expect(page.getByLabel('冰冻病例身份')).toContainText('QC FAIL');
 });

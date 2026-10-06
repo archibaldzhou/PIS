@@ -22,7 +22,7 @@ test('qualified assignment, explicit claim, transfer and receiving user claim pr
   const d = await (await page.request.get(path)).json() as { actorId: string; candidates: { id: string; name: string }[] };
   const target = d.candidates.find(c => c.name === '合成交接用户'); expect(target).toBeDefined(); if (!target) throw new Error('Synthetic qualified receiver missing');
   async function open(p: Page) {
-    await p.getByRole('button', { name: '申请登记工作区' }).click(); await p.getByLabel('授权工作范围').click(); await p.getByText('合成申请工作范围', { exact: true }).last().click();
+    await p.getByRole('button', { name: '申请登记工作区' }).click(); await expect(p.getByText('当前工作范围：合成申请工作范围', { exact: true })).toBeVisible();
     const queue = await (await p.request.get('/api/requests/diagnosis/scopes/' + scopes[0].id + '?pageSize=50')).json() as { items: { caseId: string }[] };
     const position = queue.items.findIndex(i => i.caseId === caseId); expect(position).toBeGreaterThanOrEqual(0);
     const loaded = p.waitForResponse(r => r.url().includes('/api/requests/diagnosis/scopes/') && r.request().method() === 'GET');
@@ -44,7 +44,7 @@ test('qualified assignment, explicit claim, transfer and receiving user claim pr
   await act(page, '本人领取', 'claim', 1);
   await act(page, '转交并等待对方领取', 'transfer', 2, target.name + ' / ' + target.id);
   await expect(page.getByLabel('诊断分配身份')).toContainText('ASSIGNED');
-  const other = await browser.newContext({ baseURL: 'http://127.0.0.1:5173' });
+  const other = await browser.newContext({ baseURL: new URL(page.url()).origin });
   try {
     const receiver = await other.newPage(); await receiver.goto('/');
     await receiver.getByLabel('用户名', { exact: true }).fill(handoffUsername());

@@ -38,7 +38,7 @@ test('QC fail isolates labels, creates linked rework and requires independent ne
   };
   const block = await post('/api/materials/requests/' + receipt.resourceId + '/blocks', { requestVersion: 2, taskId: tasks[0].id, taskVersion: 2, confirmedCassetteId: box, reason: 'Synthetic block' }, 201);
   const slide = await post('/api/materials/' + block + '/slides', { blockVersion: 0, taskId: tasks[1].id, taskVersion: 2, confirmedBlockId: block, reason: 'Synthetic original' }, 201);
-  await page.getByLabel('授权工作范围').click(); await page.getByText('合成申请工作范围', { exact: true }).last().click();
+  await expect(page.getByText('当前工作范围：合成申请工作范围', { exact: true })).toBeVisible();
   await page.getByTestId('request-row-' + receipt.resourceId).getByRole('button', { name: '查看 ' + detail.requestNumber, exact: true }).click();
   await page.getByRole('button', { name: '处理此病例技术QC', exact: true }).click();
   await page.getByRole('button', { name: '质检材料 ' + slide, exact: true }).click();

@@ -57,7 +57,7 @@ async function prepareViewer(page: Page) {
   const revised = { ...evaluation, expectedVersion: 0, focus: 'PASS', note: 'Synthetic explicit pass' }; const qcKey = headers();
   expect((await page.request.post(qcPath, { headers: qcKey, data: revised })).status()).toBe(200);
   expect((await (await page.request.post(qcPath, { headers: qcKey, data: revised })).json() as { replayed: boolean }).replayed).toBe(true);
-  await page.getByRole('button', { name: '申请登记工作区' }).click(); await page.getByLabel('授权工作范围').click(); await page.getByText('合成申请工作范围', { exact: true }).last().click();
+  await page.getByRole('button', { name: '申请登记工作区' }).click(); await expect(page.getByText('当前工作范围：合成申请工作范围', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: `查看 ${detail.requestNumber}`, exact: true }).click(); await page.getByRole('button', { name: '处理此申请扫描导入' }).click(); await page.getByRole('button', { name: '数字QC 0', exact: true }).click();
   await expect(page.getByText('EVALUATED_NOT_PUBLISHED / 当前依赖有效', { exact: true })).toBeVisible();
   await page.getByLabel('QC人工备注或原因', { exact: true }).fill('Synthetic explicit publication'); await page.getByRole('button', { name: '发布合成契约版本' }).click();
@@ -84,7 +84,7 @@ export const test=base.extend<{source: Awaited<ReturnType<typeof prepareViewer>>
   source: [async ({page}, use) => { await use(await prepareViewer(page)); }, {timeout:30_000}],
 });
 export async function forbidden(browser: Browser, resources: string[]) {
-  const other = await browser.newContext({ baseURL: 'http://127.0.0.1:5173' });
+  const other = await browser.newContext({ baseURL: base.info().project.use.baseURL });
   try {
     const receiver = await other.newPage(); await signInReceiver(receiver);
     for (const resource of resources) expect((await receiver.request.get(resource)).status()).toBe(404);

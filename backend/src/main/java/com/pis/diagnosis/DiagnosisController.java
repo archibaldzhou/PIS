@@ -12,6 +12,7 @@ import static com.pis.diagnosis.DiagnosisContracts.*;
 public class DiagnosisController {
  private final DiagnosisService service;
  public DiagnosisController(DiagnosisService service) { this.service=service; }
+ @GetMapping("/output-scopes/{id}") public Page outputList(@PathVariable UUID id,@RequestParam(defaultValue="ALL") State state,@RequestParam(defaultValue="1") int page,@RequestParam(defaultValue="20") int pageSize) { return service.outputList(id,state,page,pageSize); }
  @GetMapping("/scopes/{id}") public Page list(@PathVariable UUID id,@RequestParam(defaultValue="ALL") State state,@RequestParam(defaultValue="1") int page,@RequestParam(defaultValue="20") int pageSize) { return service.list(id,state,page,pageSize); }
  @GetMapping("/cases/{id}") public Detail detail(@PathVariable UUID id) { return service.detail(id); }
  @PostMapping("/cases/{id}/{action}") public ResponseEntity<IdempotentCommands.Result> decide(@PathVariable UUID id,@PathVariable String action,@Valid @RequestBody Decision input,@RequestHeader("Idempotency-Key") String key) {

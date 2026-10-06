@@ -20,7 +20,7 @@ export function RequestList({ reader, onSelect, onManual }: { reader: RequestRea
         { value: '', label: '全部' }, { value: '草稿', label: '草稿' }, { value: '待接收', label: '待接收' },
         ...['接收异常', '已退回', '已接收'].map(value => ({ value, label: value })),
       ]} /></Form.Item>
-      <Form.Item label="来源"><Input disabled value="由授权工作范围确定" /></Form.Item>
+      <Form.Item label="来源"><Input disabled value="由后台配置自动确定" /></Form.Item>
       <Space><Button htmlType="submit" type="primary" disabled={state.status === 'loading'}>查询</Button>
         <Button onClick={() => { form.resetFields(); search(initialFilter); }}>重置</Button>
         <Button onClick={() => void controller.run(filter)} disabled={state.status === 'loading'}>刷新</Button></Space>

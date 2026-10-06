@@ -55,13 +55,20 @@ public class DiagnosisService {
  private Item item(Context c,boolean ready) { return new Item(c.caseId(),c.request(),c.patient(),c.number(),c.state(),c.version(),c.owner(),c.requestState().equals("RECEIVED")&&ready); }
  @Transactional(timeout=10)
  public Page list(UUID scope,State state,int page,int size) {
-  permit(scope,null); if(page<1||page>10000||size<1||size>50) throw new ApiException(HttpStatus.BAD_REQUEST,"DIAGNOSIS_PAGE_INVALID","Invalid page");
+  return listAuthorized(scope,state,page,size,false);
+ }
+ @Transactional(timeout=10)
+ public Page outputList(UUID scope,State state,int page,int size) { return listAuthorized(scope,state,page,size,true); }
+ private Page listAuthorized(UUID scope,State state,int page,int size,boolean output) {
+  if(output)permitOutput(scope);else permit(scope,null);
+  if(page<1||page>10000||size<1||size>50) throw new ApiException(HttpStatus.BAD_REQUEST,"DIAGNOSIS_PAGE_INVALID","Invalid page");
   jdbc.execute("SET LOCAL statement_timeout='5s'");
   String filter=" WHERE w.scope_id=? AND (?='ALL' OR coalesce(d.state,'UNASSIGNED')=?)";
   String sql="WITH filtered AS MATERIALIZED ("+SOURCE+filter+"), totals AS (SELECT count(*) total FROM filtered), items AS (SELECT * FROM filtered ORDER BY case_number,id LIMIT ? OFFSET ?) SELECT totals.total,items.* FROM totals LEFT JOIN items ON true ORDER BY case_number,id";
   var contexts=new ArrayList<Context>(); final long[] total={0};
   jdbc.query(sql,r->{total[0]=r.getLong("total");if(r.getObject("id")!=null) contexts.add(MAPPER.mapRow(r,0));},scope,state.name(),state.name(),size,(page-1)*size);
-  var ready=quality.diagnosisReadiness(contexts.stream().map(Context::caseId).toList()); permit(scope,null);
+  var ready=quality.diagnosisReadiness(contexts.stream().map(Context::caseId).toList());
+  if(output)permitOutput(scope);else permit(scope,null);
   return new Page(total[0],page,size,contexts.stream().map(c->item(c,ready.getOrDefault(c.caseId(),false))).toList());
  }
  @Transactional(timeout=10)
@@ -104,13 +111,30 @@ public class DiagnosisService {
  /** Separate review boundary: qualified reader, without granting draft editing ownership. */
  public record ReviewContext(UUID caseId,UUID requestId,UUID hospitalId,UUID patientId,UUID scopeId,UUID ownerId,String number,long assignmentVersion,boolean ready,String dependencies) { }
  public ReviewContext reviewContext(UUID id) {
-  var c=context(id,Action.CLAIM);boolean qualified=c.owner()!=null&&rights(c.scope(),c.owner()).diagnose();
+  return reviewProjection(context(id,Action.CLAIM));
+ }
+ /** Output operators can read frozen reports without receiving diagnosis, review or signing rights. */
+ public ReviewContext outputContext(UUID id) {
+  access.actor();var rows=jdbc.query(SOURCE+" WHERE c.id=?",MAPPER,id);if(rows.isEmpty())throw missing();
+  var c=rows.getFirst();permitOutput(c.scope());requests.detail(c.request());return reviewProjection(c);
+ }
+ private void permitOutput(UUID scope) {
+  access.require(scope,WorkflowAccess.Permission.READ);var actor=access.actor();
+  if(TransactionSynchronizationManager.isActualTransactionActive())jdbc.queryForList("SELECT user_id FROM report_output_grant WHERE user_id=? AND scope_id=? FOR SHARE",actor.id(),scope);
+  if(Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM report_output_grant WHERE user_id=? AND scope_id=? AND revoked_at IS NULL AND valid_until>statement_timestamp() AND qualification='SYN-REPORT-OUTPUT-1')",Boolean.class,actor.id(),scope)))return;
+  // Preserve existing qualified review accounts; this grants no write capabilities.
+  if(!rights(scope,actor.id()).diagnose())throw missing();
+  if(TransactionSynchronizationManager.isActualTransactionActive())jdbc.queryForList("SELECT user_id FROM report_review_grant WHERE user_id=? AND scope_id=? FOR SHARE",actor.id(),scope);
+  if(!Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM report_review_grant WHERE user_id=? AND scope_id=? AND revoked_at IS NULL AND valid_from<=statement_timestamp() AND (valid_until IS NULL OR valid_until>statement_timestamp()) AND (can_review OR can_simulate_sign))",Boolean.class,actor.id(),scope)))throw missing();
+ }
+ private ReviewContext reviewProjection(Context c) {
+  boolean qualified=c.owner()!=null&&rights(c.scope(),c.owner()).diagnose();
   String owner=c.owner()==null?"NONE":qualificationSnapshot(c.scope(),c.owner());
-  return new ReviewContext(id,c.request(),c.hospital(),c.patient(),c.scope(),c.owner(),c.number(),c.version(),qualified&&c.state().equals("ACTIVE")&&item(c,quality.diagnosisReadiness(List.of(id)).getOrDefault(id,false)).ready(),c.state()+":"+c.version()+":"+owner+":"+quality.reportSnapshot(c.request()));
+  return new ReviewContext(c.caseId(),c.request(),c.hospital(),c.patient(),c.scope(),c.owner(),c.number(),c.version(),qualified&&c.state().equals("ACTIVE")&&item(c,quality.diagnosisReadiness(List.of(c.caseId())).getOrDefault(c.caseId(),false)).ready(),c.state()+":"+c.version()+":"+owner+":"+quality.reportSnapshot(c.request()));
  }
  public String qualificationSnapshot(UUID scope,UUID user) {
   if(!rights(scope,user).diagnose()) return "UNAVAILABLE";
-  return jdbc.queryForObject("SELECT jsonb_build_array(u.id,u.auth_version,to_jsonb(g),to_jsonb(d),to_jsonb(s))::text FROM app_user u JOIN workflow_grant g ON g.user_id=u.id JOIN diagnosis_grant d ON d.user_id=u.id AND d.scope_id=g.scope_id JOIN workflow_scope s ON s.id=g.scope_id WHERE u.id=? AND s.id=?",String.class,user,scope);
+  return jdbc.queryForObject("SELECT jsonb_build_array(u.id,u.auth_version,to_jsonb(g),to_jsonb(d),(to_jsonb(s)-'admin_version'))::text FROM app_user u JOIN workflow_grant g ON g.user_id=u.id JOIN diagnosis_grant d ON d.user_id=u.id AND d.scope_id=g.scope_id JOIN workflow_scope s ON s.id=g.scope_id WHERE u.id=? AND s.id=?",String.class,user,scope);
  }
  /** Bounded internal consultation boundary; caller has authorized this scope and holds the request lock. */
  public Map<UUID,String> qualificationSnapshots(UUID scope,List<UUID> users) {
@@ -123,7 +147,7 @@ public class DiagnosisService {
    jdbc.queryForList("SELECT user_id FROM diagnosis_grant WHERE scope_id=? AND user_id IN ("+placeholders+") ORDER BY user_id FOR SHARE",args.toArray());
   }
   var result=new HashMap<UUID,String>();
-  jdbc.query("SELECT u.id,jsonb_build_array(u.id,u.auth_version,to_jsonb(g),to_jsonb(d),to_jsonb(s))::text AS snapshot "+ELIGIBLE+" AND d.can_diagnose AND u.id IN ("+placeholders+")",r->{result.put(r.getObject("id",UUID.class),r.getString("snapshot"));},args.toArray());
+  jdbc.query("SELECT u.id,jsonb_build_array(u.id,u.auth_version,to_jsonb(g),to_jsonb(d),(to_jsonb(s)-'admin_version'))::text AS snapshot "+ELIGIBLE+" AND d.can_diagnose AND u.id IN ("+placeholders+")",r->{result.put(r.getObject("id",UUID.class),r.getString("snapshot"));},args.toArray());
   return Map.copyOf(result);
  }
  private static ApiException missing() { return new ApiException(HttpStatus.NOT_FOUND,"DIAGNOSIS_NOT_FOUND","Diagnosis resource unavailable"); }

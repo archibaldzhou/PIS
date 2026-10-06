@@ -1,5 +1,5 @@
 export interface HelloResponse { message: string; application: string }
-export interface CurrentUser { id: string; username: string; displayName: string }
+export interface CurrentUser { id: string; username: string; displayName: string; administration?: boolean; passwordChangeRequired?: boolean }
 export interface CsrfToken { headerName: 'X-CSRF-TOKEN'; token: string }
 export interface Credentials { username: string; password: string }
 
@@ -47,6 +47,13 @@ export async function request(path: string, options: RequestInit = {}): Promise<
     throw new ApiError(403, 'FORBIDDEN', '请求被拒绝，请重试或联系管理员');
   }
   const workflowErrors: Record<string, string> = {
+    PASSWORD_POLICY: '密码须为16–72个UTF-8字节。', PASSWORD_REUSE: '新密码不能与当前密码相同。',
+    PASSWORD_CHANGE_REJECTED: '当前密码不正确，或新密码与当前密码相同。', ACCOUNT_NOT_MANAGED: '请联系管理员将此账号纳入后台管理。',
+    ADMIN_AUDIT_UNAVAILABLE: '管理审计暂不可用，本次操作已拒绝。',
+    ADMIN_VERSION_CONFLICT: '配置已被其他人修改，请关闭编辑并刷新后重新核对。', ADMIN_SELF_CHANGE: '不能在后台修改当前登录账号；请由另一位管理员配置。',
+    ADMIN_PERMISSION_INVALID: '请核对范围、角色、权限依赖和截止时间。', QUALIFICATION_REQUIRED: '专业权限需要核验资格；复核与签署还需要诊断权限。',
+    DEFAULT_SCOPE_REQUIRED: '默认范围必须属于该用户的工作范围。', ACCOUNT_ALREADY_EXISTS: '登录名或本院工号已存在。',
+    SCOPE_ALREADY_EXISTS: '相同组织组合的工作范围已存在。', ORGANIZATION_ALREADY_EXISTS: '组织编码已存在。', ADMIN_INPUT_INVALID: '姓名和工号不能包含首尾空格。',
     ADAPTER_LIMIT: '此申请合成接口消息达到上限。', ADAPTER_NOT_FOUND: '接口资源或当前资格不可用。', ADAPTER_VERSION: '消息版本已变化，请刷新核对。', ADAPTER_NOT_READY: '状态、顺序或退避时间不允许操作。', ADAPTER_IDENTITY: '来源或病例身份、摘要不匹配。', ADAPTER_SCHEMA: '字段与适配器路径不匹配。', ADAPTER_SIZE: '合成消息超过大小上限。', ADAPTER_DUPLICATE_CONFLICT: '来源关联ID已有不同输入。', ADAPTER_ACK_MISMATCH: '缺少匹配的接收证据，不能确认ACK。', ADAPTER_STALE_ATTEMPT: '尝试已过期、取消或被替换。', ADAPTER_PAGE: '接口查询页超出范围。',
     AI_IMPACT_CHANGED: '失效影响快照已变化，请保留理由并重新核验。', AI_IMPACT_CONFLICT: '复核版本已变化，请重新核对原操作。', AI_REFERENCE_INVALIDATED: '此引用已失效或不是当前报告修订，只能授权追溯。',
     AI_DECISION_NOT_FOUND: '人工决定或当前权限不可用。', AI_DECISION_BINDING: '人工决定与病例或结果不匹配。', AI_DECISION_CONFLICT: '人工决定或目标报告版本已变化，请重新核验。', AI_DECISION_ALREADY_ACCEPTED: '此结果已有明确采纳记录，请查看原记录。', AI_DECISION_PAGE: '人工历史页码超出范围。',
@@ -113,7 +120,9 @@ export async function fetchCurrentUser(signal?: AbortSignal): Promise<CurrentUse
   if (!isRecord(data) || typeof data.id !== 'string' || !data.id ||
       typeof data.username !== 'string' || !data.username ||
       typeof data.displayName !== 'string' || !data.displayName) return invalidResponse();
-  return { id: data.id, username: data.username, displayName: data.displayName };
+  return { id: data.id, username: data.username, displayName: data.displayName,
+    ...(typeof data.administration === 'boolean' ? { administration: data.administration } : {}),
+    ...(typeof data.passwordChangeRequired === 'boolean' ? { passwordChangeRequired: data.passwordChangeRequired } : {}) };
 }
 
 export async function fetchCsrf(signal?: AbortSignal): Promise<CsrfToken> {

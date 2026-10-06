@@ -9,8 +9,8 @@ type Intention = { kind: 'save'; draft: Draft } | { kind: 'manual'; patientName:
 const blankContainer: ContainerInput = { site: '', laterality: 'UNKNOWN', materialQuantity: 1, fixative: '', fixedAt: null };
 const localTime = (value: string | null) => value?.slice(0, 16) ?? '';
 const utc = (value: string | null) => value ? new Date(value.endsWith('Z') ? value : value + ':00Z').toISOString() : null;
-export function Registration({ api, scopeId, record, manual = false, onDirty, onSaved, onExpired, onPending }: {
-  api: AccessionApi; scopeId: string; record?: RequestDetail; manual?: boolean; onDirty: () => void; onSaved: () => void; onExpired: () => void; onPending: (pending: boolean) => void;
+export function Registration({ api, scopeId, record, manual = false, canWrite = true, onDirty, onSaved, onExpired, onPending }: {
+  api: AccessionApi; scopeId: string; record?: RequestDetail; manual?: boolean; canWrite?: boolean; onDirty: () => void; onSaved: () => void; onExpired: () => void; onPending: (pending: boolean) => void;
 }) {
   const [form] = Form.useForm<Values>();
   const [encounter, setEncounter] = useState<Encounter | undefined>(record ? { id: record.encounterId, patientId: record.patientId, patientLabel: record.patientLabel, encounterNumber: record.encounterNumber } : undefined);
@@ -85,7 +85,7 @@ export function Registration({ api, scopeId, record, manual = false, onDirty, on
     } catch { /* Ant Design renders validation failures beside fields; no request was made. */ }
     finally { validating.current = false; }
   }
-  const readOnly = record !== undefined && record.state !== 'DRAFT';
+  const readOnly = !canWrite || record !== undefined && record.state !== 'DRAFT';
   return <>
     <Steps className="workflow-steps" current={record?.state === 'SUBMITTED' ? 3 : encounter ? 1 : 0}
       items={[manual ? '手工登记患者与就诊' : '选择患者与就诊', '填写临床资料', '核对容器清单', '提交申请'].map(title => ({ title }))} />

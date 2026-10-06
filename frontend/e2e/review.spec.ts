@@ -26,13 +26,13 @@ test('separated synthetic review and simulation bind exact revisions and freeze 
   const draftBody = { expectedVersion: -1, assignmentVersion: 0, confirmedCaseId: caseId, templateCode: 'SYN-REPORT', templateVersion: 1, fields: { gross: '', microscopy: '', diagnosis: 'Synthetic manual review text', notes: '' }, reason: 'Synthetic author input' };
   expect((await page.request.post(report + '/draft', { headers: headers(), data: draftBody })).status()).toBe(200);
   async function open(p: Page) {
-    await p.getByRole('button', { name: '申请登记工作区' }).click(); await p.getByLabel('授权工作范围').click(); await p.getByText('合成申请工作范围', { exact: true }).last().click();
+    await p.getByRole('button', { name: '申请登记工作区' }).click(); await expect(p.getByText('当前工作范围：合成申请工作范围', { exact: true })).toBeVisible();
     const queue = await (await p.request.get('/api/requests/diagnosis/scopes/' + scopes[0].id + '?pageSize=50')).json() as { items: { caseId: string }[] }; const index = queue.items.findIndex(i => i.caseId === caseId); expect(index).toBeGreaterThanOrEqual(0);
     await p.getByRole('button', { name: '复核与模拟签署', exact: true }).click(); if (index >= 10) await p.getByTitle(String(Math.floor(index / 10) + 1), { exact: true }).click(); const fresh = nextReview(p, caseId); await p.getByRole('button', { name: '复核合成报告 ' + caseId }).click(); await settledReview(p, caseId, await fresh);
   }
   const act = (p: Page, action: 'APPROVE' | 'SIMULATE_SIGN', expectedStatus = 200) => reviewAction(p, caseId, action, expectedStatus);
   await open(page); await act(page, 'APPROVE', 409); // Author separation is enforced server-side.
-  const other = await browser.newContext({ baseURL: 'http://127.0.0.1:5173' });
+  const other = await browser.newContext({ baseURL: new URL(page.url()).origin });
   try {
     const reviewer = await other.newPage(); await reviewer.goto('/'); await reviewer.getByLabel('用户名', { exact: true }).fill(handoffUsername()); await reviewer.getByLabel('密码', { exact: true }).fill(process.env.PIS_E2E_HANDOFF_PASSWORD ?? 'Synthetic-handoff-only-42!');
     const login = reviewer.waitForResponse(r => new URL(r.url()).pathname === '/api/auth/login'); await reviewer.getByRole('button', { name: '登录', exact: true }).click(); expect((await login).status()).toBe(204);

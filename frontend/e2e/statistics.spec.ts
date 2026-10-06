@@ -14,7 +14,7 @@ test('authorized saved events produce frozen statistics, open waiting, exact sou
   const submitHeaders = headers(); const submitPath = `/api/requests/${rid}/submit`;
   expect((await page.request.post(submitPath, { headers: submitHeaders, data: { expectedVersion: 0 } })).status()).toBe(200);
   expect((await page.request.post(submitPath, { headers: submitHeaders, data: { expectedVersion: 0 } })).headers()['idempotency-replayed']).toBe('true');
-  await page.getByRole('button', { name: '申请登记工作区' }).click(); await page.getByLabel('授权工作范围').click(); await page.getByText('合成申请工作范围', { exact: true }).last().click();
+  await page.getByRole('button', { name: '申请登记工作区' }).click(); await expect(page.getByText('当前工作范围：合成申请工作范围', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '工作量TAT与QC统计', exact: true }).click();
   const loaded = page.waitForResponse(r => r.url().includes('/statistics/scopes/') && r.request().method() === 'GET');
   await page.getByRole('button', { name: '冻结并查询统计' }).click(); const response = await loaded; expect(response.status()).toBe(200); const initial = await response.json() as View;
@@ -29,7 +29,7 @@ test('authorized saved events produce frozen statistics, open waiting, exact sou
   const nextId = (await newer.json() as { receipt: { resourceId: string } }).receipt.resourceId;
   const next = await (await page.request.get(`${path}/${nextId}?metric=RECEPTION`)).json() as View;
   expect(next.summaries.find(s => s.metric === 'RECEPTION')).toMatchObject({ cohort: 1, completed: 1, open: 0 }); expect(next.facts[0].endEvent).not.toBeNull();
-  const other = await browser.newContext({ baseURL: 'http://127.0.0.1:5173' });
+  const other = await browser.newContext({ baseURL: new URL(page.url()).origin });
   try {
     const receiver = await other.newPage(); await receiver.goto('/'); await receiver.getByLabel('用户名', { exact: true }).fill(handoffUsername()); await receiver.getByLabel('密码', { exact: true }).fill(process.env.PIS_E2E_HANDOFF_PASSWORD ?? 'Synthetic-handoff-only-42!');
     const accepted = receiver.waitForResponse(r => new URL(r.url()).pathname === '/api/auth/login'); await receiver.getByRole('button', { name: '登录', exact: true }).click(); expect((await accepted).status()).toBe(204);

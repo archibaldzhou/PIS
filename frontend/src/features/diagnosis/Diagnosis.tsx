@@ -10,7 +10,7 @@ function unavailable(e: unknown, expired: () => void) { if (e instanceof ApiErro
 export function Diagnosis({ scopeId, renderEditor, editorKind, ...callbacks }: DiagnosisCallbacks & { scopeId: string; editorKind?: 'consultation' | 'review' | 'output' | 'amendment' | 'delivery'; renderEditor?: (id: string, callbacks: DiagnosisCallbacks & { onSaved: () => void }) => React.ReactNode }) {
   const [filter, setFilter] = useState<Filter>({ page: 1, state: 'ALL' }), [selected, setSelected] = useState(''), [revision, setRevision] = useState(0), [dirty, setDirty] = useState(false), [pending, setPending] = useState(false), [confirming, setConfirming] = useState(false);
   const next = useRef<(() => void) | undefined>(undefined);
-  const [reader] = useState(() => new ReadController(async (f: Filter, signal: AbortSignal) => { try { return { status: 'ready' as const, data: await loadList(scopeId, f, signal) }; } catch (e) { return unavailable(e, callbacks.onExpired); } }));
+  const [reader] = useState(() => new ReadController(async (f: Filter, signal: AbortSignal) => { try { return { status: 'ready' as const, data: await loadList(scopeId, f, signal, editorKind === 'output' || editorKind === 'delivery') }; } catch (e) { return unavailable(e, callbacks.onExpired); } }));
   const state = useSyncExternalStore(reader.subscribe, reader.getSnapshot); useEffect(() => { void reader.run(filter); return reader.stop; }, [reader, filter]);
   function clean() { setDirty(false); callbacks.onClean(); }
   function change(action: () => void) { if (pending) return; if (dirty) { next.current = action; setConfirming(true); } else action(); }

@@ -1,6 +1,7 @@
 import { ApiError } from '../api';
 /** Minimal list projection; all identity and permission decisions remain server-side. */
 export interface RequestSummary {
+  scopeId?: string;
   id: string;
   version: number;
   requestNumber: string;

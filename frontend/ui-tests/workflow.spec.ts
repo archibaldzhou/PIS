@@ -9,13 +9,12 @@ async function start(page: Page) {
   await page.route('**/api/auth/me', route => route.fulfill({ json: { id: 'synthetic-user', username: 'synthetic', displayName: '合成用户' } }));
   await page.route('**/api/auth/csrf', route => route.fulfill({ json: { headerName: 'X-CSRF-TOKEN', token: 'synthetic-only' } }));
   await page.route('**/api/hello', route => route.fulfill({ json: { application: 'PIS', message: 'Hello World' } }));
-  await page.route('**/api/requests/scopes', route => route.fulfill({ json: [{ id: scope, name: '合成院区 / 科室' }] }));
+  await page.route('**/api/requests/work-context', route => route.fulfill({ json: { defaultScopeId: scope, writableScopes: [scope], name: '合成院区 / 科室', scopes: [{ id: scope, name: '合成院区 / 科室' }], administration: false, menus: ['operations', 'adapters', 'requests', 'registration', 'manual', 'reception', 'labels', 'grossing', 'technical', 'materials', 'quality', 'worklist', 'diagnosis', 'report', 'review', 'output', 'amendments', 'delivery', 'frozen', 'cytology', 'staining', 'consultation', 'archive', 'statistics', 'storage', 'scan', 'digitalqc', 'viewer', 'ai', 'aitasks'] } }));
   await page.route('**/api/requests?*', route => route.fulfill({ json: { items: [], total: 0, page: 1, pageSize: 20 } }));
   await page.route('**/api/requests/encounters?*', route => route.fulfill({ json: [encounter] }));
   await page.goto('/');
   await page.getByRole('button', { name: '申请登记工作区' }).click();
-  await page.getByRole('combobox', { name: '授权工作范围' }).click();
-  await page.getByText('合成院区 / 科室', { exact: true }).last().click();
+  await expect(page.getByText('当前工作范围：合成院区 / 科室', { exact: true })).toBeVisible();
 }
 
 test('manual registration validates identity and sends one typed intent without existing encounter', async ({ page }) => {
@@ -441,7 +440,7 @@ test('diagnosis uncertain claim keeps case version and key and prevents navigati
   const id = '88888888-8888-4888-8888-888888888888';
   let saved = false;
   const item = () => ({ caseId: id, requestId: 'synthetic-request', patientId: encounter.patientId, number: 'SYN-DIAG', state: saved ? 'ACTIVE' : 'UNASSIGNED', version: saved ? 0 : -1, ownerId: saved ? 'synthetic-user' : null, ready: true });
-  await page.route('**/api/requests/diagnosis/scopes/*', r => r.fulfill({ json: { total: 1, page: 1, pageSize: 10, items: [item()] } }));
+  await page.route('**/api/requests/diagnosis/{scopes,output-scopes}/*', r => r.fulfill({ json: { total: 1, page: 1, pageSize: 10, items: [item()] } }));
   await page.route('**/api/requests/diagnosis/cases/' + id, r => r.fulfill({ json: { item: item(), actorId: 'synthetic-user', canAssign: true, canDiagnose: true, candidates: [{ id: 'synthetic-user', name: '合成本人' }], events: [] } }));
   const sent: { key: string; body: unknown }[] = [];
   await page.route('**/api/requests/diagnosis/cases/' + id + '/claim', async r => { sent.push({ key: r.request().headers()['idempotency-key'], body: r.request().postDataJSON() as unknown }); if (sent.length === 1) await r.abort('failed'); else { saved = true; await r.fulfill({ json: { receipt: { status: 200, resourceType: 'DIAGNOSIS_ASSIGNMENT', resourceId: id, version: 0 }, replayed: true } }); } });
@@ -464,7 +463,7 @@ test('diagnosis dirty case switch clears hidden target and distinguishes forbidd
   await start(page);
   const a = '88888888-8888-4888-8888-888888888888', b = '99999999-9999-4999-8999-999999999999'; let forbidden = false;
   const item = (id: string) => ({ caseId: id, requestId: 'synthetic-request-' + id, patientId: encounter.patientId, number: 'SYN-' + id, state: 'UNASSIGNED', version: -1, ownerId: null, ready: id === a });
-  await page.route('**/api/requests/diagnosis/scopes/*', r => forbidden ? r.fulfill({ status: 404, json: { code: 'DIAGNOSIS_NOT_FOUND' } }) : r.fulfill({ json: { total: 2, page: 1, pageSize: 10, items: [item(a), item(b)] } }));
+  await page.route('**/api/requests/diagnosis/{scopes,output-scopes}/*', r => forbidden ? r.fulfill({ status: 404, json: { code: 'DIAGNOSIS_NOT_FOUND' } }) : r.fulfill({ json: { total: 2, page: 1, pageSize: 10, items: [item(a), item(b)] } }));
   for (const id of [a, b]) await page.route('**/api/requests/diagnosis/cases/' + id, r => r.fulfill({ json: { item: item(id), actorId: 'synthetic-user', canAssign: true, canDiagnose: true, candidates: [{ id: 'synthetic-target', name: '合成目标' }], events: [] } }));
   await page.getByRole('button', { name: '诊断分配与领取', exact: true }).click(); await page.getByRole('button', { name: '处理诊断分配 ' + a }).click();
   await page.getByLabel('诊断分配操作', { exact: true }).click(); await page.getByRole('option', { name: '分配给合格人员', exact: true }).click();
@@ -484,7 +483,7 @@ test('late diagnosis detail cannot replace the newly selected case', async ({ pa
   const a = '88888888-8888-4888-8888-888888888888', b = '99999999-9999-4999-8999-999999999999';
   const item = (id: string) => ({ caseId: id, requestId: 'request-' + id, patientId: encounter.patientId, number: 'SYN-' + id, state: 'UNASSIGNED', version: -1, ownerId: null, ready: false });
   const detail = (id: string) => ({ item: item(id), actorId: 'synthetic-user', canAssign: true, canDiagnose: true, candidates: [], events: [] });
-  await page.route('**/api/requests/diagnosis/scopes/*', r => r.fulfill({ json: { total: 2, page: 1, pageSize: 10, items: [item(a), item(b)] } }));
+  await page.route('**/api/requests/diagnosis/{scopes,output-scopes}/*', r => r.fulfill({ json: { total: 2, page: 1, pageSize: 10, items: [item(a), item(b)] } }));
   let release: () => void = () => {}; const hold = new Promise<void>(resolve => { release = resolve; });
   let finish: () => void = () => {}; const finished = new Promise<void>(resolve => { finish = resolve; });
   await page.route('**/api/requests/diagnosis/cases/' + a, async r => { await hold; try { await r.fulfill({ json: detail(a) }); } finally { finish(); } });
@@ -501,7 +500,7 @@ test('report template cancel preserves draft; switch clears fields; uncertain sa
   const templates = [{ code: 'SYN-REPORT', version: 1, title: '合成文本草稿', schemaCode: 'SYN-TEXT-1' }, { code: 'SYN-REPORT', version: 2, title: '合成结构草稿', schemaCode: 'SYN-STRUCTURED-2' }];
   const fields = { gross: '', microscopy: '', diagnosis: '合成人工输入二', notes: '', sampleCount: 2, manualChecked: false };
   const revision = { id: 'synthetic-revision', caseId: id, version: 0, templateCode: 'SYN-REPORT', templateVersion: 2, fields, assignmentVersion: 0, authorId: 'synthetic-user', reason: '合成修订', createdAt: '2026-10-03T00:00:00Z' };
-  await page.route('**/api/requests/diagnosis/scopes/*', r => r.fulfill({ json: { total: 1, page: 1, pageSize: 10, items: [item] } }));
+  await page.route('**/api/requests/diagnosis/{scopes,output-scopes}/*', r => r.fulfill({ json: { total: 1, page: 1, pageSize: 10, items: [item] } }));
   await page.route('**/api/requests/reports/cases/' + id, r => r.fulfill({ json: { context: { ...item, assignmentVersion: 0 }, current: saved ? revision : null, templates } }));
   await page.route('**/api/requests/reports/cases/' + id + '/history?*', r => r.fulfill({ json: { caseId: id, page: 1, revisions: saved ? [revision] : [] } }));
   const sent: { body: unknown; key: string }[] = [];
@@ -525,7 +524,7 @@ test('report case switch discards late responses and confirms dirty leave or can
   await start(page); const a = '88888888-8888-4888-8888-888888888888', b = '99999999-9999-4999-8999-999999999999';
   const item = (id: string) => ({ caseId: id, requestId: 'request-' + id, patientId: encounter.patientId, number: 'SYN-' + id, state: 'ACTIVE', version: 0, ownerId: 'synthetic-user', ready: true });
   const detail = (id: string) => ({ context: { ...item(id), assignmentVersion: 0 }, templates: [{ code: 'SYN-REPORT', version: 1, title: '合成文本', schemaCode: 'SYN-TEXT-1' }], current: { id: 'revision-' + id, caseId: id, version: 0, templateCode: 'SYN-REPORT', templateVersion: 1, assignmentVersion: 0, fields: { gross: '', microscopy: '', diagnosis: '合成原稿-' + id, notes: '' }, authorId: 'synthetic-user', reason: 'Synthetic', createdAt: '2026-10-03T00:00:00Z' } });
-  await page.route('**/api/requests/diagnosis/scopes/*', r => r.fulfill({ json: { total: 2, page: 1, pageSize: 10, items: [item(a), item(b)] } }));
+  await page.route('**/api/requests/diagnosis/{scopes,output-scopes}/*', r => r.fulfill({ json: { total: 2, page: 1, pageSize: 10, items: [item(a), item(b)] } }));
   for (const id of [a, b]) await page.route('**/api/requests/reports/cases/' + id + '/history?*', r => r.fulfill({ json: { caseId: id, page: 1, revisions: [] } }));
   let release: () => void = () => {}; const hold = new Promise<void>(r => { release = r; }); let finish: () => void = () => {}; const finished = new Promise<void>(r => { finish = r; }); let slow = true;
   await page.route('**/api/requests/reports/cases/' + a, async r => { if (slow) { slow = false; await hold; try { await r.fulfill({ json: detail(a) }); } finally { finish(); } } else await r.fulfill({ json: detail(a) }); });
@@ -543,7 +542,7 @@ function reviewFixture(id: string, state = 'DRAFT', version = -1) {
 test('review retries original key, cancels action and simulation, preserves conflict input and freezes confirmed simulation', async ({ page }) => {
  await start(page); await page.route('**/review/history?*', r => r.fulfill({ json: { caseId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', page: 1, events: [] } })); const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'; let state = 'DRAFT', version = -1;
  const item = { caseId: id, requestId: 'synthetic-request', patientId: encounter.patientId, number: 'SYN-REVIEW', state: 'ACTIVE', version: 0, ownerId: 'synthetic-user', ready: true };
- await page.route('**/api/requests/diagnosis/scopes/*', r => r.fulfill({ json: { total: 1, page: 1, pageSize: 10, items: [item] } }));
+ await page.route('**/api/requests/diagnosis/{scopes,output-scopes}/*', r => r.fulfill({ json: { total: 1, page: 1, pageSize: 10, items: [item] } }));
  await page.route('**/api/requests/reports/cases/' + id + '/review', r => r.fulfill({ json: reviewFixture(id, state, version) }));
  const sent: { body: unknown; key: string }[] = []; let signing = 0;
  await page.route('**/api/requests/reports/cases/' + id + '/review/*', async r => { sent.push({ body: r.request().postDataJSON() as unknown, key: r.request().headers()['idempotency-key'] }); if (sent.length === 1) return r.abort('failed'); if (r.request().url().endsWith('SIMULATE_SIGN') && ++signing === 1) return r.fulfill({ status: 409, json: { code: 'REPORT_REVIEW_STALE', title: 'Synthetic conflict' } }); state = r.request().url().endsWith('APPROVE') ? 'APPROVED' : 'SIMULATED_SIGNED'; version++; await r.fulfill({ json: { receipt: { status: 200, resourceType: 'REPORT_REVIEW', resourceId: id, version }, replayed: sent.length === 2 } }); });
@@ -562,7 +561,7 @@ test('review retries original key, cancels action and simulation, preserves conf
 test('review action switching waits for delayed command and exact fresh revision without losing either confirmation', async ({ page }) => {
  await start(page); const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
  const item = { caseId: id, requestId: 'synthetic-request', patientId: encounter.patientId, number: 'SYN-REVIEW', state: 'ACTIVE', version: 0, ownerId: 'synthetic-user', ready: true };
- await page.route('**/api/requests/diagnosis/scopes/*', r => r.fulfill({ json: { total: 1, page: 1, pageSize: 10, items: [item] } }));
+ await page.route('**/api/requests/diagnosis/{scopes,output-scopes}/*', r => r.fulfill({ json: { total: 1, page: 1, pageSize: 10, items: [item] } }));
  let releasePost: () => void = () => {}, releaseRead: () => void = () => {}, postStarted: () => void = () => {}, readStarted: () => void = () => {};
  const postGate = new Promise<void>(r => { releasePost = r; }), readGate = new Promise<void>(r => { releaseRead = r; });
  const postSeen = new Promise<void>(r => { postStarted = r; }), readSeen = new Promise<void>(r => { readStarted = r; });
@@ -606,7 +605,7 @@ test('review action switching waits for delayed command and exact fresh revision
 });
 test('review dirty refresh after separation refusal waits for approved revision and closed parent dialog before switching', async ({ page }) => {
  await start(page); const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'; let state = 'DRAFT', version = -1;
- await page.route('**/api/requests/diagnosis/scopes/*', r => r.fulfill({ json: { total: 1, page: 1, pageSize: 10, items: [{ caseId: id, requestId: 'synthetic-request', patientId: encounter.patientId, number: 'SYN-REVIEW', state: 'ACTIVE', version: 0, ownerId: 'synthetic-user', ready: true }] } }));
+ await page.route('**/api/requests/diagnosis/{scopes,output-scopes}/*', r => r.fulfill({ json: { total: 1, page: 1, pageSize: 10, items: [{ caseId: id, requestId: 'synthetic-request', patientId: encounter.patientId, number: 'SYN-REVIEW', state: 'ACTIVE', version: 0, ownerId: 'synthetic-user', ready: true }] } }));
  let release: () => void = () => {}, started: () => void = () => {};
  const gate = new Promise<void>(r => { release = r; }), seen = new Promise<void>(r => { started = r; });
  await page.route('**/api/requests/reports/cases/' + id + '/review', async r => {
@@ -630,7 +629,7 @@ test('review dirty refresh after separation refusal waits for approved revision 
 test('review late case responses cannot overwrite selection; dirty switching and leaving are cancellable', async ({ page }) => {
  await start(page); await page.route('**/review/history?*', r => r.fulfill({ json: { caseId: new URL(r.request().url()).pathname.split('/')[5], page: 1, events: [] } })); const a = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', b = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
  const item = (id: string) => ({ caseId: id, requestId: 'request-' + id, patientId: encounter.patientId, number: 'SYN-' + id, state: 'ACTIVE', version: 0, ownerId: 'synthetic-user', ready: true });
- await page.route('**/api/requests/diagnosis/scopes/*', r => r.fulfill({ json: { total: 2, page: 1, pageSize: 10, items: [item(a), item(b)] } }));
+ await page.route('**/api/requests/diagnosis/{scopes,output-scopes}/*', r => r.fulfill({ json: { total: 2, page: 1, pageSize: 10, items: [item(a), item(b)] } }));
  let release: () => void = () => {}; const hold = new Promise<void>(r => { release = r; }); let finish: () => void = () => {}; const finished = new Promise<void>(r => { finish = r; }); let slow = true;
  await page.route('**/api/requests/reports/cases/' + a + '/review', async r => { if (slow) { slow = false; await hold; try { await r.fulfill({ json: reviewFixture(a) }); } finally { finish(); } } else await r.fulfill({ json: reviewFixture(a) }); });
  await page.route('**/api/requests/reports/cases/' + b + '/review', r => r.fulfill({ json: reviewFixture(b) }));
@@ -651,7 +650,7 @@ function outputFixture(id: string, exists = true, activityVersion = -1) {
 test('fixed PDF generation and unknown preview retry keep original bytes and key; preview closes and print cancellation preserves input', async ({ page }) => {
  await start(page); const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'; let exists = false, version = -1;
  const item = { caseId: id, requestId: 'request', patientId: encounter.patientId, number: 'SYN-OUTPUT', state: 'ACTIVE', version: 0, ownerId: 'synthetic-user', ready: true };
- await page.route('**/api/requests/diagnosis/scopes/*', r => r.fulfill({ json: { total: 1, page: 1, pageSize: 10, items: [item] } }));
+ await page.route('**/api/requests/diagnosis/{scopes,output-scopes}/*', r => r.fulfill({ json: { total: 1, page: 1, pageSize: 10, items: [item] } }));
  await page.route('**/output/' + outputArtifactId + '/history?*', r => r.fulfill({ json: { caseId: id, artifactId: outputArtifactId, page: 1, events: [] } }));
  await page.route('**/api/requests/reports/cases/' + id + '/output', async r => { if (r.request().method() === 'GET') await r.fulfill({ json: outputFixture(id, exists, version) }); else { exists = true; await r.fulfill({ json: { receipt: { status: 200, resourceType: 'REPORT_ARTIFACT', resourceId: outputArtifactId, version: 0 } } }); } });
  const sent: { body: unknown; key: string }[] = [];
@@ -669,7 +668,7 @@ test('fixed PDF generation and unknown preview retry keep original bytes and key
 test('output rejects corrupt binary without displaying PDF and cannot mix late responses or dirty case input', async ({ page }) => {
  await start(page); const a = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', b = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
  const item = (id: string) => ({ caseId: id, requestId: 'request-' + id, patientId: encounter.patientId, number: 'SYN-' + id, state: 'ACTIVE', version: 0, ownerId: 'synthetic-user', ready: true });
- await page.route('**/api/requests/diagnosis/scopes/*', r => r.fulfill({ json: { total: 2, page: 1, pageSize: 10, items: [item(a), item(b)] } }));
+ await page.route('**/api/requests/diagnosis/{scopes,output-scopes}/*', r => r.fulfill({ json: { total: 2, page: 1, pageSize: 10, items: [item(a), item(b)] } }));
  await page.route('**/output/' + outputArtifactId + '/history?*', r => r.fulfill({ json: { caseId: new URL(r.request().url()).pathname.split('/')[5], artifactId: outputArtifactId, page: 1, events: [] } }));
  let release: () => void = () => {}; const hold = new Promise<void>(r => { release = r; }); let finish: () => void = () => {}; const finished = new Promise<void>(r => { finish = r; }); let slow = true;
  await page.route('**/api/requests/reports/cases/' + a + '/output', async r => { if (slow) { slow = false; await hold; try { await r.fulfill({ json: outputFixture(a) }); } finally { finish(); } } else await r.fulfill({ json: outputFixture(a) }); });
@@ -684,7 +683,7 @@ test('output rejects corrupt binary without displaying PDF and cannot mix late r
 
 test('output print conflict preserves input; refresh requires review; user self-report and download keep fixed artifact', async ({ page }) => {
  await start(page); const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', requestId = 'ffffffff-ffff-4fff-8fff-ffffffffffff'; let version = -1, attempts = 0; const events: { id: string; version: number; kind: string; requestId: string | null; actorId: string; reason: string; occurredAt: string }[] = [];
- await page.route('**/api/requests/diagnosis/scopes/*', r => r.fulfill({ json: { total: 1, page: 1, pageSize: 10, items: [{ caseId: id, requestId: 'request', patientId: encounter.patientId, number: 'SYN-OUTPUT', state: 'ACTIVE', version: 0, ownerId: 'synthetic-user', ready: true }] } }));
+ await page.route('**/api/requests/diagnosis/{scopes,output-scopes}/*', r => r.fulfill({ json: { total: 1, page: 1, pageSize: 10, items: [{ caseId: id, requestId: 'request', patientId: encounter.patientId, number: 'SYN-OUTPUT', state: 'ACTIVE', version: 0, ownerId: 'synthetic-user', ready: true }] } }));
  await page.route('**/api/requests/reports/cases/' + id + '/output', r => r.fulfill({ json: outputFixture(id, true, version) }));
  await page.route('**/output/' + outputArtifactId + '/history?*', r => r.fulfill({ json: { caseId: id, artifactId: outputArtifactId, page: 1, events: [...events].reverse() } }));
  await page.route('**/output/' + outputArtifactId + '/events/*', async r => { const body = r.request().postDataJSON() as { expectedVersion: number; requestId: string | null; reason: string }; const kind = new URL(r.request().url()).pathname.split('/').at(-1) ?? ''; if (++attempts === 1) { version = 0; return r.fulfill({ status: 409, json: { code: 'VERSION_CONFLICT' } }); } expect(body.expectedVersion).toBe(version); if (kind === 'USER_REPORTED_CANCELLED') expect(body.requestId).toBe(requestId); version++; events.push({ id: kind === 'PRINT_REQUEST' ? requestId : 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', version, kind, requestId: body.requestId, actorId: 'synthetic-user', reason: body.reason, occurredAt: '2026-10-03T00:00:00Z' }); await r.fulfill({ json: { receipt: { status: 200, resourceType: 'REPORT_OUTPUT_EVENT', resourceId: events.at(-1)?.id, version } } }); });
@@ -704,7 +703,7 @@ function chainFixture(id: string, pending = false) {
 }
 async function startChain(page: Page, ids: string[]) {
  await start(page); const items = ids.map(caseId => ({ caseId, requestId: 'synthetic-request', patientId: encounter.patientId, number: 'SYN-AMEND', state: 'ACTIVE', version: 0, ownerId: 'synthetic-user', ready: true }));
- await page.route('**/api/requests/diagnosis/scopes/**', r => r.fulfill({ json: { items, page: 1, pageSize: 10, total: items.length } })); await page.getByRole('button', { name: '报告补充与更正', exact: true }).click();
+ await page.route('**/api/requests/diagnosis/{scopes,output-scopes}/**', r => r.fulfill({ json: { items, page: 1, pageSize: 10, total: items.length } })); await page.getByRole('button', { name: '报告补充与更正', exact: true }).click();
 }
 test('amendment double click and unknown retry preserve base version and key; type cancel and dirty history navigation are explicit', async ({ page }) => {
  const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'; let pending = false; const sent: { body: unknown; key: string }[] = [];
@@ -867,7 +866,7 @@ function consultView(caseId = consultCase, id: string | null = consultId, owner 
  const h = { id: consultId, caseId, revisionId: basis.id, assignmentVersion: 0, materialBasis: '[{"id":"synthetic-slide","version":0,"qcVersion":0,"state":"PASS"}]', kind: 'REREAD', purpose: 'Synthetic purpose', expiresAt: '2099-01-01T00:00:00Z', createdBy: 'owner', state: 'OPEN', version: 1, summaryId: null };
  return { caseId, patientId: encounter.patientId, number: 'SYN-CONSULT', actorId: owner ? 'owner' : 'reviewer', owner, consultations: [h], selected: id ? h : null, basis: id || owner ? basis : null, members: id ? [{ userId: 'reviewer', state: 'ACCEPTED', opinionId: null, confirmedSummaryId: null }] : [], events: [], opinions: [], summary: null, candidates: owner ? [{ id: 'reviewer', name: '合成会诊医生' }] : [], invalidReason: null, ready: false, page: 1 };
 }
-async function startConsult(page: Page) { await start(page); await page.route('**/api/requests/diagnosis/scopes/*', r => r.fulfill({ json: { total: 2, page: 1, pageSize: 10, items: [consultCase, consultCaseB].map(caseId => ({ caseId, requestId: 'synthetic-request', patientId: encounter.patientId, number: 'SYN-CONSULT', state: 'ACTIVE', version: 0, ownerId: 'owner', ready: true })) } })); await page.getByRole('button', { name: '院内会诊与复阅', exact: true }).click(); await page.getByRole('button', { name: '查看院内会诊 ' + consultCase }).click(); }
+async function startConsult(page: Page) { await start(page); await page.route('**/api/requests/diagnosis/{scopes,output-scopes}/*', r => r.fulfill({ json: { total: 2, page: 1, pageSize: 10, items: [consultCase, consultCaseB].map(caseId => ({ caseId, requestId: 'synthetic-request', patientId: encounter.patientId, number: 'SYN-CONSULT', state: 'ACTIVE', version: 0, ownerId: 'owner', ready: true })) } })); await page.getByRole('button', { name: '院内会诊与复阅', exact: true }).click(); await page.getByRole('button', { name: '查看院内会诊 ' + consultCase }).click(); }
 test('consultation dirty actions and case switches cancel or discard without carrying personal text', async ({ page }) => {
  await page.route('**/consultations/cases/*?*', r => { const u = new URL(r.request().url()); return r.fulfill({ json: consultView(u.pathname.split('/').pop(), u.searchParams.get('consultation')) }); }); await startConsult(page); await page.getByRole('button', { name: '查看会诊 ' + consultId }).click(); await page.getByLabel('院内会诊操作').click(); await page.getByRole('option', { name: '追加个人意见', exact: true }).click(); await page.getByLabel('人工意见或汇总内容').fill('Synthetic unsaved personal opinion'); await page.getByLabel('院内会诊操作').click(); await page.getByRole('option', { name: '退回会诊', exact: true }).click(); await page.getByRole('button', { name: '继续编辑', exact: true }).click(); await expect(page.getByLabel('人工意见或汇总内容')).toHaveValue('Synthetic unsaved personal opinion');
  await page.getByRole('button', { name: '查看院内会诊 ' + consultCaseB }).click(); await page.getByRole('button', { name: '继续编辑', exact: true }).click(); await expect(page.getByLabel('会诊病例身份')).toContainText(consultCase); await page.getByRole('button', { name: '查看院内会诊 ' + consultCaseB }).click(); await page.getByRole('button', { name: '放弃并切换' }).click(); await page.getByRole('button', { name: '查看会诊 ' + consultId }).click(); await expect(page.getByLabel('会诊病例身份')).toContainText(consultCaseB); await expect(page.getByText('Synthetic unsaved personal opinion', { exact: true })).toHaveCount(0);
