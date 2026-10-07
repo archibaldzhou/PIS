@@ -1,0 +1,106 @@
+{
+  "file": "PIS-new-system-operation-zh.mp4",
+  "sha256": "b215d317d7651b72aa4ebcb0cbdd864feca5e25f9aa1350fc6bd036d5fd73565",
+  "bytes": 88135172,
+  "expectedSeconds": 472,
+  "chapters": 15,
+  "visibleLoginClicks": 1,
+  "highlightedClicks": 220,
+  "decode": "passed",
+  "measuredSeconds": 471.28,
+  "sourceRevision": "1821ae86ba38faf53e0af16a84ac168625e64883",
+  "recordedDate": "2026-10-07",
+  "resolution": "1600x1080",
+  "fps": 25,
+  "format": "H.264 MP4",
+  "captions": "Chinese burned-in plus separate SRT",
+  "audio": false,
+  "visualReview": "15 chapter contact sheet and full-size administrator save highlight inspected",
+  "scenarioValidation": "All 15 selected final recording scenarios passed against isolated real local APIs and PostgreSQL. Failed and interrupted takes excluded.",
+  "applicationCodeChanged": false,
+  "delivery": "Local task artifacts; large video not committed to Git",
+  "limitations": [
+    "Synthetic data only; not clinical use.",
+    "Independent cases and authenticated role sessions per chapter, one visible login.",
+    "Prerequisites and some independent-role, delivery and archive actions prepared by real local APIs and described in subtitles.",
+    "Private storage, scanning, WSI viewing and AI excluded.",
+    "Simulated signing and local delivery do not represent clinical signing or external delivery."
+  ],
+  "chapterIndex": [
+    {
+      "startSeconds": 10,
+      "title": "01 后台管理与自动工作范围",
+      "highlightedClicks": 15
+    },
+    {
+      "startSeconds": 70,
+      "title": "02 手工申请",
+      "highlightedClicks": 4
+    },
+    {
+      "startSeconds": 98,
+      "title": "03 申请资料完善与提交",
+      "highlightedClicks": 11
+    },
+    {
+      "startSeconds": 126,
+      "title": "04 标本接收",
+      "highlightedClicks": 6
+    },
+    {
+      "startSeconds": 154,
+      "title": "05 标签预览与条码校验",
+      "highlightedClicks": 16
+    },
+    {
+      "startSeconds": 182,
+      "title": "06 取材记录",
+      "highlightedClicks": 26
+    },
+    {
+      "startSeconds": 210,
+      "title": "07 技术任务与交接",
+      "highlightedClicks": 13
+    },
+    {
+      "startSeconds": 238,
+      "title": "08 蜡块与玻片谱系",
+      "highlightedClicks": 30
+    },
+    {
+      "startSeconds": 266,
+      "title": "09 技术质控与返工",
+      "highlightedClicks": 22
+    },
+    {
+      "startSeconds": 294,
+      "title": "10 诊断分配与领取",
+      "highlightedClicks": 16
+    },
+    {
+      "startSeconds": 322,
+      "title": "11 人工报告草稿",
+      "highlightedClicks": 14
+    },
+    {
+      "startSeconds": 350,
+      "title": "12 复核与模拟签署",
+      "highlightedClicks": 12
+    },
+    {
+      "startSeconds": 378,
+      "title": "13 固定 PDF 与打印记录",
+      "highlightedClicks": 15
+    },
+    {
+      "startSeconds": 406,
+      "title": "14 本地投递与回执",
+      "highlightedClicks": 16
+    },
+    {
+      "startSeconds": 434,
+      "title": "15 归档与借阅归还",
+      "highlightedClicks": 4
+    }
+  ]
+}
